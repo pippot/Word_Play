@@ -8,7 +8,12 @@ from environments.altar.common_utility import CLAN_NAME, round_num_to_time_str
 from environments.altar.common_entities import Altar_Signal_Type, Altar_Signal
 from environments.altar.unreliable_altar.observations import Unreliable_Altar_Observation
 import itertools
-from typing import Callable, Self
+from typing import Callable, Any
+try:
+	from typing import Self
+except ImportError:
+	# Python < 3.11 compatibility (typing.Self introduced in 3.11)
+	Self = Any
 import math
 import numpy as np
 import numpy.typing as npt

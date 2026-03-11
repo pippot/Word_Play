@@ -2,6 +2,20 @@
 wordplay_inspect_bridge.py
 --------------------------
 Bridges Wordplay's gym-like Environment API to Inspect's evaluation framework.
+
+Changes from v1:
+  1. @scorer(metrics=[mean(), stderr()]) — metric objects, not strings
+  2. state.output assignment uses ModelOutput.from_content() instead of model_copy()
+     to safely handle the case where state.output may not yet be set
+  3. Full per-agent transcripts are written to state.store (accessible to scorer
+     and visible in Inspect View via transcript events) rather than only
+     appending step summaries to state.messages
+  4. Scorer tracks and returns cumulative reward (accumulated during rollout)
+     not just the final single-step reward; docstring matches implementation
+  5. Action selection asks the model for an integer index, not a raw string,
+     and parses it strictly with a range-guarded int() — much more robust
+  6. N/A: bridge is intentionally not a task file; altar_inspect_task.py is
+     the runnable task entry point
 """
 
 from __future__ import annotations
@@ -9,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any, Callable, Sequence
+from dataclasses import asdict, is_dataclass
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Dataset, MemoryDataset, Sample
@@ -24,37 +39,39 @@ from inspect_ai.model import (
 from inspect_ai.scorer import Score, Scorer, mean, scorer, stderr
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 from inspect_ai.tool import Tool, ToolError, tool
-from inspect_ai.util import input_screen, store_as, StoreModel
+from inspect_ai.util import input_screen
 
-from pydantic import Field
+from pydantic import BaseModel, Field
+
+_EP_STORE_KEY = "wordplay_episode_state"
 
 
 # ---------------------------------------------------------------------------
-# 1.  Per-sample state model — stored cleanly in Inspect's store
+# 1.  Per-sample state — stored in state.store for proper per-sample isolation
+#     We use a plain dataclass-style object rather than StoreModel so it can
+#     hold a non-serialisable env reference without Pydantic complaints.
 # ---------------------------------------------------------------------------
 
-class WordplayEpisodeState(StoreModel):
+class WordplayEpisodeState:
     """All episode-level state for one Wordplay sample."""
 
-    # Live env reference (not JSON-serialisable, so we store as Any)
-    env: Any = Field(default=None, exclude=True)
-
-    step_count: int = Field(default=0)
-    done: bool = Field(default=False)
-
-    # Cumulative rewards per agent, accumulated across all steps
-    cumulative_rewards: list[float] = Field(default_factory=list)
-
-    # Full trajectory for Inspect View: list of step dicts
-    trajectory: list[dict[str, Any]] = Field(default_factory=list)
-
-    # Per-agent message histories kept here so they feed into the transcript
-    agent_histories: list[list[dict[str, Any]]] = Field(default_factory=list)
+    def __init__(self) -> None:
+        self.env: Any = None           # live env — excluded from serialisation
+        self.step_count: int = 0
+        self.done: bool = False
+        self.cumulative_rewards: list[float] = []
+        self.trajectory: list[dict[str, Any]] = []
 
 
-# Convenience helpers
 def _ep(state: TaskState) -> WordplayEpisodeState:
-    return store_as(WordplayEpisodeState)
+    """Get (or create) the WordplayEpisodeState for this specific sample."""
+    ep = state.store.get(_EP_STORE_KEY)
+    if ep is None:
+        ep = WordplayEpisodeState()
+        state.store.set(_EP_STORE_KEY, ep)
+    return ep
+
+# state.store is  Inspect's per-sample key-value store
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +82,31 @@ def _format_possible_actions(possible_actions) -> str:
     return "\n".join(
         f"  [{i}] {action_sel}" for i, action_sel in enumerate(possible_actions)
     )
+
+def _safe_observation_text(obs: Any) -> str:
+    """
+    Convert an observation to text for prompting.
+    Falls back to a structured dump if __str__ is unimplemented.
+    """
+    try:
+        return str(obs)
+    except NotImplementedError:
+        pass
+    except Exception:
+        # Continue to structured fallback for any unexpected __str__ failure.
+        pass
+
+    try:
+        if is_dataclass(obs):
+            return json.dumps(asdict(obs), default=str, indent=2)
+    except Exception:
+        pass
+
+    # Generic object fallback.
+    try:
+        return json.dumps(vars(obs), default=str, indent=2)
+    except Exception:
+        return repr(obs)
 
 
 def _parse_action_index(raw: str, possible_actions) -> Any:
@@ -172,6 +214,11 @@ def wordplay_episode_solver(
     async def solve(state: TaskState, generate: Generate) -> TaskState:
         # ---- boot env ----
         env = env_factory()
+        # NOTE: seed is passed here for forward-compatibility, but the built-in
+        # Wordplay presets (Simple_Reset_Environment, etc.) currently ignore it
+        # in their _reset() implementations. Until env authors plumb seed through
+        # to their RNG, multi-seed runs will produce different episodes but won't
+        # be exactly reproducible. Fix: implement seed handling in env._reset().
         env.reset(seed=state.metadata.get("seed"))
 
         ep = _ep(state)
@@ -213,9 +260,10 @@ def wordplay_episode_solver(
                 for disc_turn in range(discussion_turns):
                     for agent_id in range(len(env.agents)):
                         obs = env.observe(agent_id)
+                        obs_text = _safe_observation_text(obs)
                         disc_prompt = (
                             f"[Discussion turn {disc_turn + 1}/{discussion_turns}]\n"
-                            f"Observation:\n{obs}\n\n"
+                            f"Observation:\n{obs_text}\n\n"
                             "Reply with your discussion message (plain text, no tool call)."
                         )
                         agent_histories[agent_id].append(
@@ -253,12 +301,17 @@ def wordplay_episode_solver(
                 agent_histories[agent_id].extend(new_msgs)
 
             # ---- collect chosen actions and step env ----
+            # Raise explicitly if an agent has no actions — passing None to
+            # env.step() would produce silent undefined behaviour.
             action_selections = []
             for agent_id in range(len(env.agents)):
                 possible = env.get_possible_actions(agent_id)
-                chosen = shared["pending"].get(
-                    agent_id, possible[0] if possible else None
-                )
+                if not possible:
+                    raise RuntimeError(
+                        f"Agent {agent_id} has no possible actions at step {step_idx + 1}. "
+                        "Check your env's get_possible_actions() implementation."
+                    )
+                chosen = shared["pending"].get(agent_id, possible[0])
                 action_selections.append(chosen)
 
             env.step(action_selections)
@@ -275,11 +328,21 @@ def wordplay_episode_solver(
                 "actions": [str(a) for a in action_selections],
                 "rewards": list(env.last_rewards or []),
                 "terminations": list(env.terminations),
+                # Capture altar signals if this env exposes them (Altar-specific)
+                "altar_signals": (
+                    [s.signal_message for s in env.altar_signals]
+                    if hasattr(env, "altar_signals")
+                    else []
+                ),
             }
             ep.trajectory.append(step_record)
 
-            # Append step summary to state.messages so it shows in the main
-            # Inspect sample transcript for agent 0 (the subject model)
+            # ---- check termination across ALL agents ----
+            # Do not break on agent 0 alone — other agents may still be active.
+            # The episode ends when every agent has terminated or been truncated.
+            all_done = all(
+                t or tr for t, tr in zip(env.terminations, env.truncations)
+            )
             obs0, reward0, term0, trunc0, _ = env.last(0)
             state.messages.append(
                 ChatMessageUser(
@@ -287,13 +350,13 @@ def wordplay_episode_solver(
                         f"[Step {step_idx + 1}] "
                         f"Reward: {reward0} | "
                         f"Cumulative: {ep.cumulative_rewards[0]:.3f} | "
-                        f"Terminated: {term0} | "
+                        f"All done: {all_done} | "
                         f"Actions: {[str(a) for a in action_selections]}"
                     )
                 )
             )
 
-            if term0 or trunc0:
+            if all_done:
                 break
 
         ep.done = True
@@ -333,10 +396,11 @@ async def _run_agent_action(
     Returns the new messages to append to this agent's history.
     """
     obs = env.observe(agent_id)
+    obs_text = _safe_observation_text(obs)
     possible = env.get_possible_actions(agent_id)
     action_prompt = (
         f"[Step {step_idx + 1}]\n"
-        f"Observation:\n{obs}\n\n"
+        f"Observation:\n{obs_text}\n\n"
         f"Possible actions:\n{_format_possible_actions(possible)}\n\n"
         "Call `wordplay_action` with the INTEGER INDEX of your chosen action."
     )
@@ -380,7 +444,7 @@ def wordplay_outcome_scorer(
     """
 
     async def score(state: TaskState, target) -> Score:
-        ep = store_as(WordplayEpisodeState)
+        ep = _ep(state)
         env = ep.env
 
         if env is None:
@@ -414,6 +478,13 @@ def wordplay_outcome_scorer(
                 "terminations": env.terminations,
                 "steps": ep.step_count,
                 "trajectory_length": len(ep.trajectory),
+                # Altar-specific: final step's altar signals (env-agnostic envs
+                # will simply not have this attribute)
+                "altar_signals": (
+                    [s.signal_message for s in env.altar_signals]
+                    if hasattr(env, "altar_signals")
+                    else []
+                ),
             },
         )
 
@@ -489,7 +560,8 @@ def wordplay_human_baseline_solver(
                     content=f"[Step {step_idx + 1}] Reward: {reward0} | Done: {term0}"
                 )
             )
-            if term0 or trunc0:
+            all_done = all(t or tr for t, tr in zip(env.terminations, env.truncations))
+            if all_done:
                 break
 
         ep.done = True
