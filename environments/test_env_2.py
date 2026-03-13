@@ -802,6 +802,9 @@ def run_exp():
         ["", "", "b", "", ""],
         ["", "", "b", "", ""],
     ]
+    #bbbbb
+    #bbwwb
+    # add function to convert string to tilemap as well (look at slack screenshot)
 
     tileset = {
         "f": {"name": "Blue Flower", "tags": ["item"]},
