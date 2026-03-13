@@ -868,7 +868,28 @@ def run_exp():
                 Entity(
                     name="Cow",
                     position=Position_2D(1, 0),
-                    components=[Health(max_health=5, starting_health=2)],
+                    actions=[Move_Up(), Move_Down()],
+                    components=[
+                        Health(max_health=5, starting_health=5),
+                        Follow_Action_Sequence([(Move_Up, None), (Move_Down, None)]),
+                        TalkingCow(),
+                    ],
+                ),
+                Entity(
+                    name="Fat Cow",
+                    position=Position_2D(1, 0),
+                    components=[
+                        Health(max_health=10, starting_health=10),
+                        TalkingCow(),
+                    ],
+                ),
+                Entity(
+                    name="Tiny Cow",
+                    position=Position_2D(1, 0),
+                    components=[
+                        Health(max_health=1, starting_health=1),
+                        TalkingCow(),
+                    ],
                 ),
                 Entity(
                     name="Wall",
