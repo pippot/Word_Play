@@ -3,8 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Callable
 
-from word_play.core import Action, Component, Entity, Environment
-from word_play.core.actions import Action_Validation, Target_Is_Nearby, Target_Not_Self
+from word_play.core import Action, Component, Entity, Environment, Action_Validation, Target_Is_Nearby, Target_Not_Self
 from word_play.presets.action_validations import Target_Doesnt_Have_Tag, Target_Has_Tag
 
 

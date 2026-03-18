@@ -6,7 +6,7 @@ from typing import Any, Callable, TYPE_CHECKING
 if TYPE_CHECKING:
     from word_play.core import Entity, Environment
 
-from word_play.core.actions import Action_Arg
+from word_play.core import Action_Arg
 
 
 class Int_Arg(Action_Arg):

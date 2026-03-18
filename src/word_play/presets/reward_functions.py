@@ -1,5 +1,4 @@
-from word_play.core.actions import Action_Selection
-from word_play.core import Environment
+from word_play.core import Environment, Action_Selection
 
 
 def zero_reward_func(agent_actions: list[Action_Selection], env: Environment) -> list[float]:

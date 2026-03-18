@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from word_play.core import Action, Entity, Environment
-from word_play.core.actions import Target_Is_Nearby, Target_Not_Self
+from word_play.core import Action, Entity, Environment, Target_Is_Nearby, Target_Not_Self
 from word_play.presets.action_validations import Target_Doesnt_Have_Tag, Target_Has_Component
 from word_play.presets.systems.health import Health
 

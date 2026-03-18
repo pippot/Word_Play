@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from word_play.core import Entity, Environment, Observation
-from word_play.core.actions import Action_Selection
+from word_play.core import Entity, Environment, Observation, Action_Selection
 from word_play.presets.environments.simple_env_reset_mixin import Simple_Env_Reset_Mixin
 from word_play.presets.entity_orderings import entity_definition_order
 from word_play.presets.movement.simple_2d_grid import INFINITE_2D_MOVEMENT_SYSTEM

@@ -4,8 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from word_play.core.entity import Entity
-    from word_play.core.environment import Environment
+    from word_play.core import Entity, Environment
 
 
 def entity_definition_order(entities: list[Entity], env: Environment) -> list[int]:

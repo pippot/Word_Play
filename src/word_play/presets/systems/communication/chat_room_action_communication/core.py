@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from word_play.core import Action, Entity, Environment
-from word_play.core.actions import Action_Validation, Target_Is_Self
+from word_play.core import Action, Entity, Environment, Action_Validation, Target_Is_Self
 from word_play.presets.action_args import Int_Arg, List_Arg
 from word_play.presets.systems.communication.core import Communication_Policy
 
