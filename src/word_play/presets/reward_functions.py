@@ -1,11 +1,12 @@
-from word_play.environment import Action_Selection, Environment
+from word_play.core.actions import Action_Selection
+from word_play.core.environment import Environment
 
 
 def zero_reward_func(agent_actions: list[Action_Selection], env: Environment) -> list[float]:
-	return [0] * len(env.agents)
+    return [0] * len(env.agents)
 
 
-'''
+"""
 # Some examples reward function examples.
 # These are not presets because they depend on a (non-existent) Environment implementation
 
@@ -43,4 +44,4 @@ def negative_reward_when_taking_damage(agent_actions: list[Action_Selections], e
 
 	# We can always make an Environment preset which auto stores the last k Environment states.
 	# This seems quite general to me
-'''
+"""
