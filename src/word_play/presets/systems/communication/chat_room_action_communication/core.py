@@ -1,30 +1,11 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Callable
 
-from word_play.core import Action, Component, Entity, Environment
-from word_play.core.actions import Action_Validation, Action_Selection, Target_Is_Self
+from word_play.core import Action, Entity, Environment
+from word_play.core.actions import Action_Validation, Target_Is_Self
 from word_play.presets.action_args import Int_Arg, List_Arg
-
-
-# TODO: not sure if the info args are required for end_conversation and send_message
-class Communication_Policy(Component, ABC):
-    @abstractmethod
-    def start_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
-        pass
-
-    @abstractmethod
-    def send_message(self, recipients: list[Entity], env: Environment, info: str | None = None) -> str:
-        pass
-
-    @abstractmethod
-    def receive_message(self, message: str, sender: Entity, env: Environment) -> None:
-        pass
-
-    @abstractmethod
-    def end_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
-        pass
+from word_play.presets.systems.communication.core import Communication_Policy
 
 
 def nearby_conversation_partners(actor: Entity, env: Environment) -> list[Entity]:

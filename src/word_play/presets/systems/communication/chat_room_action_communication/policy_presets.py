@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from word_play.core import Entity, Environment
-from word_play.presets.systems.communication.chat_room_action_communication.core import Communication_Policy
+from word_play.presets.systems.communication.core import Communication_Policy
 
 
 class Human_Communication_Policy(Communication_Policy):
