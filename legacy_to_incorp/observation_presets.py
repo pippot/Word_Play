@@ -1,6 +1,8 @@
 from word_play.environment import Action_Selection, Observation
 from dataclasses import dataclass
 
+"""NOTE: this will be useful when we create a dicussion phase style communication system"""
+
 
 def format_possible_actions(possible_actions: list[Action_Selection]) -> str:
     obs_str = ""
