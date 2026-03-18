@@ -40,6 +40,7 @@ from word_play.presets.systems.communication import (
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.health import Health
 from word_play.presets.systems.inventory import Inventory
+from word_play.utils import tilemap_to_entities
 
 import pprint
 
