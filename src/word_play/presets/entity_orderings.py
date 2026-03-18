@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.word_play.core.entity import Entity
+    from word_play.core.entity import Entity
     from word_play.core.environment import Environment
 
 

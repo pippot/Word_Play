@@ -1,3 +1,10 @@
+from __future__ import annotations
+
+from word_play.core import Agent_Policy, Entity, Environment, Observation
+from word_play.core.actions import Action_Selection
+from word_play.presets.systems.communication import Communication_Policy
+
+
 # TODO: this is just a template, this class needs to be implemented. This class should use some general LLM API so that
 #       it can switch to use different LLMs very easily. It should not store the LLM in memory, since if we have many
 #       agents, we don't want many copies of the same LLM. It should also manage its memory, e.g., it is responsible for

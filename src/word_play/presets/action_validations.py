@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.word_play.core.actions import (
+from word_play.core.actions import (
     Action_Validation,
     Target_Is_Nearby,
     Target_Is_Self,
@@ -35,8 +35,8 @@ check when enumerating actions.
 """
 
 if TYPE_CHECKING:
-    from src.word_play.core.components import Component
-    from src.word_play.core.entity import Entity
+    from word_play.core.components import Component
+    from word_play.core.entity import Entity
     from word_play.core.environment import Environment
 
 

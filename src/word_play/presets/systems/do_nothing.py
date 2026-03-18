@@ -1,4 +1,4 @@
-from src.word_play.core.environment import Action, Target_Is_Self, Entity, Environment
+from word_play.core import Action, Entity, Environment, Target_Is_Self
 
 
 class Do_Nothing(Action):

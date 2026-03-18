@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Callable
 
-from word_play.core import Agent_Policy, Component, Entity, Environment, Observation
-from word_play.core.actions import Action_Selection
+from word_play.core import Action, Component, Entity, Environment
+from word_play.core.actions import Action_Validation, Action_Selection, Target_Is_Self
+from word_play.presets.action_args import Int_Arg, List_Arg
 
 
 # TODO: not sure if the info args are required for end_conversation and send_message

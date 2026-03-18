@@ -1,52 +1,47 @@
-from word_play.environment import (
-    Position,
-    Environment,
-    Entity,
-    Component,
-    Agent_Policy,
-    Non_Agent_Policy,
-    Observation,
-    Action_Arg,
-    String_Arg,
-    Int_Arg,
-    arg_in_range,
-    String_Choice_Arg,
-    Dynamic_Choice_Arg,
-    List_Arg,
-    Dict_Arg,
+from word_play.core import (
     Action,
-    Action_Validation,
-    Action_Chain,
+    Agent_Policy,
+    Component,
+    Entity,
+    Environment,
+    Observation,
+    Target_Is_Nearby,
     Target_Is_Self,
     Target_Not_Self,
-    Target_Is_Nearby,
-    Target_Has_Tag,
-    Target_Doesnt_Have_Tag,
-    Target_Has_Component,
-    Action_Selection,
-    entity_definition_order,
-    random_order,
-    randomize_agent_order,
 )
-
-from word_play.presets.movement_system_presets import (
-    INFINITE_2D_MOVEMENT_SYSTEM,
+from word_play.presets.action_args import (
+    Dict_Arg,
+    Dynamic_Choice_Arg,
+    Int_Arg,
+    List_Arg,
+    String_Arg,
+    String_Choice_Arg,
+    arg_in_range,
+)
+from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
+from word_play.presets.action_policies.human import Human_Takes_Action
+from word_play.presets.entity_orderings import entity_definition_order, random_order, randomize_agent_order
+from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
+from word_play.presets.movement.simple_2d_grid import (
+    Collidable,
     Move_Up,
     Move_Down,
     Move_Left,
     Move_Right,
     Position_2D,
-    Collidable,
 )
-from word_play.presets.reward_func_presets import zero_reward_func
-from word_play.presets.action_presets import Do_Nothing
-from word_play.presets.observation_presets import format_possible_actions
+from word_play.presets.systems.combat import Attack
+from word_play.presets.systems.communication import (
+    Human_Communication_Policy,
+    Start_Private_Conversation,
+    Start_Public_Conversation,
+    TalkingCow,
+)
+from word_play.presets.systems.do_nothing import Do_Nothing
+from word_play.presets.systems.health import Health
+from word_play.presets.systems.inventory import Inventory
 
-from dataclasses import dataclass
-from typing import Any, Callable, Iterable
-from copy import deepcopy
 import pprint
-from abc import ABC, abstractmethod
 
 
 class Test_Action(Action):
