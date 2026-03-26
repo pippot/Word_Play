@@ -194,21 +194,35 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             + format_action_details(observation.possible_actions)
         )
 
-    def _selection_prompt(self, observation: Observation, reasoning: str | None) -> str:
-        example_kwargs = "{}"
-        for sel in observation.possible_actions:
-            if sel.required_kwargs:
-                example_kwargs = json.dumps({k: f"<{k}>" for k in sel.required_kwargs})
-                break
+    def _observation_requires_kwargs(self, observation: Observation) -> bool:
+        return any(action_selection.required_kwargs for action_selection in observation.possible_actions)
 
+    def _selection_prompt(self, observation: Observation, reasoning: str | None) -> str:
         reasoning_block = f"\nYour prior reasoning:\n{reasoning}\n" if reasoning else ""
+        if self._observation_requires_kwargs(observation):
+            example_kwargs = "{}"
+            for sel in observation.possible_actions:
+                if sel.required_kwargs:
+                    example_kwargs = json.dumps({k: f"<{k}>" for k in sel.required_kwargs})
+                    break
+            required_format = '{"action_choice_idx": <integer>, "action_kwargs": <dict or {}>}'
+            example_output = f'{{"action_choice_idx": 0, "action_kwargs": {example_kwargs}}}'
+            kwargs_instruction = ""
+        else:
+            required_format = '{"action_choice_idx": <integer>}'
+            example_output = '{"action_choice_idx": 0}'
+            kwargs_instruction = (
+                "None of the available actions require kwargs. "
+                'Do not include "action_kwargs" in your response.\n\n'
+            )
 
         return (
             "You are controlling an agent in a grid-world game.\n"
             "Choose exactly ONE action. Reply with ONLY a JSON object — no markdown, no extra text.\n\n"
             "REQUIRED FORMAT:\n"
-            '{"action_choice_idx": <integer>, "action_kwargs": <dict or {}>}\n\n'
-            + f'Example: {{"action_choice_idx": 0, "action_kwargs": {example_kwargs}}}\n\n'
+            + required_format + "\n\n"
+            + kwargs_instruction
+            + f"Example: {example_output}\n\n"
             + self._observation_memory_block()
             + f"CURRENT OBSERVATION:\n{observation}\n"
             + reasoning_block + "\n"
