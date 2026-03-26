@@ -50,33 +50,61 @@ from copy import deepcopy
 import pprint
 from abc import ABC, abstractmethod
 import json
+import os
 import re
+import sys
 
 """This file is to be used with V2.0 of WordPlay, i.e., the version after the component refactor."""
 
 
-def component_data_attributes(cls):
+
+def component_data_attributes(comp):
     return {
         name: value
-        for name, value in cls.__dict__.items()
+        for name, value in comp.__dict__.items()
         if not name.startswith("__") and not callable(value) and name != "entity"
     }
 
 
+def _format_inventory_items(inventory: list[Entity]) -> list[str]:
+    return [item.name for item in inventory]
+
+
 def entity_state_to_str(entity: Entity) -> str:
-    return pprint.pformat(
-        {
-            "name": entity.name,
-            "position": entity.position,
-            "tags": entity.tags,
-            "components": [
-                {"component type": ctype.__name__} | component_data_attributes(comp)
-                for ctype, comp in entity.components.items()
-                if component_data_attributes(comp)
-            ],
-        },
-        sort_dicts=False,
-    )
+    lines = [
+        f"name: {entity.name}",
+        f"position: {entity.position}",
+    ]
+
+    if entity.tags:
+        lines.append(f"tags: {entity.tags}")
+
+    for ctype, comp in entity.components.items():
+        component_name = ctype.__name__
+        component_data = component_data_attributes(comp)
+        if not component_data:
+            continue
+
+        if issubclass(ctype, Agent_Policy) or issubclass(ctype, Non_Agent_Policy) or issubclass(ctype, Communication_Policy):
+            continue
+
+        if component_name == "Health":
+            lines.append(f"health: {comp.health}/{comp.max_health}")
+        elif component_name == "Inventory":
+            lines.append(f"inventory_size: {comp.inventory_size}")
+            lines.append(f"inventory: {_format_inventory_items(comp.inventory)}")
+        elif component_name == "Collidable":
+            lines.append(f"collides_with_tags: {comp.collidable_tags}")
+        elif component_name == "Key":
+            lines.append(f"key_name: {comp.key_name}")
+        elif component_name == "Door":
+            door_state = "locked" if comp.locked else "unlocked"
+            lines.append(f"door: {door_state}")
+            lines.append(f"door_key_name: {comp.key_name}")
+        else:
+            lines.append(f"{component_name}: {pprint.pformat(component_data, sort_dicts=False)}")
+
+    return "\n".join(lines)
 
 
 def indent(text: str, prefix: str = "\t") -> str:
@@ -85,14 +113,28 @@ def indent(text: str, prefix: str = "\t") -> str:
 
 
 def format_nearby_entities(nearby_entities: list[Entity], agent: Entity) -> str:
-    # TODO: maybe make this "indent(State: indent(...))" stuff a function
-    nearby_entities_strs = [
-        indent(f"State: {indent(entity_state_to_str(entity))}") for entity in nearby_entities if entity is not agent
-    ]
-    if not nearby_entities_strs:
+    strs = [f"- {entity_state_to_str(entity).replace(chr(10), chr(10) + '  ')}" for entity in nearby_entities if entity is not agent]
+    if not strs:
         return "Nearby Entities: None"
+    return "Nearby Entities:\n" + "\n".join(strs)
 
-    return "Nearby Entities:\n" + "\n".join(nearby_entities_strs)
+
+def format_action_list(possible_actions: list[Action_Selection]) -> str:
+    if not possible_actions:
+        return " None"
+    return "".join(f"\n  [{i}] {sel}" for i, sel in enumerate(possible_actions))
+
+
+def format_action_details(possible_actions: list[Action_Selection]) -> str:
+    lines = ["ACTION DETAILS:"]
+    for idx, sel in enumerate(possible_actions):
+        lines.append(f"  [{idx}] {sel}")
+        if sel.required_kwargs:
+            lines.append("       kwargs required:")
+            for name, arg in sel.required_kwargs.items():
+                desc = arg.arg_description(sel.actor, sel.target_entity, sel.env)
+                lines.append(f'         "{name}": {desc}')
+    return "\n".join(lines)
 
 
 # TODO: make this nice so that the printing of things like all component infos are printed nicely. Make it especially
@@ -105,27 +147,31 @@ class Simple_Observation(Observation):
     last_reward: float
     info: dict
 
-    def __str__(self):
+    def __str__(self) -> str:
         if "action_success" not in self.info:
-            previous_action_info = ""
+            prev_block = ""
         else:
-            if self.info["action_info"]:
-                extra_action_info_text = (
-                    f"\nSome additional information about your action: {pprint.pformat(self.info["action_info"])}"
-                )
-            else:
-                extra_action_info_text = ""
-            previous_action_info = f"Your last action {"was successful." if self.info["action_success"] else "unsuccessful."}{extra_action_info_text}\n\n"
+            status = "succeeded" if self.info["action_success"] else "FAILED"
+            extra = ""
+            if self.info.get("action_info"):
+                extra = f"\n  Details: {pprint.pformat(self.info['action_info'])}"
+            prev_block = f"LAST ACTION: {status}{extra}\n\n"
 
-        return f"""{previous_action_info}Your reward last turn was {self.last_reward}.
+        agent_block = "YOUR STATE:\n" + indent(entity_state_to_str(self.agent))
+        nearby_block = format_nearby_entities(self.nearby_entities, self.agent)
+        actions_block = "AVAILABLE ACTIONS (reply with the index):" + format_action_list(self.possible_actions)
 
-Your Info:
-{indent("State: " + indent(entity_state_to_str(self.agent)))}
-
-{format_nearby_entities(self.nearby_entities, self.agent)}
-
-Possible Action:{format_possible_actions(self.possible_actions)}
-"""
+        return "\n\n".join(
+            filter(
+                None,
+                [
+                    prev_block + f"REWARD THIS TURN: {self.last_reward}",
+                    agent_block,
+                    nearby_block,
+                    actions_block,
+                ],
+            )
+        )
 
 
 class Simple_Grid_World(Environment):
@@ -537,187 +583,487 @@ class TalkingCow(Communication_Policy):
         pass
 
 
-# TODO: this is just a template, this class needs to be implemented. This class should use some general LLM API so that
-#       it can switch to use different LLMs very easily. It should not store the LLM in memory, since if we have many
-#       agents, we don't want many copies of the same LLM. It should also manage its memory, e.g., it is responsible for
-#       storing information about past observations and past chats with other agents.
-#       This class should accept a Human_LLM class as input for its LLM (e.g., see model_presets.py). The Human_LLM
-#       model sees the exact same thing as the LLM, the only difference is that the human is generating text instead of
-#       the LLM. This is a very useful class for testing and debugging.
+class OpenRouter_Model(Model):
+    """
+    Chat model backed by OpenRouter. Any model from https://openrouter.ai/models
+    works, e.g.:
+        "meta-llama/llama-3.1-8b-instruct"
+        "openai/gpt-4o"
+        "anthropic/claude-3-5-sonnet"
+        "google/gemma-3-1b-it:free"
+ 
+    Requires the OPENROUTER_API_KEY environment variable to be set.
+    """
+ 
+    _CLIENT = None
+ 
+    def __init__(
+        self,
+        model_name: str,
+        system_prompt: str = "",
+        generation_params: dict | None = None,
+        site_url: str | None = None,
+        app_name: str | None = None,
+        verbosity: int = 0,
+    ):
+        super().__init__(verbosity=verbosity)
+        self.model_name = model_name
+        self.system_prompt = system_prompt
+        self.generation_params = generation_params or {}
+ 
+        headers = {}
+        if site_url:
+            headers["HTTP-Referer"] = site_url
+        if app_name:
+            headers["X-Title"] = app_name
+        self._headers = headers
+ 
+    def _get_client(self):
+        if OpenRouter_Model._CLIENT is None:
+            try:
+                from openai import OpenAI
+            except ImportError as exc:
+                raise ImportError("OpenRouter_Model requires the 'openai' package.") from exc
+ 
+            api_key = ""
+            if not api_key:
+                raise EnvironmentError("Missing environment variable: OPENROUTER_API_KEY")
+ 
+            OpenRouter_Model._CLIENT = OpenAI(
+                api_key=api_key,
+                base_url="https://openrouter.ai/api/v1",
+                default_headers=self._headers or None,
+            )
+        return OpenRouter_Model._CLIENT
+ 
+    def generate_text(self, input_text: str | list[str], generation_config=None, max_new_tokens=None) -> str:
+        if isinstance(input_text, list):
+            raise NotImplementedError("Batched input is not supported.")
+ 
+        params = {**self.generation_params, **(generation_config or {})}
+        if max_new_tokens is not None:
+            params["max_tokens"] = max_new_tokens
+ 
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": input_text})
+ 
+        response = self._get_client().chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            **params,
+        )
+        return response.choices[0].message.content.strip()
+ 
+ 
+class Lazy_Model_Handle(Model):
+    """
+    Defers model construction until the first generate_text call.
+ 
+    Usage:
+        LLM_MODEL_REGISTRY["main"] = Lazy_Model_Handle(
+            lambda: OpenRouter_Model("meta-llama/llama-3.1-8b-instruct", system_prompt="...")
+        )
+    """
+ 
+    def __init__(self, loader: Callable[[], Model], verbosity: int = 0):
+        super().__init__(verbosity=verbosity)
+        self.loader = loader
+        self._model: Model | None = None
+ 
+    @property
+    def model(self) -> Model:
+        if self._model is None:
+            self._model = self.loader()
+        return self._model
+ 
+    def generate_text(self, input_text: str | list[str], generation_config=None, max_new_tokens=None) -> str:
+        if max_new_tokens is None:
+            return self.model.generate_text(
+                input_text,
+                generation_config=generation_config,
+            )
+
+        try:
+            return self.model.generate_text(
+                input_text,
+                generation_config=generation_config,
+                max_new_tokens=max_new_tokens,
+            )
+        except TypeError as exc:
+            if "max_new_tokens" not in str(exc):
+                raise
+            return self.model.generate_text(
+                input_text,
+                generation_config=generation_config,
+            )
+ 
+    def cond_logP(self, inputs, targets):
+        return self.model.cond_logP(inputs, targets)
+ 
+ 
+# ===========================================================================
+# Model registry
+# ===========================================================================
+ 
+# Populate before creating any agents, e.g.:
+#   LLM_MODEL_REGISTRY["main"] = OpenRouter_Model("meta-llama/llama-3.1-8b-instruct", system_prompt="...")
+LLM_MODEL_REGISTRY: dict[str, Model] = {}
+
+
+def resolve_registered_model(model_key: str) -> Model:
+    if model_key not in LLM_MODEL_REGISTRY:
+        raise KeyError(
+            f"Model '{model_key}' not found in LLM_MODEL_REGISTRY. "
+            f"Available keys: {list(LLM_MODEL_REGISTRY)}"
+        )
+    return LLM_MODEL_REGISTRY[model_key]
+
+# test with human LLM and observe the history and observations
+
+
 class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
+    """
+    A combined action-selection and communication policy backed by any Model.
+
+    Action output format — JSON:
+        {"action_choice_idx": <int>, "action_kwargs": {<key>: <value>, ...}}
+
+    The policy does NOT store the model object itself — it holds only a string
+    key into LLM_MODEL_REGISTRY. This means any number of agents can share one
+    model without duplicating it in memory.
+
+    Memory:
+        - observation_history: rolling buffer of past observation strings,
+          included as context in the selection prompt.
+        - conversation_history: rolling buffer of dialogue turns.
+    """
+
     MAX_ATTEMPTS = 3
 
     def __init__(
         self,
-        model: Model,
+        model_key: str,
+        system_prompt: str = "",
         action_generation_config: dict | None = None,
         message_generation_config: dict | None = None,
         reasoning_generation_config: dict | None = None,
         use_chain_of_thought: bool = False,
         conversation_memory_window: int = 12,
+        observation_memory_window: int = 4,
     ):
         super().__init__()
-        self.model = model
+        self.model_key = model_key
+        self.system_prompt = system_prompt
         self.action_generation_config = action_generation_config
         self.message_generation_config = message_generation_config
         self.reasoning_generation_config = reasoning_generation_config
         self.use_chain_of_thought = use_chain_of_thought
         self.conversation_memory_window = conversation_memory_window
+        self.observation_memory_window = observation_memory_window
+
+        self.observation_history: list[str] = []
+        self.observation_summary: str | None = None
         self.conversation_history: list[dict[str, str]] = []
         self.active_conversation_participants: list[str] = []
 
+    @property
+    def model(self) -> Model:
+        return resolve_registered_model(self.model_key)
+
+    # -----------------------------------------------------------------------
+    # Agent_Policy — action selection
+    # -----------------------------------------------------------------------
+
     def select_action(self, observation: Observation) -> tuple[Action_Selection, dict]:
-        action_prompt = self._action_selection_prompt(observation)
-        reasoning = None
-        reasoning_output = None
+        reasoning: str | None = None
 
         if self.use_chain_of_thought:
-            reasoning_prompt = self._action_reasoning_prompt(observation)
-            reasoning_output = self.model.generate_text(reasoning_prompt, self.reasoning_generation_config)
-            reasoning = reasoning_output.strip()
+            reasoning_prompt = self._reasoning_prompt(observation)
+            reasoning = self.model.generate_text(
+                self._with_system(reasoning_prompt),
+                self.reasoning_generation_config,
+            ).strip()
 
-        last_error = None
-        for attempt_idx in range(self.MAX_ATTEMPTS):
-            prompt = action_prompt
-            if reasoning:
-                prompt += f"\n\nPrior reasoning:\n{reasoning}"
+        selection_prompt = self._selection_prompt(observation, reasoning)
+        last_exc: Exception | None = None
 
-            raw_response = self.model.generate_text(prompt, self.action_generation_config)
-
+        for attempt in range(self.MAX_ATTEMPTS):
+            raw = self.model.generate_text(
+                self._with_system(selection_prompt),
+                self.action_generation_config,
+            )
             try:
-                selection = self._parse_action_selection_response(raw_response, observation)
-                return selection, {
-                    "raw_action_selection": raw_response,
-                    "reasoning": reasoning_output,
-                    "llm_attempt_count": attempt_idx + 1,
+                action_selection = self._parse_selection(raw, observation)
+                self._record_observation(observation)
+                return action_selection, {
+                    "raw_response": raw,
+                    "reasoning": reasoning,
+                    "attempt": attempt + 1,
                 }
             except Exception as exc:
-                last_error = exc
+                last_exc = exc
+                selection_prompt = self._retry_prompt(selection_prompt, raw, str(exc))
 
-        raise RuntimeError(f"LLM could not select a valid action after {self.MAX_ATTEMPTS} attempts: {last_error}")
-
-    def start_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
-        self.active_conversation_participants = [entity.name for entity in participants if entity is not self.entity]
-        if info:
-            self.conversation_history.append({"role": "system", "content": info})
-
-    def send_message(self, recipients: list[Entity], env: Environment, info: str | None = None) -> str:
-        prompt = self._conversation_prompt(recipients, env, info)
-        response = self.model.generate_text(prompt, self.message_generation_config)
-        message = response.strip()
-        self.conversation_history.append({"role": "assistant", "content": message})
-        self._truncate_conversation_history()
-        return message
-
-    def receive_message(self, message: str, sender: Entity, env: Environment) -> None:
-        self.conversation_history.append({"role": "user", "content": f"{sender.name}: {message}"})
-        self._truncate_conversation_history()
-
-    def end_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
-        if info:
-            self.conversation_history.append({"role": "system", "content": info})
-        self.active_conversation_participants = []
-        self._truncate_conversation_history()
-
-    def _action_selection_prompt(self, observation: Observation) -> str:
-        return (
-            "You are choosing exactly one action for a game agent.\n"
-            "Return only JSON with this shape:\n"
-            '{"action_choice_idx": <integer>, "action_kwargs": <object>}\n'
-            "Use {} for action_kwargs when the action takes no arguments.\n"
-            "Do not include markdown or any extra text.\n\n"
-            f"Observation:\n{observation}\n\n"
-            f"Action details:\n{self._format_action_details(observation.possible_actions)}"
+        raise RuntimeError(
+            f"LLM failed to produce a valid action after {self.MAX_ATTEMPTS} attempts. "
+            f"Last error: {last_exc}"
         )
 
-    def _action_reasoning_prompt(self, observation: Observation) -> str:
+    def _record_observation(self, observation: Observation) -> None:
+        self.observation_history.append(str(observation))
+        if len(self.observation_history) > self.observation_memory_window:
+            overflow = self.observation_history[:-self.observation_memory_window]
+            self._update_observation_summary(overflow)
+            self.observation_history = self.observation_history[-self.observation_memory_window:]
+
+    def _update_observation_summary(self, observations: list[str]) -> None:
+        summary_lines: list[str] = []
+        if self.observation_summary:
+            summary_lines.append(self.observation_summary)
+
+        for observation_text in observations:
+            summary_lines.append(self._summarize_observation_text(observation_text))
+
+        self.observation_summary = "\n".join(line for line in summary_lines if line).strip() or None
+
+    def _summarize_observation_text(self, observation_text: str) -> str:
+        summary_parts = []
+        reward_match = re.search(r"REWARD THIS TURN:\s*(.*)", observation_text)
+        if reward_match:
+            summary_parts.append(f"reward={reward_match.group(1).strip()}")
+
+        state_lines = []
+        in_state_block = False
+        for line in observation_text.splitlines():
+            stripped = line.strip()
+            if stripped == "YOUR STATE:":
+                in_state_block = True
+                continue
+            if in_state_block and not stripped:
+                break
+            if in_state_block and (
+                stripped.startswith("name:")
+                or stripped.startswith("position:")
+                or stripped.startswith("health:")
+                or stripped.startswith("inventory:")
+            ):
+                state_lines.append(stripped)
+
+        action_lines = [
+            line.strip()
+            for line in observation_text.splitlines()
+            if line.strip().startswith("[") and "]" in line
+        ]
+        if action_lines:
+            summary_parts.append(f"actions={', '.join(action_lines[:3])}")
+        if state_lines:
+            summary_parts.extend(state_lines[:4])
+
+        if not summary_parts:
+            summary_parts.append(observation_text.strip().splitlines()[0][:160])
+
+        return " | ".join(summary_parts)
+
+
+    # -----------------------------------------------------------------------
+    # Prompt builders
+    # -----------------------------------------------------------------------
+
+    def _observation_memory_block(self) -> str:
+        sections = []
+        if self.observation_summary:
+            sections.append(f"OLDER OBSERVATION SUMMARY:\n{self.observation_summary}")
+
+        if not self.observation_history:
+            return "\n\n".join(sections) + ("\n\n" if sections else "")
+
+        entries = "\n\n---\n\n".join(
+            f"[t-{len(self.observation_history) - i}]\n{obs}"
+            for i, obs in enumerate(self.observation_history)
+        )
+        sections.append(f"RECENT OBSERVATIONS (oldest to most recent):\n{entries}")
+        return "\n\n".join(sections) + "\n\n"
+
+    def _reasoning_prompt(self, observation: Observation) -> str:
         return (
-            "Think step by step about which single action the agent should take next.\n"
-            "Consider the observation, nearby entities, and the available actions.\n"
-            "You may reason freely in plain text, but do not output JSON.\n\n"
-            f"Observation:\n{observation}\n\n"
-            f"Action details:\n{self._format_action_details(observation.possible_actions)}"
+            "You are controlling an agent in a grid-world game.\n"
+            "Think step by step about which action the agent should take next.\n"
+            "Consider the agent's state, nearby entities, and available actions.\n"
+            "Write your reasoning in plain text. Do NOT output JSON yet.\n\n"
+            + self._observation_memory_block()
+            + f"CURRENT OBSERVATION:\n{observation}\n\n"
+            + format_action_details(observation.possible_actions)
         )
 
-    def _format_action_details(self, possible_actions: list[Action_Selection]) -> str:
-        lines = []
-        for idx, action_selection in enumerate(possible_actions):
-            lines.append(f"[{idx}] {action_selection}")
-            if action_selection.required_kwargs:
-                for name, arg in action_selection.required_kwargs.items():
-                    description = arg.arg_description(
-                        action_selection.actor,
-                        action_selection.target_entity,
-                        action_selection.env,
-                    )
-                    lines.append(f"  - {name}: {description}")
-        return "\n".join(lines)
+    def _selection_prompt(self, observation: Observation, reasoning: str | None) -> str:
+        example_kwargs = "{}"
+        for sel in observation.possible_actions:
+            if sel.required_kwargs:
+                example_kwargs = json.dumps({k: f"<{k}>" for k in sel.required_kwargs})
+                break
 
-    def _parse_action_selection_response(
-        self, raw_response: str, observation: Observation
-    ) -> Action_Selection:
-        parsed = self._extract_json_dict(raw_response)
+        reasoning_block = f"\nYour prior reasoning:\n{reasoning}\n" if reasoning else ""
 
-        if "action_choice_idx" not in parsed:
-            raise ValueError("LLM response missing action_choice_idx.")
+        return (
+            "You are controlling an agent in a grid-world game.\n"
+            "Choose exactly ONE action. Reply with ONLY a JSON object — no markdown, no extra text.\n\n"
+            "REQUIRED FORMAT:\n"
+            '{"action_choice_idx": <integer>, "action_kwargs": <dict or {}>}\n\n'
+            + f'Example: {{"action_choice_idx": 0, "action_kwargs": {example_kwargs}}}\n\n'
+            + self._observation_memory_block()
+            + f"CURRENT OBSERVATION:\n{observation}\n"
+            + reasoning_block + "\n"
+            + format_action_details(observation.possible_actions) + "\n\n"
+            + "Your JSON:"
+        )
 
-        action_choice_idx = parsed["action_choice_idx"]
-        if not isinstance(action_choice_idx, int):
-            raise ValueError("action_choice_idx must be an integer.")
+    def _retry_prompt(self, prev_prompt: str, bad_response: str, error: str) -> str:
+        return (
+            f"{prev_prompt}\n\n"
+            f"Your previous response was invalid.\n"
+            f"  Response: {bad_response}\n"
+            f"  Error: {error}\n\n"
+            "Try again. Output ONLY the JSON object."
+        )
 
-        if not 0 <= action_choice_idx < len(observation.possible_actions):
-            raise ValueError(f"action_choice_idx out of range: {action_choice_idx}")
+    # -----------------------------------------------------------------------
+    # Response parsing
+    # -----------------------------------------------------------------------
 
-        action_selection = observation.possible_actions[action_choice_idx]
-        action_kwargs = parsed.get("action_kwargs")
+    def _parse_selection(self, raw: str, observation: Observation) -> Action_Selection:
+        parsed = self._extract_json(raw)
+        idx = parsed.get("action_choice_idx")
+
+        if not isinstance(idx, int) or not (0 <= idx < len(observation.possible_actions)):
+            raise ValueError(f"Invalid action_choice_idx: {idx}")
+
+        action_selection = observation.possible_actions[idx]
 
         if action_selection.required_kwargs:
-            if not isinstance(action_kwargs, dict):
-                raise ValueError("LLM response must provide a dict for action_kwargs.")
-            action_selection.action_kwargs = action_kwargs
+            action_selection.action_kwargs = self._parse_action_kwargs(
+                action_selection,
+                parsed.get("action_kwargs", {}),
+            )
         else:
             action_selection.action_kwargs = None
 
         if not action_selection.is_valid():
-            raise ValueError("LLM selected an invalid action or invalid kwargs.")
+            raise ValueError(f"Action [{idx}] is invalid in the current state.")
 
         return action_selection
 
-    def _extract_json_dict(self, text: str) -> dict:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match is None:
-            raise ValueError("Could not find JSON object in LLM response.")
 
+    def _extract_json(self, text: str) -> dict:
+        text = re.sub(r"```(?:json)?\s*", "", text).strip()
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON object found in model response.")
         parsed = json.loads(match.group(0))
         if not isinstance(parsed, dict):
-            raise ValueError("LLM response JSON must be an object.")
+            raise ValueError("JSON response must be an object.")
         return parsed
 
-    def _conversation_prompt(self, recipients: list[Entity], env: Environment, info: str | None) -> str:
-        recipients_text = ", ".join(entity.name for entity in recipients)
-        history_text = self._format_conversation_history()
-        info_text = "" if info is None else f"\nAdditional context: {info}\n"
 
+    def _with_system(self, prompt: str) -> str:
+        if self.system_prompt:
+            return f"{self.system_prompt}\n\n{prompt}"
+        return prompt
+
+    def _parse_action_kwargs(self, action_selection: Action_Selection, raw_kwargs: Any) -> dict:
+        if not action_selection.required_kwargs:
+            return {}
+
+        if isinstance(raw_kwargs, dict):
+            return self._parse_action_kwargs_dict(action_selection, raw_kwargs)
+
+        if isinstance(raw_kwargs, list):
+            kwarg_text = "; ".join(self._coerce_kwarg_value(value) for value in raw_kwargs)
+            return action_selection.parse_and_validate_kwarg_list(kwarg_text)
+
+        if isinstance(raw_kwargs, str):
+            try:
+                return action_selection.parse_and_validate_kwarg_dict(raw_kwargs)
+            except Exception:
+                return action_selection.parse_and_validate_kwarg_list(raw_kwargs)
+
+        raise ValueError("'action_kwargs' must be a JSON object, list, or string.")
+
+    def _parse_action_kwargs_dict(self, action_selection: Action_Selection, raw_kwargs: dict[str, Any]) -> dict:
+        parts = []
+        for key, value in raw_kwargs.items():
+            parts.append(f"{key}: {self._coerce_kwarg_value(value)}")
+        return action_selection.parse_and_validate_kwarg_dict(", ".join(parts))
+
+    def _coerce_kwarg_value(self, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(value)
+        return json.dumps(value)
+
+    # -----------------------------------------------------------------------
+    # Communication_Policy — multi-agent dialogue
+    # -----------------------------------------------------------------------
+
+    def start_conversation(
+        self, participants: list[Entity], env: Environment, info: str | None = None
+    ) -> None:
+        self.active_conversation_participants = [entity.name for entity in participants if entity is not self.entity]
+        self.conversation_history.clear()
+        if info:
+            self.conversation_history.append({"role": "system", "content": info})
+            # be careful with system prompts
+            # dont want the model to over pay attention to the system prompt
+
+    def send_message(
+        self, recipients: list[Entity], env: Environment, info: str | None = None
+    ) -> str:
+        prompt = self._message_prompt(recipients, env, info)
+        response = self.model.generate_text(
+            self._with_system(prompt),
+            self.message_generation_config,
+        ).strip()
+        self.conversation_history.append({"role": "assistant", "content": response})
+        self._trim_history()
+        return response
+
+    def receive_message(self, message: str, sender: Entity, env: Environment) -> None:
+        self.conversation_history.append({"role": "user", "content": f"{sender.name}: {message}"})
+        self._trim_history()
+
+    def end_conversation(
+        self, participants: list[Entity], env: Environment, info: str | None = None
+    ) -> None:
+        if info:
+            self.conversation_history.append({"role": "system", "content": info})
+        self.active_conversation_participants = []
+        self._trim_history()
+
+    def _message_prompt(
+        self, recipients: list[Entity], env: Environment, info: str | None
+    ) -> str:
+        recipients_str = ", ".join(entity.name for entity in recipients)
+        history_str = (
+            "\n".join(entry["content"] for entry in self.conversation_history[-self.conversation_memory_window:])
+            or "(no prior messages)"
+        )
+        info_str = f"\nExtra context: {info}\n" if info else ""
         return (
-            "You are controlling a game character in dialogue.\n"
-            "Write exactly one short in-character message to the listed recipients.\n"
-            "Do not add speaker labels or quotes.\n"
-            f"Speaker: {self.entity.name}\n"
-            f"Recipients: {recipients_text}\n"
+            "You are playing a character in a grid-world game.\n"
+            "Write ONE short in-character message. No speaker labels, no quotes.\n\n"
+            f"Your character: {self.entity.name}\n"
+            f"Recipients: {recipients_str}\n"
             f"Environment: {env.description}\n"
-            f"{info_text}"
-            f"Recent conversation:\n{history_text}"
+            f"{info_str}"
+            f"Conversation so far:\n{history_str}\n\n"
+            "Your message:"
         )
 
-    def _format_conversation_history(self) -> str:
-        if not self.conversation_history:
-            return "No prior conversation."
-
-        return "\n".join(entry["content"] for entry in self.conversation_history[-self.conversation_memory_window :])
-
-    def _truncate_conversation_history(self) -> None:
+    def _trim_history(self) -> None:
         if len(self.conversation_history) > self.conversation_memory_window:
-            self.conversation_history = self.conversation_history[-self.conversation_memory_window :]
+            self.conversation_history = self.conversation_history[-self.conversation_memory_window:]
 
 
 def nearby_conversation_partners(actor: Entity, env: Environment) -> list[Entity]:
@@ -813,8 +1159,43 @@ class Start_Private_Conversation(Action):
         return "Start a private conversation with only some of the nearby people."
 
 
-def run_exp():
+def register_run_exp_model(model_mode: str) -> str:
+    model_key = "run_exp_llm"
+
+    if model_mode == "human_llm":
+        LLM_MODEL_REGISTRY[model_key] = Lazy_Model_Handle(
+            lambda: __import__(
+                "word_play.presets.model_presets",
+                fromlist=["Human"],
+            ).Human(),
+        )
+        return model_key
+
+    if model_mode == "openrouter":
+        LLM_MODEL_REGISTRY[model_key] = Lazy_Model_Handle(
+            lambda: OpenRouter_Model(
+                model_name="openai/gpt-4.1-mini",
+                system_prompt="You are a game-playing assistant that follows formatting instructions exactly.",
+                generation_params={"temperature": 0.0},
+                app_name="Word Play",
+            )
+        )
+        return model_key
+
+    LLM_MODEL_REGISTRY[model_key] = Lazy_Model_Handle(
+        lambda: HuggingFace_Chat_Model(
+            model_name="HuggingFaceTB/SmolLM2-360M-Instruct",
+            system_prompt="You are a game-playing assistant that follows formatting instructions exactly.",
+            generation_params={"max_new_tokens": 180, "do_sample": False},
+        )
+    )
+    return model_key
+
+
+def run_exp(model_mode: str = "hf_local"):
     exp_steps = 1000
+    model_key = register_run_exp_model(model_mode)
+    print(f"run_exp model mode: {model_mode}")
 
     env = Simple_Grid_World(
         description="The forbidden forest.",
@@ -824,8 +1205,8 @@ def run_exp():
                     name="Iskandar",
                     position=Position_2D(0, 0),
                     actions=[
-                        Test_Action(),
                         Do_Nothing(),
+                        Test_Action(),
                         Move_Up(),
                         Move_Down(),
                         Move_Left(),
@@ -835,7 +1216,11 @@ def run_exp():
                         Start_Private_Conversation(),
                     ],
                     components=[
-                        Human_Takes_Action(),
+                        LLM_Action_And_Communication_Policy(
+                            model_key=model_key,
+                            use_chain_of_thought=False,
+                        ),
+                        # Human_Takes_Action(),
                         Inventory(
                             collectable_tags=["item"],
                             inventory_size=2,
@@ -845,7 +1230,6 @@ def run_exp():
                         ),
                         Health(max_health=5, starting_health=3),
                         Collidable(collidable_tags=["wall"]),
-                        Human_Communication_Policy(),
                     ],
                 ),
                 # Entity(
@@ -935,10 +1319,16 @@ def run_exp():
         for agent_id, agent in enumerate(env.agents):
             observation = env.observe(agent_id)
             action, info = agent.get_component(Agent_Policy).select_action(observation)
+            print(f"[step {step}] {agent.name} -> {action}")
+            if info:
+                if info.get("reasoning"):
+                    print(f"[step {step}] reasoning:\n{info['reasoning']}")
+                if info.get("raw_response"):
+                    print(f"[step {step}] raw response:\n{info['raw_response']}")
             cur_step_actions.append(action)
 
         env.step(cur_step_actions)
 
 
 if __name__ == "__main__":
-    run_exp()
+    run_exp(sys.argv[1] if len(sys.argv) > 1 else "hf_local")
