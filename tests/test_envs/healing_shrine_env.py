@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests import _path_setup  # noqa: F401
 from word_play.core import Entity, Environment
 from word_play.presets.entity_orderings import entity_definition_order
 from word_play.presets.movement import Single_Point_Position
@@ -14,9 +15,6 @@ from tests.test_envs.rpg_test_helpers import (
     TinyObservation,
     action_for,
     random_action_for,
-    require_component,
-    set_test_verbosity,
-    trace,
 )
 
 
@@ -59,25 +57,24 @@ class HealingShrineEnv(Environment):
         pass
 
 
-def run_healing_shrine_env(mode: str = "predefined", steps: int = 3, seed: int = 7, verbosity: int = 0) -> dict:
+def run_healing_shrine_env(mode: str = "predefined", steps: int = 3, seed: int = 7) -> dict:
     import random
 
-    set_test_verbosity(verbosity)
     random.seed(seed)
     env = HealingShrineEnv()
     if mode == "predefined":
         action = action_for(env, "Cleric", Heal, "Fighter")
-        trace(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
+        print(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
         env.step([action])
     elif mode == "random":
         for _ in range(steps):
             action = random_action_for(env, env.agents[0])
-            trace(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
+            print(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
             env.step([action])
     else:
         raise ValueError("Unsupported mode: {mode}".format(mode=mode))
 
     fighter = next(entity for entity in env.state.entities if entity.name == "Fighter")
     return {
-        "fighter_health": require_component(fighter, LocalHealth).current_health,
+        "fighter_health": fighter.require_component(LocalHealth).current_health,
     }

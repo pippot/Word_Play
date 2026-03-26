@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests import _path_setup  # noqa: F401
 from word_play.core import Entity, Environment
 from word_play.presets.entity_orderings import entity_definition_order
 from word_play.presets.movement import Move_Right, Position_1D
@@ -13,9 +14,6 @@ from tests.test_envs.rpg_test_helpers import (
     TinyObservation,
     action_for,
     random_action_for,
-    require_component,
-    set_test_verbosity,
-    trace,
 )
 
 
@@ -58,10 +56,9 @@ class LootQuestEnv(Environment):
         pass
 
 
-def run_loot_quest_env(mode: str = "predefined", steps: int = 4, seed: int = 7, verbosity: int = 0) -> dict:
+def run_loot_quest_env(mode: str = "predefined", steps: int = 4, seed: int = 7) -> dict:
     import random
 
-    set_test_verbosity(verbosity)
     random.seed(seed)
     env = LootQuestEnv()
     if mode == "predefined":
@@ -71,18 +68,18 @@ def run_loot_quest_env(mode: str = "predefined", steps: int = 4, seed: int = 7, 
             (Pick_Up_Item, "Potion Drop"),
         ]:
             a = action_for(env, "Rogue", a_type, target)
-            trace(f"➜ [{a.actor.name}] uses [{a.action.__class__.__name__}] on [{a.target_entity.name}]")
+            print(f"➜ [{a.actor.name}] uses [{a.action.__class__.__name__}] on [{a.target_entity.name}]")
             env.step([a])
     elif mode == "random":
         for _ in range(steps):
             action = random_action_for(env, env.agents[0])
-            trace(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
+            print(f"➜ [{action.actor.name}] uses [{action.action.__class__.__name__}] on [{action.target_entity.name}]")
             env.step([action])
     else:
         raise ValueError("Unsupported mode: {mode}".format(mode=mode))
 
     rogue = next(entity for entity in env.state.entities if entity.name == "Rogue")
-    inventory = require_component(rogue, Inventory)
+    inventory = rogue.require_component(Inventory)
     position = rogue.position
     rogue_x = getattr(position, "x", None)
     if rogue_x is None:
