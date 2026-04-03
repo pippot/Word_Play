@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -27,17 +28,20 @@ def main() -> int:
     args, pytest_args = parser.parse_known_args()
 
     root = Path(__file__).resolve().parents[2]
-    pytest_executable = root / ".venv" / "bin" / "pytest"
 
-    if not pytest_executable.exists():
+    if importlib.util.find_spec("pytest") is None:
         print(
-            "Expected pytest at .venv/bin/pytest. Create the virtualenv and install test dependencies first.",
+            "pytest is not installed in the active interpreter. "
+            "Install the project with test dependencies first, for example: "
+            f"{sys.executable} -m pip install -e .[test]",
             file=sys.stderr,
         )
         return 1
 
     command = [
-        str(pytest_executable),
+        sys.executable,
+        "-m",
+        "pytest",
         "tests",
         f"--test-verbosity={args.test_verbosity}",
         *pytest_args,
