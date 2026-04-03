@@ -83,11 +83,17 @@ class Line_Tracking_Observation(Observation):
 
 
 def line_tracking_reward(agent_actions: list[Action_Selection], env: Environment) -> list[float]:
-    env = env
-    distance = abs(env.agents[0].position.x - env.target_position)
-    if env.terminations[0]:
-        return [-1.0]
-    return [1.0 if distance == 0 else 0.0]
+    current_distance = env.current_distance_to_target
+    if current_distance == 0:
+        return [1.0]
+
+    if current_distance < env.previous_distance_to_target:
+        return [0.25]
+
+    if current_distance > env.previous_distance_to_target:
+        return [-0.25]
+
+    return [0.0]
 
 
 class Line_Tracking_1D(Simple_Env_Reset_Mixin, Environment):
@@ -112,6 +118,8 @@ class Line_Tracking_1D(Simple_Env_Reset_Mixin, Environment):
         self.target_position = target_start
         self.target_drift_direction = target_drift_direction
         self.steps_elapsed = 0
+        self.previous_distance_to_target = abs(0 - self.target_position)
+        self.current_distance_to_target = self.previous_distance_to_target
 
         super().__init__(
             description,
@@ -133,10 +141,11 @@ class Line_Tracking_1D(Simple_Env_Reset_Mixin, Environment):
         )
 
     def environment_start_of_step(self, action_selections: list[Action_Selection]) -> None:
-        pass
+        self.previous_distance_to_target = abs(self.agents[0].position.x - self.target_position)
 
     def environment_end_of_step(self, action_selections: list[Action_Selection]) -> None:
         self.steps_elapsed += 1
+        self.current_distance_to_target = abs(self.agents[0].position.x - self.target_position)
 
         next_target = self.target_position + self.target_drift_direction
         if next_target < self.line_min or next_target > self.line_max:
@@ -150,9 +159,6 @@ class Line_Tracking_1D(Simple_Env_Reset_Mixin, Environment):
         elif agent_position > self.line_max:
             self.agents[0].position.x = self.line_max
 
-        if abs(self.agents[0].position.x - self.target_position) > self.lose_distance:
-            self.terminations[0] = True
-
         if self.steps_elapsed >= self.max_steps:
             self.truncations[0] = True
 
@@ -161,6 +167,9 @@ class Line_Tracking_1D(Simple_Env_Reset_Mixin, Environment):
         self.target_position = self.target_start
         self.target_drift_direction = self.initial_target_drift_direction
         self.steps_elapsed = 0
+        agent_entities = [entity for entity in self.state.entities if entity.is_agent]
+        self.previous_distance_to_target = abs(agent_entities[0].position.x - self.target_position)
+        self.current_distance_to_target = self.previous_distance_to_target
 
 
 def build_line_tracking_agent(name: str, policy_component) -> Entity:
