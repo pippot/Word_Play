@@ -26,3 +26,6 @@ hints. If type hints are removed, the version requirement can be dropped even fu
 ## Package Requirements
 The requirements.txt is not wrong; no additional packages are required.
 The only exception is that if you wish to use some of the preset Model classes, you must install packages such as openai.
+
+# Acknowledgements
+We are thankful to Darci Prout for coming up with the name "WordPlay."
