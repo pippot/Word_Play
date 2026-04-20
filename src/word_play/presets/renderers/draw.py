@@ -20,6 +20,10 @@ if TYPE_CHECKING:
     from .renderer import Pygame_Renderer
 
 
+# Note: Container/Inventory/Crafter imports are done inside functions
+# to avoid circular import issues with renderables module
+
+
 def visible_renderables(env: "Environment") -> list[tuple[int, Entity, Renderable]]:
     """Collect visible renderable entities sorted by their draw order."""
     renderables: list[tuple[int, Entity, Renderable]] = []
@@ -682,6 +686,101 @@ def draw_container_overlay(
         renderer.effect_surface.blit(ellipsis_surface, (ellipsis_x, ellipsis_y))
 
 
+def draw_inventory_overlay(
+    renderer: "Pygame_Renderer",
+    inventory: Any,
+    px: int,
+    py: int,
+) -> None:
+    """Draw up to 2 inventory items as overlays on an entity."""
+    inv_list = getattr(inventory, "inventory", None)
+    if not inv_list:
+        return
+
+    # Draw first item top-right, second item bottom-left
+    overlay_size = max(16, int(renderer.tile_size * 0.42))
+    positions = [
+        (px + renderer.tile_size - overlay_size - 2, py + 2),  # top-right
+        (px + 2, py + renderer.tile_size - overlay_size - 2),  # bottom-left
+    ]
+    colors = [(255, 100, 100), (100, 255, 100)]  # Fallback colors per item
+
+    for idx, item in enumerate(inv_list[:2]):
+        draw_x, draw_y = positions[idx]
+        item_renderable = item.get_component(Renderable)
+
+        if item_renderable is None or not item_renderable.sprite_path:
+            # No renderable - draw colored square with first letter
+            pygame.draw.rect(renderer.effect_surface, colors[idx], (draw_x, draw_y, overlay_size, overlay_size))
+            text = renderer.small_font.render(item.name[0].upper() if item.name else "?", True, (255, 255, 255))
+            renderer.effect_surface.blit(text, (draw_x + 2, draw_y + 2))
+            continue
+
+        image = get_scaled_image(renderer, item_renderable.sprite_path, overlay_size, overlay_size)
+        if image is not None:
+            renderer.effect_surface.blit(image, (draw_x, draw_y))
+        else:
+            # Sprite failed to load - draw colored square
+            pygame.draw.rect(renderer.effect_surface, colors[idx], (draw_x, draw_y, overlay_size, overlay_size))
+            text = renderer.small_font.render(item.name[0].upper() if item.name else "?", True, (255, 255, 255))
+            renderer.effect_surface.blit(text, (draw_x + 2, draw_y + 2))
+
+
+def draw_crafter_overlay(
+    renderer: "Pygame_Renderer",
+    crafter: Any,
+    px: int,
+    py: int,
+) -> None:
+    """Draw loaded or output items as overlay on a Crafter."""
+    # Show input item(s) at corners
+    stored_inputs = getattr(crafter, "stored_input_items", [])
+    if stored_inputs:
+        anchor = "top_right"
+        item = stored_inputs[0]
+        item_renderable = item.get_component(Renderable)
+        if item_renderable is not None:
+            overlay_size = max(16, int(renderer.tile_size * 0.42))
+            draw_x = px + renderer.tile_size - overlay_size - 2
+            draw_y = py + 2
+            image = get_scaled_image(renderer, item_renderable.sprite_path, overlay_size, overlay_size)
+            if image is not None:
+                renderer.effect_surface.blit(image, (draw_x, draw_y))
+
+    # Show output item in center
+    stored_output = getattr(crafter, "stored_item", None)
+    if stored_output is not None:
+        item_renderable = stored_output.get_component(Renderable)
+        if item_renderable is not None:
+            overlay_size = max(20, int(renderer.tile_size * 0.55))
+            draw_x = px + (renderer.tile_size - overlay_size) // 2
+            draw_y = py + (renderer.tile_size - overlay_size) // 2
+            image = get_scaled_image(renderer, item_renderable.sprite_path, overlay_size, overlay_size)
+            if image is not None:
+                renderer.effect_surface.blit(image, (draw_x, draw_y))
+
+
+def draw_single_item_holder_overlay(
+    renderer: "Pygame_Renderer",
+    holder: Any,
+    px: int,
+    py: int,
+) -> None:
+    """Draw the stored item as overlay on a Single_Item_Holder."""
+    stored = getattr(holder, "stored_item", None)
+    if stored is None:
+        return
+    item_renderable = stored.get_component(Renderable)
+    if item_renderable is None:
+        return
+    overlay_size = max(20, int(renderer.tile_size * 0.55))
+    draw_x = px + (renderer.tile_size - overlay_size) // 2
+    draw_y = py + (renderer.tile_size - overlay_size) // 2
+    image = get_scaled_image(renderer, item_renderable.sprite_path, overlay_size, overlay_size)
+    if image is not None:
+        renderer.effect_surface.blit(image, (draw_x, draw_y))
+
+
 def draw_entity(renderer: "Pygame_Renderer", entity: Entity, renderable: Renderable, px: int, py: int) -> None:
     """Draw an entity sprite, including damage flash and optional overlay."""
     sprite_name = animated_sprite_name(renderable)
@@ -736,6 +835,30 @@ def draw_entity(renderer: "Pygame_Renderer", entity: Entity, renderable: Rendera
             draw_container_overlay(renderer, container, px, py)
         finally:
             renderer.world_surface = previous_world_surface
+
+    # Check for Inventory component with items (Agents holding items)
+    from word_play.presets.systems.inventory import Inventory
+    inventory = entity.get_component(Inventory)
+    if inventory is not None:
+        inv_list = getattr(inventory, 'inventory', [])
+        if len(inv_list) > 0:
+            draw_inventory_overlay(renderer, inventory, px, py)
+
+    # Check for Crafter component with items (Chopping Board, Stove)
+    from word_play.presets.systems.crafter import Crafter
+    crafter = entity.get_component(Crafter)
+    if crafter is not None:
+        has_inputs = len(getattr(crafter, 'stored_input_items', [])) > 0
+        has_output = getattr(crafter, 'stored_item', None) is not None
+        if has_inputs or has_output:
+            draw_crafter_overlay(renderer, crafter, px, py)
+
+    # Check for Single_Item_Holder with item (Pass Counter)
+    from word_play.presets.systems.inventory import Single_Item_Holder
+    holder = entity.get_component(Single_Item_Holder)
+    if holder is not None:
+        if getattr(holder, 'stored_item', None) is not None:
+            draw_single_item_holder_overlay(renderer, holder, px, py)
 
     emissive_sprite = getattr(renderable, "emissive_sprite", None)
     if emissive_sprite:

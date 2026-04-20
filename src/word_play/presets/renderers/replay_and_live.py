@@ -629,6 +629,7 @@ def run_live_view(
     reset_factory: Callable[[], "Environment"] | None = None,
     initial_notes: list[str] | None = None,
     autofill_required_kwargs: Callable[["Action_Selection"], dict[str, Any]] | None = None,
+    autoplay: bool = True,
 ) -> list[dict[str, Any]]:
     """Run an interactive pygame loop that steps, renders, and records an environment."""
     init_pygame_if_needed(renderer)
@@ -653,7 +654,9 @@ def run_live_view(
 
     total_steps = max_steps if max_steps is not None else getattr(env, "episode_length", len(frames))
     committed_steps = 0
-
+    # Reset environment tick counter for HUD display
+    if hasattr(env, "tick"):
+        env.tick = 0
     clock = pygame.time.Clock()
     paused = False  # Live mode always starts immediately, no pause option
     last_step_at = time.monotonic()
@@ -762,6 +765,16 @@ def run_live_view(
                 step_worker = None
                 env.reset()
                 frames = []
+                # Create a new recorder on reset for a fresh log file
+                if keep_logs:
+                    recorder = make_recorder(
+                        log_path,
+                        title=record_title,
+                        metadata=record_metadata,
+                        keep_logs=keep_logs,
+                        log_root=log_root,
+                    )
+                    renderer.last_record_path = None if recorder is None else str(recorder.output_path)
                 frames = record_frame(
                     renderer,
                     env,
@@ -772,6 +785,9 @@ def run_live_view(
                 )
                 paused = not autoplay
                 committed_steps = 0
+            # Reset environment tick counter for HUD display
+            if hasattr(env, "tick"):
+                env.tick = 0
                 last_step_at = time.monotonic()
                 pending_prompt = None
                 renderer.camera_focus_entity_name = None
