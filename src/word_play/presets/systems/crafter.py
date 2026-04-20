@@ -154,40 +154,16 @@ class Load_Crafter(Action):
     def is_valid(
         self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None | str = "unconsidered"
     ) -> bool:
-        from word_play.presets.systems.inventory import Inventory
-        result = super().is_valid(actor, target_entity, env, kwargs=kwargs)
-        if not result:
-            # More specific debug
-            from word_play.core.actions import Target_Is_Nearby, Target_Not_Self
-            has_crafter = target_entity.get_component(Crafter) is not None
-            nearby = env.movement_system.positions_are_close(actor.position, target_entity.position)
-            is_self = actor is target_entity
-            if "Chopping Board" in target_entity.name:
-                print(f"[DEBUG] Load_Crafter CHECKING Chopping Board for {actor.name}@{actor.position}")
-                print(f"    Chopping Board@{target_entity.position}, nearby: {nearby}, has_crafter: {has_crafter}")
+        if not super().is_valid(actor, target_entity, env, kwargs=kwargs):
             return False
-
-        # Base validation passed - debug for Chopping Board
-        if "Chopping Board" in target_entity.name:
-            print(f"[DEBUG] Load_Crafter base validation PASSED for {actor.name}@{actor.position} -> {target_entity.name}")
         if actor.get_component(Inventory) is None:
-            print(f"[DEBUG] Load_Crafter: {actor.name} has no inventory")
             return False
         if kwargs is None or kwargs == "unconsidered":
             return True
         inventory = actor.get_component(Inventory)
         crafter = target_entity.get_component(Crafter)
-        idx = int(kwargs["inventory index"])
-        if idx >= len(inventory.inventory):
-            print(f"[DEBUG] Load_Crafter: inventory index {idx} out of range (have {len(inventory.inventory)})")
-            return False
-        item = inventory.inventory[idx]
-        can_accept = crafter.can_accept(item)
-        if not can_accept:
-            print(f"[DEBUG] Load_Crafter: crafter {target_entity.name} can't accept {item.name}")
-            print(f"  staged_inputs: {crafter.staged_inputs}")
-            print(f"  stored_item: {crafter.stored_item}")
-        return can_accept
+        item = inventory.inventory[int(kwargs["inventory index"])]
+        return crafter.can_accept(item)
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         assert kwargs is not None
