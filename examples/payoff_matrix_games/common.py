@@ -32,10 +32,10 @@ from word_play.presets.systems.communication import (
 from word_play.presets.systems.do_nothing import Do_Nothing
 
 try:
-    from .expand_symmetric_payoff_matrix import normalize_payoff_matrix
+    from .payoff_matrix_utils import normalize_payoff_matrix
     from .model_params import SUPPORTED_MODEL_MODES, make_policy, register_model
 except ImportError:
-    from expand_symmetric_payoff_matrix import normalize_payoff_matrix
+    from payoff_matrix_utils import normalize_payoff_matrix
     from model_params import SUPPORTED_MODEL_MODES, make_policy, register_model
 
 
