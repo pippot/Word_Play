@@ -1,86 +1,125 @@
+<<<<<<< HEAD
+"""Dungeon quest environment - Run the LLM-controlled example."""
+=======
+"""Dungeon quest environment - Run the example.
+
+Run with --policy preview to see the hardcoded demo without needing an API key.
+"""
+>>>>>>> origin/bryan/presets
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+try:
+    from examples.dungeon_quest.environment import DungeonRaidEnv
+except ModuleNotFoundError:
+    from environment import DungeonRaidEnv
 
-from examples.dungeon_quest.environment import (  # noqa: E402
-    DungeonRaidEnv,
-)
-from word_play.core import Agent_Policy  # noqa: E402
-from word_play.presets.renderers import EnvironmentLayoutAdapter, PygameRenderer  # noqa: E402
+<<<<<<< HEAD
+=======
+from word_play.presets.action_policies.dungeon_quest_preview_policy import DUNGEON_RAIDER_SEQUENCE
+from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
+>>>>>>> origin/bryan/presets
+from word_play.presets.action_policies.llm_action_and_communication import LLM_Action_And_Communication_Policy
+from word_play.presets.renderers import run_exp
 
-DEFAULT_LOG_DIR = PROJECT_ROOT / "experiments" / "logs" / "dungeon_quest"
+DEFAULT_LOG_DIR = Path(__file__).resolve().parents[2] / "experiments" / "logs" / "dungeon_quest"
+DEFAULT_MODEL_NAME = "openai/gpt-4o"
+DEFAULT_MODEL_KEY = "openrouter_dungeon_quest"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 
-def run_dungeon_quest(
-    *,
-    tile_size: int = 72,
-    autoplay: bool = True,
-    step_delay: float = 0.55,
-    keep_logs: bool = True,
-    log_path: str | None = None,
-    log_dir: str | None = None,
-) -> str | None:
-    """Run the dungeon preview in the live renderer."""
-    renderer = PygameRenderer(layout=EnvironmentLayoutAdapter(), tile_size=tile_size)
-
-    def reset_factory() -> DungeonRaidEnv:
-        return DungeonRaidEnv(renderer=renderer)
-
-    def step_builder(env: DungeonRaidEnv):
-        selections = []
-        for agent in env.agents:
-            observation = env.observe(env.agent_to_idx[agent])
-            selection, _info = agent.get_component(Agent_Policy).select_action(observation)
-            selections.append(selection)
-        return selections
-
-    initial_env = reset_factory()
-    renderer.run_live_view(
-        initial_env,
-        step_builder=step_builder,
-        keep_logs=keep_logs,
-        log_path=log_path,
-        log_root=log_dir or str(DEFAULT_LOG_DIR),
-        record_title="Dungeon Quest Example",
-        autoplay=autoplay,
-        step_delay=step_delay,
-        max_steps=initial_env.episode_length,
-        reset_factory=reset_factory,
-        initial_notes=["Dungeon quest booted.", "Sparse reward: only boss defeat pays out."],
-    )
-    return renderer.last_record_path
+def build_system_prompt(agent_name: str) -> str:
+    """Generate system prompt for the dungeon quest agent."""
+    return """You are controlling a dungeon raider in a partially observed dungeon crawl.
+Read the observation literally and do not assume anything outside the currently visible area.
+For action selection, reply with ONLY one JSON object in the form {"action_choice_idx": N}.
+Never output markdown, prose, or an empty response.
+Do not invent coordinates for yourself, enemies, walls, or the exit unless they are explicitly given.
+Use only the local directional facts, your starting position for the room, your goals, and the available actions.
+Your main goal is to defeat the final boss, the Ash Warden.
+Each room must be cleared before you can leave it.
+When all enemies in the room are dead, the exit opens.
+Stand on the open exit tile and choose Enter the exit to reach the next room.
+If enemies remain and are visible, prioritize reaching and killing them.
+If no enemies are visible, explore efficiently until you find them or find the open exit.
+If you are already standing on the open exit tile, choose Enter the exit immediately.
+Choose exactly one valid action from the provided action list."""
 
 
 def main() -> None:
-    """Parse CLI arguments and launch the dungeon example."""
+<<<<<<< HEAD
+    parser = argparse.ArgumentParser(description="Run the dungeon quest LLM example.")
+    parser.add_argument("--policy", choices=["llm"], default="llm", help="Policy mode to use (only LLM supported).")
+=======
     parser = argparse.ArgumentParser(description="Run the dungeon quest example.")
-    parser.add_argument("--tile-size", type=int, default=72)
+    parser.add_argument(
+        "--policy",
+        choices=["llm", "preview"],
+        default="llm",
+        help="Policy mode: llm (default, requires API key) or preview (hardcoded demo)."
+    )
+>>>>>>> origin/bryan/presets
+    parser.add_argument("--tile-size", type=int, default=56, help="Tile size for rendering.")
+    parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME, help="Model name for LLM mode.")
+    parser.add_argument("--model-key", default=DEFAULT_MODEL_KEY, help="Model key for LLM mode.")
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="Base URL for LLM mode.")
     parser.add_argument("--paused", action="store_true", help="Start paused instead of autoplaying.")
-    parser.add_argument("--delay", type=float, default=0.55, help="Seconds between auto-stepped frames.")
-    parser.add_argument("--no-logs", action="store_true", help="Do not save a replay log for the live run.")
-    parser.add_argument("--log-path", default=None, help="Optional explicit path for the replay log pickle.")
+    parser.add_argument("--delay", type=float, default=2.0, help="Seconds between auto-stepped frames.")
+    parser.add_argument("--no-logs", action="store_true", help="Do not save a replay log.")
+    parser.add_argument("--log-path", default=None, help="Optional explicit path for the replay log.")
     parser.add_argument("--log-dir", default=str(DEFAULT_LOG_DIR), help="Directory for auto-named replay logs.")
     args = parser.parse_args()
 
-    saved_log_path = run_dungeon_quest(
+    env = DungeonRaidEnv()
+
+<<<<<<< HEAD
+    run_exp(
+        env=env,
+        policy="llm",
         tile_size=args.tile_size,
-        autoplay=not args.paused,
-        step_delay=args.delay,
+        model_name=args.model_name,
+        model_key=args.model_key,
+        base_url=args.base_url,
+        llm_policy_builder=lambda _env, agent, model_key: LLM_Action_And_Communication_Policy(
+            model_key=model_key,
+            system_prompt=build_system_prompt(agent.name),
+            action_generation_config={"temperature": 0.2},
+            message_generation_config={"temperature": 0.4},
+            use_chain_of_thought=True,
+        ),
+        sidebar_width=380,
         keep_logs=not args.no_logs,
         log_path=args.log_path,
-        log_dir=args.log_dir,
+        log_root=args.log_dir,
+        autoplay=True,
+        step_delay=args.delay,
+        record_title="Dungeon Quest LLM Example",
+        initial_notes=["Dungeon quest demo booted."],
     )
-    if saved_log_path is not None:
-        print(f"Saved replay log: {saved_log_path}")
+=======
+    if args.policy == "preview":
+        # Attach hardcoded preview policy to the player agent
+        # Find the player agent and assign the raider sequence
+        for entity in env.state.entities:
+            if entity.name == "Raider":
+                entity.policy = Follow_Action_Sequence(DUNGEON_RAIDER_SEQUENCE, skip_invalid_actions=True)
+
+        run_exp(
+            env=env,
+            policy="preview",
+            tile_size=args.tile_size,
+            sidebar_width=380,
+            keep_logs=not args.no_logs,
+            log_path=args.log_path,
+            log_root=args.log_dir,
+            autoplay=True,
+            step_delay=args.delay,
+            record_title="Dungeon Quest Preview Demo",
+            initial_notes=["Dungeon quest preview demo (no API key needed)."],
+        )
+>>>>>>> origin/bryan/presets
 
 
 if __name__ == "__main__":

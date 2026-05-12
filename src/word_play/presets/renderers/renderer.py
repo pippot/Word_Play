@@ -56,7 +56,7 @@ class Renderer(ABC):
         """Render one environment frame using a concrete backend."""
 
 
-class PositionLayoutAdapter(ABC):
+class Position_Layout_Adapter(ABC):
     """Map environment positions and optional backgrounds into render space."""
     @abstractmethod
     def screen_position(self, position: Position) -> tuple[float, float]:
@@ -66,21 +66,98 @@ class PositionLayoutAdapter(ABC):
         """Return background tiles to draw behind entities."""
         return []
 
+    def prepare_env(self, env: "Environment") -> None:
+        """Update any renderer-facing derived state before drawing."""
+        return None
 
-class GridLayoutAdapter(PositionLayoutAdapter):
+
+class Grid_Layout_Adapter(Position_Layout_Adapter):
     """Use entity x/y values directly as grid coordinates."""
     def screen_position(self, position: Position) -> tuple[float, float]:
         """Project the position without changing its coordinates."""
         return float(position.x), float(position.y)
 
 
-class EnvironmentLayoutAdapter(GridLayoutAdapter):
+class Environment_Layout_Adapter(Grid_Layout_Adapter):
     """Extend grid layout with environment-provided background tiles."""
     def background(self, env: "Environment") -> list[dict[str, Any]]:
-        """Fetch background tiles when the environment exposes them."""
+        """Fetch background tiles or synthesize simple floor/wall backgrounds."""
+        wall_positions = getattr(env, "wall_positions", None)
+        width = getattr(env, "width", None)
+        height = getattr(env, "height", None)
+        floor_sprite = getattr(env, "floor_sprite", "src/world_tiles/indoors/floors/day_brick_floor_c.png")
+        wall_set = getattr(env, "wall_set", None)
+        wall_sprite = getattr(env, "wall_sprite", None)
+        if wall_sprite is None:
+            for entity in getattr(getattr(env, "state", None), "entities", []):
+                if "wall" not in getattr(entity, "tags", []):
+                    continue
+                renderable = entity.get_component(Renderable) if hasattr(entity, "get_component") else None
+                if renderable is not None:
+                    wall_sprite = renderable.sprite_path
+                    break
+        if wall_positions is not None and width is not None and height is not None and floor_sprite and (wall_set or wall_sprite):
+            background: list[dict[str, Any]] = []
+            for y in range(height):
+                for x in range(width):
+                    if (x, y) in wall_positions:
+                        tile = {"x": x, "y": y, "kind": "wall"}
+                        if wall_set:
+                            tile["wall_set"] = wall_set
+                        else:
+                            tile["sprite"] = wall_sprite
+                    else:
+                        tile = {"x": x, "y": y, "kind": "floor", "sprite": floor_sprite}
+                    background.append(tile)
+            return background
         background_tiles = getattr(env, "background_tiles", None)
         return [] if background_tiles is None else background_tiles()
 
+    def prepare_env(self, env: "Environment") -> None:
+        """Apply common renderer-side sync for inventories, holders, crafters, and containers."""
+        try:
+            from word_play.presets.systems import Inventory, Crafter, Single_Item_Holder, Container
+        except Exception:
+            return
+
+        for entity in getattr(getattr(env, "state", None), "entities", []):
+            renderable = entity.get_component(Renderable) if hasattr(entity, "get_component") else None
+            if renderable is None:
+                continue
+
+            inventory = entity.get_component(Inventory)
+            holder = entity.get_component(Single_Item_Holder)
+            crafter = entity.get_component(Crafter)
+            container = entity.get_component(Container)
+
+            if inventory is not None:
+                held_item = inventory.inventory[0] if inventory.inventory else None
+                held_renderable = None if held_item is None else held_item.get_component(Renderable)
+                renderable.overlay_sprite = None if held_renderable is None else held_renderable.sprite_path
+                renderable.overlay_mode = "badge"
+                renderable.overlay_scale = 0.42
+            elif holder is not None and holder.stored_item is not None:
+                item_renderable = holder.stored_item.get_component(Renderable)
+                if item_renderable is not None:
+                    renderable.overlay_sprite = item_renderable.sprite_path
+                    renderable.overlay_mode = "center"
+                    renderable.overlay_scale = 0.75
+            elif crafter is not None:
+                if crafter.stored_item is not None:
+                    # Output is ready - show the crafted item
+                    output_renderable = crafter.stored_item.get_component(Renderable)
+                    if output_renderable is not None:
+                        renderable.overlay_sprite = output_renderable.sprite_path
+                        renderable.overlay_mode = "center"
+                        renderable.overlay_scale = 0.75
+                elif crafter.active_recipe is not None and crafter.remaining_steps is not None:
+                    # Crafting in progress - no overlay needed, just show in HUD
+                    renderable.overlay_sprite = None
+                else:
+                    renderable.overlay_sprite = None
+
+            if "collectable" in entity.tags:
+                renderable.visible = "in_inventory" not in entity.tags and "in_container" not in entity.tags
 
 def compact_non_empty_lines(text: str, limit: int = 4) -> list[str]:
     """Return a few non-empty trimmed lines for renderer-side HUD formatting."""
@@ -126,16 +203,41 @@ def apply_agent_sidebar(
     env.hud_sidebar_actions = sidebar_action_lines[:max_action_lines]
 
 
+def apply_policy_selection_sidebar(
+    env: "Environment",
+    *,
+    observation: Any,
+    selection: Any,
+    info: dict[str, Any] | None = None,
+    header: str = "Agent",
+    max_reasoning_lines: int = 32,
+    max_selection_lines: int = 4,
+    max_action_lines: int = 12,
+) -> None:
+    """Populate sidebar state from a generic policy selection result."""
+    resolved_info = info or {}
+    apply_agent_sidebar(
+        env,
+        header=header,
+        reasoning=resolved_info.get("reasoning"),
+        selection=str(selection),
+        observation=observation,
+        max_reasoning_lines=max_reasoning_lines,
+        max_selection_lines=max_selection_lines,
+        max_action_lines=max_action_lines,
+    )
+
+
 from .draw import render_environment
 from .replay_and_live import replay_frames, replay_recording, run_live_view
 from .runtime import configure_renderer, init_pygame_if_needed
 
 
-class PygameRenderer(Renderer):
+class Pygame_Renderer(Renderer):
     """Concrete renderer that delegates drawing and replay to pygame helpers."""
     def __init__(
         self,
-        layout: PositionLayoutAdapter,
+        layout: Position_Layout_Adapter,
         tile_size: int = 32,
         draw_grid_overlay: bool = False,
     ):
@@ -213,15 +315,15 @@ class PygameRenderer(Renderer):
 def render(
     env: "Environment",
     *,
-    renderer: PygameRenderer | None = None,
+    renderer: Pygame_Renderer | None = None,
     tile_size: int = 32,
     draw_grid_overlay: bool = False,
-) -> PygameRenderer:
+) -> Pygame_Renderer:
     """Render one frame with a provided or auto-created pygame renderer."""
     active_renderer = renderer or getattr(env, "renderer_impl", None)
     if active_renderer is None:
-        active_renderer = PygameRenderer(
-            layout=EnvironmentLayoutAdapter(),
+        active_renderer = Pygame_Renderer(
+            layout=Environment_Layout_Adapter(),
             tile_size=tile_size,
             draw_grid_overlay=draw_grid_overlay,
         )
@@ -238,8 +340,8 @@ def replay(
     step_delay: float = 0.28,
 ) -> None:
     """Replay a saved log using the default environment layout adapter."""
-    renderer = PygameRenderer(
-        layout=EnvironmentLayoutAdapter(),
+    renderer = Pygame_Renderer(
+        layout=Environment_Layout_Adapter(),
         tile_size=tile_size,
         draw_grid_overlay=draw_grid_overlay,
     )
