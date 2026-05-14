@@ -23,9 +23,6 @@ def component_data_attributes(comp):
         if not name.startswith("__") and not callable(value) and name != "entity"
     }
 
-def _format_inventory_items(inventory: list[Entity]) -> list[str]:
-    return [item.name for item in inventory]
-
 
 def entity_state_to_str(entity: Entity) -> str:
     lines = [
@@ -42,14 +39,18 @@ def entity_state_to_str(entity: Entity) -> str:
         if not component_data:
             continue
 
-        if issubclass(ctype, Agent_Policy) or issubclass(ctype, Non_Agent_Policy) or issubclass(ctype, Communication_Policy):
+        if (
+            issubclass(ctype, Agent_Policy)
+            or issubclass(ctype, Non_Agent_Policy)
+            or issubclass(ctype, Communication_Policy)
+        ):
             continue
 
         if component_name == "Health":
             lines.append(f"health: {comp.health}/{comp.max_health}")
         elif component_name == "Inventory":
             lines.append(f"inventory_size: {comp.inventory_size}")
-            lines.append(f"inventory: {_format_inventory_items(comp.inventory)}")
+            lines.append(f"inventory: {[item.name for item in comp.inventory]}")
         elif component_name == "Collidable":
             lines.append(f"collides_with_tags: {comp.collidable_tags}")
         elif component_name == "Key":
@@ -70,7 +71,11 @@ def indent(text: str, prefix: str = "\t") -> str:
 
 
 def format_nearby_entities(nearby_entities: list[Entity], agent: Entity) -> str:
-    strs = [f"- {entity_state_to_str(entity).replace(chr(10), chr(10) + '  ')}" for entity in nearby_entities if entity is not agent]
+    strs = [
+        f"- {entity_state_to_str(entity).replace(chr(10), chr(10) + '  ')}"
+        for entity in nearby_entities
+        if entity is not agent
+    ]
     if not strs:
         return "Nearby Entities: None"
     return "Nearby Entities:\n" + "\n".join(strs)
