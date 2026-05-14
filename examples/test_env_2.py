@@ -1,22 +1,15 @@
 from word_play.core import (
     Action,
     Agent_Policy,
-    Component,
     Entity,
-    Environment,
-    Observation,
-    Target_Is_Nearby,
     Target_Is_Self,
-    Target_Not_Self,
 )
 from word_play.presets.action_args import (
     Dict_Arg,
-    Dynamic_Choice_Arg,
     Int_Arg,
     List_Arg,
     String_Arg,
     String_Choice_Arg,
-    arg_in_range,
 )
 from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
 from word_play.presets.action_policies.human import Human_Takes_Action
@@ -40,7 +33,6 @@ from word_play.presets.systems.communication import (
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.health import Health
 from word_play.presets.systems.inventory import Inventory
-from word_play.utils import tilemap_to_entities
 
 import pprint
 
@@ -185,6 +177,7 @@ def run_exp():
         for agent_id, agent in enumerate(env.agents):
             observation = env.observe(agent_id)
             action, info = agent.get_component(Agent_Policy).select_action(observation)
+            print(f"[step {step}] {agent.name} -> {action}")
             cur_step_actions.append(action)
 
         env.step(cur_step_actions)

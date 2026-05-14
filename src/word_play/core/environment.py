@@ -64,6 +64,7 @@ class Environment(ABC):
         """
         self.description = description
         self.state = Environment_State(entities)
+        self.cur_step = 0
         self.movement_system = movement_system
         self.reward_func = reward_func
         self.entity_order = entity_order
@@ -114,6 +115,7 @@ class Environment(ABC):
     def reset(self, seed=None) -> None:
         self.cur_episode_seed = seed
         self._reset(seed=seed)
+        self.cur_step = 0
         self._init_agent_list()
         self._init_agent_idx_dict()
         self.last_rewards = [None] * len(self.agents)
@@ -195,8 +197,9 @@ class Environment(ABC):
             entity.post_actions_step(env=self)
 
         self.environment_end_of_step(action_selections)
-        self.last_rewards = self.reward_func(action_selections, self)
 
+        self.last_rewards = self.reward_func(action_selections, self)
+        self.cur_step += 1
         self._reorder_entities()
 
     def last(self, agent_id: int) -> tuple[Observation, float, bool, bool, dict]:
