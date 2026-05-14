@@ -73,6 +73,236 @@ def _floor_tiles_from_bounds(bounds: Any, floor_sprite: str) -> list[dict[str, A
     ]
 
 
+def _install_communication_render_hooks(env) -> None:
+    """Mirror chat messages into Renderable.last_message without changing core systems."""
+    try:
+        from word_play.presets.systems.communication import Communication_Policy
+        from .renderer import Renderable
+    except Exception:
+        return
+
+    for entity in getattr(getattr(env, "state", None), "entities", []):
+        if not hasattr(entity, "get_component"):
+            continue
+        renderable = entity.get_component(Renderable)
+        policy = entity.get_component(Communication_Policy)
+        if renderable is None or policy is None:
+            continue
+        if getattr(policy, "_renderer_message_hook_installed", False):
+            continue
+
+        original_start = policy.start_conversation
+        original_send = policy.send_message
+        original_end = policy.end_conversation
+
+        def wrapped_start(self, participants, env, info=None, *, _original=original_start):
+            depth = int(getattr(env, "_renderer_conversation_depth", 0))
+            if depth == 0:
+                env._renderer_conversation_log = []
+                env._renderer_conversation_participants = [participant.name for participant in participants]
+                starter_name = getattr(getattr(self, "entity", None), "name", "Unknown")
+                env._renderer_conversation_starter = starter_name
+                env._renderer_conversation_log.append(f"Conversation started by {starter_name}")
+            env._renderer_conversation_depth = depth + 1
+            return _original(participants, env, info)
+
+        def wrapped_send(self, recipients, env, info=None, *, _original=original_send, _renderable=renderable):
+            message = _original(recipients, env, info)
+            if message is not None:
+                _renderable.last_message = str(message)
+                _renderable._last_message_step = getattr(env, "cur_step", 0)
+                conversation_log = list(getattr(env, "_renderer_conversation_log", []))
+                speaker_name = getattr(getattr(self, "entity", None), "name", "Unknown")
+                participant_count = max(1, len(getattr(env, "_renderer_conversation_participants", [])))
+                prior_messages = max(
+                    0,
+                    len([entry for entry in conversation_log if entry.startswith("Round ") and ": " in entry])
+                )
+                round_number = prior_messages // participant_count + 1
+                conversation_log.append(f"Round {round_number} - {speaker_name}: {message}")
+                env._renderer_conversation_log = conversation_log[-8:]
+            return message
+
+        def wrapped_end(self, participants, env, info=None, *, _original=original_end):
+            try:
+                return _original(participants, env, info)
+            finally:
+                depth = max(0, int(getattr(env, "_renderer_conversation_depth", 0)) - 1)
+                env._renderer_conversation_depth = depth
+                if depth == 0:
+                    env._renderer_conversation_participants = []
+                    env._renderer_conversation_log = []
+                    env._renderer_conversation_starter = None
+
+        policy.start_conversation = MethodType(wrapped_start, policy)
+        policy.send_message = MethodType(wrapped_send, policy)
+        policy.end_conversation = MethodType(wrapped_end, policy)
+        policy._renderer_message_hook_installed = True
+
+
+def _expire_render_messages(env) -> None:
+    """Clear transient speech bubbles after they have been visible for one step."""
+    try:
+        from .renderer import Renderable
+    except Exception:
+        return
+
+    current_step = getattr(env, "cur_step", 0)
+    for entity in getattr(getattr(env, "state", None), "entities", []):
+        if not hasattr(entity, "get_component"):
+            continue
+        renderable = entity.get_component(Renderable)
+        if renderable is None:
+            continue
+        message_step = getattr(renderable, "_last_message_step", None)
+        if message_step is None:
+            continue
+        if current_step > message_step + 1:
+            renderable.last_message = None
+            renderable._last_message_step = None
+
+
+def _install_human_prompt_hooks(env) -> None:
+    """Patch human action/chat components at runtime when a renderer is active."""
+    renderer = getattr(env, "renderer_impl", None)
+    if renderer is None:
+        return
+
+    try:
+        from word_play.presets.action_policies.human import Human_Takes_Action
+    except Exception:
+        Human_Takes_Action = None
+    try:
+        from word_play.presets.systems.communication.chat_room_action_communication.presets.policies import (
+            Human_Communication_Policy,
+        )
+    except Exception:
+        Human_Communication_Policy = None
+    try:
+        from .runtime import prompt_human_action, prompt_human_multi_select, prompt_human_text
+    except Exception:
+        return
+
+    for entity in getattr(getattr(env, "state", None), "entities", []):
+        if not hasattr(entity, "get_component"):
+            continue
+
+        if Human_Takes_Action is not None:
+            action_policy = entity.get_component(Human_Takes_Action)
+            if action_policy is not None and not getattr(action_policy, "_renderer_prompt_hook_installed", False):
+                original_choose = action_policy._choose_action
+                original_kwargs = action_policy._get_action_kwargs
+
+                def wrapped_choose(self, observation, *, _original=original_choose):
+                    active_renderer = getattr(observation.possible_actions[0].env, "renderer_impl", None) if observation.possible_actions else None
+                    if active_renderer is None:
+                        return _original(observation)
+                    return prompt_human_action(active_renderer, observation.possible_actions[0].env, observation)
+
+                def wrapped_kwargs(self, action_selection, *, _original=original_kwargs):
+                    active_renderer = getattr(action_selection.env, "renderer_impl", None)
+                    if active_renderer is None:
+                        return _original(action_selection)
+                    error_message = None
+                    while True:
+                        if (
+                            action_selection.required_kwargs
+                            and len(action_selection.required_kwargs) == 1
+                        ):
+                            arg_name, arg = next(iter(action_selection.required_kwargs.items()))
+                            arg_description = arg.arg_description(
+                                action_selection.actor,
+                                action_selection.target_entity,
+                                action_selection.env,
+                            )
+                            matches = re.findall(r"(\d+)\s*\(([^)]+)\)", arg_description)
+                            if matches:
+                                text = prompt_human_multi_select(
+                                    active_renderer,
+                                    action_selection.env,
+                                    entity_name=action_selection.actor.name,
+                                    position_label=str(action_selection.actor.position),
+                                    header="Action Arguments",
+                                    instructions=[
+                                        str(action_selection),
+                                        f"Choose values for: {arg_name}",
+                                        "Use Up/Down to move, Space to toggle, Enter to submit.",
+                                        *( [f"Error: {error_message}"] if error_message else [] ),
+                                    ],
+                                    options=[(int(idx), label) for idx, label in matches],
+                                )
+                                try:
+                                    return action_selection.parse_and_validate_kwarg_list(text)
+                                except Exception as exc:
+                                    error_message = str(exc)
+                                    continue
+
+                        instructions = [
+                            str(action_selection),
+                            "Type the required values separated by ';'.",
+                            "Press Enter to submit.",
+                        ]
+                        if action_selection.required_kwargs:
+                            for name, arg in action_selection.required_kwargs.items():
+                                instructions.append(
+                                    f'{name}: {arg.arg_description(action_selection.actor, action_selection.target_entity, action_selection.env)}'
+                                )
+                        if error_message:
+                            instructions.append(f"Error: {error_message}")
+
+                        text = prompt_human_text(
+                            active_renderer,
+                            action_selection.env,
+                            entity_name=action_selection.actor.name,
+                            position_label=str(action_selection.actor.position),
+                            header="Action Arguments",
+                            instructions=instructions,
+                        )
+                        try:
+                            return action_selection.parse_and_validate_kwarg_list(text)
+                        except Exception as exc:
+                            error_message = str(exc)
+
+                action_policy._choose_action = MethodType(wrapped_choose, action_policy)
+                action_policy._get_action_kwargs = MethodType(wrapped_kwargs, action_policy)
+                action_policy._renderer_prompt_hook_installed = True
+
+        if Human_Communication_Policy is not None:
+            comm_policy = entity.get_component(Human_Communication_Policy)
+            if comm_policy is not None and not getattr(comm_policy, "_renderer_prompt_hook_installed", False):
+                original_send = comm_policy.send_message
+
+                def wrapped_send(self, recipients, env, info=None, *, _original=original_send):
+                    active_renderer = getattr(env, "renderer_impl", None)
+                    if active_renderer is None or self.entity is None:
+                        return _original(recipients, env, info)
+                    recipient_names = ", ".join(recipient.name for recipient in recipients) or "nobody"
+                    transcript = list(getattr(env, "_renderer_conversation_log", []))
+                    instructions = [
+                        f"Recipients: {recipient_names}",
+                        *([str(info)] if info else []),
+                    ]
+                    if transcript:
+                        instructions.append("Conversation so far:")
+                        instructions.extend(transcript[-6:])
+                    instructions.extend([
+                        f"Now speaking: {self.entity.name}",
+                        "Type your message.",
+                        "Press Enter to send.",
+                    ])
+                    return prompt_human_text(
+                        active_renderer,
+                        env,
+                        entity_name=self.entity.name,
+                        position_label=str(self.entity.position),
+                        header="Chat",
+                        instructions=instructions,
+                    )
+
+                comm_policy.send_message = MethodType(wrapped_send, comm_policy)
+                comm_policy._renderer_prompt_hook_installed = True
+
+
 class Position_Layout_Adapter(ABC):
     """Map environment positions and optional backgrounds into render space."""
 
