@@ -1,20 +1,29 @@
+"""Health system — HP tracking and damage/death."""
 from __future__ import annotations
 
 from word_play.core import Component, Environment
 
 
 class Health(Component):
+    """Health component with max/current health tracking."""
 
-    def __init__(self, max_health: float, starting_health: float):
+    def __init__(self, max_health: float, starting_health: float | None = None):
         super().__init__()
         self.max_health = max_health
-        self.health = starting_health
+        self.health = starting_health if starting_health is not None else max_health
+
+    def heal(self, amount: float) -> float:
+        """Heal by amount. Returns actual amount healed."""
+        old_health = self.health
+        self.health = min(self.health + amount, self.max_health)
+        return self.health - old_health
+
+    def damage(self, amount: float) -> float:
+        """Take damage. Returns actual damage taken."""
+        old_health = self.health
+        self.health -= amount
+        return old_health - self.health
 
     def post_actions_step(self, env: Environment) -> None:
-        # NOTE: race conditions (e.g., entity is destory only on the next step after a killing blow) due to action order
-        #       are avoided since all entity step funcs are run after the actions are resolved
-        # NOTE: If both agents A and B have 1 health and they both zap each other on the same turn for 1 damage. Under
-        #       the current implementation, they will both die, instead of only the agent who gets zapped first dying.
-        #       This is because the agents are only destroyed in post_actions_step, i.e., after all actions have executed
         if self.health <= 0:
             env.destroy_entity(self.entity)

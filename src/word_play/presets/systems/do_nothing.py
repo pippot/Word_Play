@@ -1,3 +1,4 @@
+"""Do_Nothing action — a no-op that skips the agent's turn."""
 from word_play.core import Action, Entity, Environment, Target_Is_Self
 
 
