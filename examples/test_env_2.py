@@ -101,7 +101,11 @@ def run_exp(model_mode: str = "human_action"):
                     Start_Private_Conversation(),
                 ],
                 components=[
-                    LLM_Action_And_Communication_Policy(model_key=model_key) if model_mode == "human_llm" else Human_Takes_Action(),
+                    (
+                        LLM_Action_And_Communication_Policy(model_key=model_key)
+                        if model_mode == "human_llm"
+                        else Human_Takes_Action()
+                    ),
                     Inventory(
                         collectable_tags=["item"],
                         inventory_size=2,
