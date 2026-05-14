@@ -70,7 +70,6 @@ class Environment(ABC):
         self.entity_order = entity_order
         self.reset()
         self.post_init()
-        
 
     def post_init(self) -> None:
         """This method is called at the end of the __init__ method. It can be overwritten to provide more complex logic."""
@@ -197,11 +196,9 @@ class Environment(ABC):
         for entity in self.state.entities:
             entity.post_actions_step(env=self)
 
-        
-
         self.environment_end_of_step(action_selections)
         self.last_rewards = self.reward_func(action_selections, self)
-        
+
         self.cur_step += 1
         self._reorder_entities()
 
