@@ -1,12 +1,12 @@
-"""Container system — chests, infinite sources, regen pools, and single-item holders.
+"""Container system — chests, regrowable item sources, regen pools, and single-item holders.
 
 Exports:
 - Container: Chest-style storage with visibility control
-- Infinite_Item_Source: Source that produces items on demand
+- Regrowable_Item_Source: Source that produces items on demand
 - Regen_Pool: Shared resource pool with regeneration (tragedy of the commons)
 - Single_Item_Holder: Container that holds exactly one item
 - Open_Container: Action to open a container
-- Take_From_Infinite_Source: Action to take from an infinite source into inventory
+- Take_From_Infinite_Source: Action to take from a regrowable item source into inventory
 - Take_From_Regen_Pool: Action to take from a regen pool into inventory
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ class Open_Container(Action):
 
 
 class Take_From_Infinite_Source(Action):
-    """Take an item from an Infinite_Item_Source directly into inventory.
+    """Take an item from a Regrowable_Item_Source directly into inventory.
 
     Args:
         reward: Fixed reward for taking, or None to check actor's
@@ -59,7 +59,7 @@ class Take_From_Infinite_Source(Action):
             validation_rules=[
                 Target_Not_Self(),
                 Target_Is_Nearby(),
-                Target_Has_Component(Infinite_Item_Source),
+                Target_Has_Component(Regrowable_Item_Source),
             ],
         )
         self.reward = reward
@@ -67,7 +67,7 @@ class Take_From_Infinite_Source(Action):
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
         if not super().is_valid(actor, target, env, kwargs=kwargs):
             return False
-        source = target.get_component(Infinite_Item_Source)
+        source = target.get_component(Regrowable_Item_Source)
         if source is None:
             return False
         if source.available is not None and source.available <= 0:
@@ -80,7 +80,7 @@ class Take_From_Infinite_Source(Action):
     def exec_action(self, actor, target, env, kwargs) -> dict:
         from word_play.presets.systems.preferences import Preference
 
-        source = target.get_component(Infinite_Item_Source)
+        source = target.get_component(Regrowable_Item_Source)
         item = source.create_item()
         if item is None:
             return {"error": "Source empty"}
@@ -137,7 +137,7 @@ class Container(Inventory):
         return {"opened": True}
 
 
-class Infinite_Item_Source(Component):
+class Regrowable_Item_Source(Component):
     """Source that dispenses items via inventory interface."""
 
     def __init__(
@@ -190,7 +190,7 @@ class Infinite_Item_Source(Component):
 class Regen_Pool(Component):
     """Shared resource pool with depletion/regeneration dynamics.
 
-    Unlike Infinite_Item_Source which has unlimited items, Regen_Pool has
+    Unlike Regrowable_Item_Source which has unlimited items, Regen_Pool has
     a finite stock that regrows proportionally to remaining population
     (logistic growth). Over-harvesting depletes the pool — tragedy of
     the commons.
