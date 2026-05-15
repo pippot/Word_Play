@@ -6,7 +6,7 @@ from typing import Any
 
 from word_play.core import Agent_Policy, Entity, Environment, Observation
 from word_play.core.actions import Action_Selection
-from word_play.presets.models import LLM_MODEL_REGISTRY, Model
+from word_play.presets.models import Chat_Message, LLM_MODEL_REGISTRY, Model
 from word_play.presets.observation.simple_observation import format_action_details
 from word_play.presets.systems.communication.core import Communication_Policy
 
@@ -69,6 +69,22 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
     def model(self) -> Model:
         return LLM_MODEL_REGISTRY.resolve(self.model_key)
 
+    def _generate_chat_response(
+        self,
+        prompt: str,
+        generation_config: dict | None,
+        max_new_tokens: int | None,
+    ) -> str:
+        messages = []
+        if self.system_prompt:
+            messages.append(Chat_Message(role="system", content=self.system_prompt))
+        messages.append(Chat_Message(role="user", content=prompt))
+        return self.model.generate_chat(
+            messages=messages,
+            generation_config=generation_config,
+            max_new_tokens=max_new_tokens,
+        )
+
     # -----------------------------------------------------------------------
     # Agent_Policy — action selection
     # -----------------------------------------------------------------------
@@ -78,8 +94,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
 
         if self.use_chain_of_thought:
             reasoning_prompt = self._reasoning_prompt(observation)
-            reasoning = self.model.generate_text(
-                self._with_system(reasoning_prompt),
+            reasoning = self._generate_chat_response(
+                reasoning_prompt,
                 self.reasoning_generation_config,
                 max_new_tokens=self.reasoning_max_new_tokens,
             ).strip()
@@ -89,8 +105,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         last_raw: str | None = None
 
         for attempt in range(self.MAX_ATTEMPTS):
-            raw = self.model.generate_text(
-                self._with_system(selection_prompt),
+            raw = self._generate_chat_response(
+                selection_prompt,
                 self.action_generation_config,
                 max_new_tokens=self.action_max_new_tokens,
             )
@@ -267,14 +283,6 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             "Try again. Output ONLY the JSON object."
         )
 
-    def _with_system(self, prompt: str) -> str:
-        """
-        Prepend the policy-level system prompt for text-only model interfaces.
-        """
-        if self.system_prompt:
-            return f"{self.system_prompt}\n\n{prompt}"
-        return prompt
-
     # -----------------------------------------------------------------------
     # Response parsing
     # -----------------------------------------------------------------------
@@ -349,8 +357,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
 
     def send_message(self, recipients: list[Entity], env: Environment, info: str | None = None) -> str:
         prompt = self._message_prompt(recipients, env, info)
-        response = self.model.generate_text(
-            self._with_system(prompt),
+        response = self._generate_chat_response(
+            prompt,
             self.message_generation_config,
             max_new_tokens=self.message_max_new_tokens,
         ).strip()
