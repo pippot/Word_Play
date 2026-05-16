@@ -4,13 +4,15 @@ import os
 from typing import Any, Mapping, Sequence
 
 from word_play.presets.models.model import Chat_Message, Model, normalize_chat_messages
+from word_play.presets.models.registry import LLM_MODEL_REGISTRY, Model_Registry
 
 
 class OpenRouter_Model(Model):
     """
     Chat model backed by OpenRouter (or any OpenAI-compatible endpoint via base_url).
 
-    Requires the corresponding API key environment variable.
+    API keys are never passed through code. Set the environment variable named
+    by api_key_env, which defaults to OPENROUTER_API_KEY.
     """
 
     _CLIENT_CACHE: dict[tuple[str | None, str, tuple[tuple[str, str], ...]], Any] = {}
@@ -96,3 +98,44 @@ class OpenRouter_Model(Model):
         )
         content = response.choices[0].message.content
         return content.strip() if content else ""
+
+
+def register_openrouter_model(
+    model_key: str,
+    *,
+    model_name: str,
+    generation_config: Mapping[str, Any] | None = None,
+    system_prompt: str = "",
+    base_url: str = "https://openrouter.ai/api/v1",
+    api_key_env: str = "OPENROUTER_API_KEY",
+    site_url: str | None = None,
+    app_name: str | None = None,
+    verbosity: int = 0,
+    registry: Model_Registry | None = None,
+    replace: bool = False,
+) -> None:
+    """
+    Register an OpenRouter model by environment variable name.
+
+    The API key value is intentionally not accepted here. Store it in the
+    environment variable named by api_key_env.
+    """
+    target_registry = registry or LLM_MODEL_REGISTRY
+
+    if model_key in target_registry:
+        if not replace:
+            return
+        target_registry.unload(model_key)
+
+    target_registry.register(
+        model_key,
+        OpenRouter_Model,
+        model_name=model_name,
+        system_prompt=system_prompt,
+        generation_config=generation_config,
+        site_url=site_url,
+        app_name=app_name,
+        base_url=base_url,
+        api_key_env=api_key_env,
+        verbosity=verbosity,
+    )

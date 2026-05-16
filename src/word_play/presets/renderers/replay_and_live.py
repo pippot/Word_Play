@@ -42,6 +42,7 @@ class RunSessionConfig:
     model_name: str | None = None
     model_key: str | None = None
     base_url: str | None = None
+    api_key_env: str = "OPENROUTER_API_KEY"
     llm_policy_builder: Callable[["Environment", Entity, str], "Agent_Policy"] | None = None
 
     # Rendering
@@ -137,15 +138,26 @@ def run_session(config: RunSessionConfig) -> str | None:
 
     # Setup LLM policies if needed
     if config.policy_mode == "llm":
-        from word_play.presets.models import OpenRouter_Model, LLM_MODEL_REGISTRY
-        llm_model = OpenRouter_Model(
+        from word_play.presets.models import register_openrouter_model
+
+        register_openrouter_model(
+            config.model_key,
             model_name=config.model_name,
-            generation_params={"temperature": 0.2},
+            generation_config={"temperature": 0.2},
+            base_url=config.base_url,
+            api_key_env=config.api_key_env,
+            replace=True,
         )
-        LLM_MODEL_REGISTRY[config.model_key] = llm_model
         # Also register under "default" so agents created with
         # make_llm_policy(model_key="default") work after env.reset()
-        LLM_MODEL_REGISTRY["default"] = llm_model
+        register_openrouter_model(
+            "default",
+            model_name=config.model_name,
+            generation_config={"temperature": 0.2},
+            base_url=config.base_url,
+            api_key_env=config.api_key_env,
+            replace=True,
+        )
 
     if len(env.agents) > 1:
         env.hud_sidebar_width = 0
@@ -307,6 +319,7 @@ def run_exp(
         model_name=llm_cfg.model_name if policy == "llm" else None,
         model_key=llm_cfg.model_key if policy == "llm" else None,
         base_url=llm_cfg.base_url if policy == "llm" else None,
+        api_key_env=llm_cfg.api_key_env,
         llm_policy_builder=llm_cfg.policy_builder if policy == "llm" else None,
         sidebar_width=llm_cfg.sidebar_width,
         keep_logs=keep_logs,
@@ -1139,6 +1152,7 @@ def _run_render_session(
     model_name: str | None = None,
     model_key: str | None = None,
     base_url: str | None = None,
+    api_key_env: str = "OPENROUTER_API_KEY",
     llm_policy_builder: Callable[["Environment", Entity, str], "Agent_Policy"] | None = None,
     sidebar_width: int | None = None,
     sidebar_agent_id: int = 0,
@@ -1202,15 +1216,26 @@ def _run_render_session(
         ]
 
     if policy_mode == "llm":
-        from word_play.presets.models import OpenRouter_Model, LLM_MODEL_REGISTRY
-        llm_model = OpenRouter_Model(
+        from word_play.presets.models import register_openrouter_model
+
+        register_openrouter_model(
+            model_key,
             model_name=model_name,
-            generation_params={"temperature": 0.2},
+            generation_config={"temperature": 0.2},
+            base_url=base_url,
+            api_key_env=api_key_env,
+            replace=True,
         )
-        LLM_MODEL_REGISTRY[model_key] = llm_model
         # Also register under "default" so agents created with
         # make_llm_policy(model_key="default") work after env.reset()
-        LLM_MODEL_REGISTRY["default"] = llm_model
+        register_openrouter_model(
+            "default",
+            model_name=model_name,
+            generation_config={"temperature": 0.2},
+            base_url=base_url,
+            api_key_env=api_key_env,
+            replace=True,
+        )
 
         if len(env.agents) > 1:
             env.hud_sidebar_width = 0
@@ -1318,6 +1343,7 @@ def Run_Render(
     parser.add_argument("--model-name", default=default_model_name)
     parser.add_argument("--model-key", default=default_model_key)
     parser.add_argument("--base-url", default=default_base_url)
+    parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--tile-size", type=int, default=default_tile_size)
     parser.add_argument("--paused", action="store_true", help="Start paused instead of autoplaying.")
     parser.add_argument("--delay", type=float, default=step_delay, help="Seconds between auto-stepped frames.")
@@ -1332,6 +1358,7 @@ def Run_Render(
         model_name=args.model_name,
         model_key=args.model_key,
         base_url=args.base_url,
+        api_key_env=args.api_key_env,
         policy_builder=llm_policy_builder if policy_mode == "llm" else None,
         sidebar_width=sidebar_width,
     )
@@ -1345,6 +1372,7 @@ def Run_Render(
         model_name=args.model_name if policy_mode == "llm" else None,
         model_key=args.model_key if policy_mode == "llm" else None,
         base_url=args.base_url if policy_mode == "llm" else None,
+        api_key_env=args.api_key_env,
         llm_policy_builder=llm_policy_builder if policy_mode == "llm" else None,
         sidebar_width=sidebar_width,
         keep_logs=not args.no_logs,
