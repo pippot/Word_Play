@@ -12,6 +12,8 @@ Create the environment in the same style as [examples/simple_env_1.py](/Users/ia
 - use `Simple_2D_Grid_World`
 - use presets wherever possible instead of reinventing systems
 - keep the main entrypoint as a `run_exp()` loop that directly steps the env
+- do not hide environment setup behind `build_*_env(...)`, `make_*`, or other builder/factory helpers
+- create entities inline with `Entity(...)` in the `entity_tileset`, agent loop, or exact action/component body that spawns them
 
 ## Look At Presets.md
 
@@ -28,6 +30,7 @@ Default rule:
 
 - if a mechanic can be expressed with a preset, use the preset
 - only write custom actions or components for the parts that are truly environment-specific
+- never create entity factory functions such as `make_item(...)`, `make_agent(...)`, or `build_some_env(...)`; inline the `Entity(...)` construction instead
 
 ## Required Shape
 
@@ -143,6 +146,8 @@ entity_tileset = {
 
 Every non-empty tile character used in `entity_tilemap` must appear in `entity_tileset`.
 
+Do not define tilesets through functions. Do not define helper functions that return `Entity(...)`. If a dynamic mechanic must spawn an entity during play, construct that `Entity(...)` directly at the spawn site.
+
 If a tile or entity uses a `Renderable`, define the `sprite_path` inline inside the `Renderable(...)` component.
 
 - do not create sprite path helper functions
@@ -219,6 +224,8 @@ env = Simple_2D_Grid_World(
     observation_radius=1,
 )
 ```
+
+Do not write or call a separate builder such as `build_fruit_market_env(...)` or `build_externality_mushrooms_env(...)`. Each environment file must show the full environment construction inline in `run_exp()`.
 
 Keep setup local to `run_exp()` unless there is a strong reason to factor helpers out.
 

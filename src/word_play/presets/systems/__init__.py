@@ -73,9 +73,6 @@ from word_play.presets.systems.communication.trade_communication.core import (
     Trading_Policy,
     sim_trade_negotiation,
 )
-from word_play.presets.systems.communication.trade_communication.presets.policies import (
-    Simple_Trading_Policy,
-)
 from word_play.presets.systems.regrowable import (
     Regrowable,
     Consume_Regrowable,
@@ -94,6 +91,17 @@ from word_play.presets.systems.team_marker import (
 from word_play.presets.systems.preferences import Preference
 from word_play.presets.systems.reward import Rewardable, award_reward
 from word_play.presets.systems.cooldown import Cooldown, Action_On_Cooldown
+
+
+def __getattr__(name: str):
+    if name == "Simple_Trading_Policy":
+        from word_play.presets.systems.communication.trade_communication.presets.policies import (
+            Simple_Trading_Policy,
+        )
+
+        return Simple_Trading_Policy
+    raise AttributeError(name)
+
 
 __all__ = [
     # Action compositions

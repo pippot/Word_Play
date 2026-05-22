@@ -259,10 +259,15 @@ class Environment(ABC):
         for action in entity.actions:
             if any(isinstance(rule, Target_Is_Self) for rule in action.validation_rules):
                 possible_targets = [entity]
+            elif any(
+                isinstance(rule, Target_Is_Nearby) and rule.target_is_nearby is not None
+                for rule in action.validation_rules
+            ):
+                possible_targets = self.state.entities.copy()
             elif any(isinstance(rule, Target_Is_Nearby) for rule in action.validation_rules):
                 possible_targets = nearby_entities.copy()
             else:
-                possible_targets = self.state.entities
+                possible_targets = self.state.entities.copy()
 
             if any(isinstance(rule, Target_Not_Self) for rule in action.validation_rules):
                 possible_targets.remove(entity)

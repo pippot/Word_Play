@@ -6,10 +6,9 @@ from word_play.core import (
     Agent_Policy,
     Entity,
 )
-from word_play.presets.action_policies.llm_action_and_communication import LLM_Action_And_Communication_Policy
+from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
-from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import (
     Collidable,
     Move_Down,
@@ -30,16 +29,18 @@ from word_play.presets.systems.cooldown import (
     Action_On_Cooldown,
     Cooldown,
 )
-from word_play.presets.systems.crafter import Zap_Change
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.freezable import Freezable
 from word_play.presets.systems.health import Health
 from word_play.presets.systems.inventory import Inventory
 from word_play.presets.systems.preferences import Preference
 from word_play.presets.systems.zap import (
+    Zap_Change,
     ZapMarking,
     Zap_Player,
 )
+from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
+from word_play.presets.action_policies.llm_action_and_communication import LLM_Action_And_Communication_Policy
 from word_play.presets.models import (
     LLM_MODEL_REGISTRY,
     OpenRouter_Model,
@@ -107,8 +108,11 @@ class Paint_Berry(Action):
         return f"Paint {target_entity.name} {self.color}."
 
 
+BENCHMARK_STEPS = 2000
+
+
 def run_exp(agent_count: int = 4, policy: str = "random", model_name: str = "openai/gpt-4o-mini"):
-    exp_steps = 2000
+    exp_steps = BENCHMARK_STEPS
 
     entity_tilemap = """
     WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
@@ -250,6 +254,8 @@ def run_exp(agent_count: int = 4, policy: str = "random", model_name: str = "ope
                 observation_memory_window=4,
                 conversation_memory_window=8,
             )
+        elif policy == "human":
+            agent_policy = Human_Takes_Action()
         else:
             agent_policy = Random_Policy()
         entities.append(
@@ -294,7 +300,7 @@ def run_exp(agent_count: int = 4, policy: str = "random", model_name: str = "ope
     )
 
     for step in range(exp_steps):
-        if not render_step(env, step_delay=0.0):
+        if policy != "human" and not render_step(env, step_delay=0.0):
             break
 
         env.last_step_rewards = [0.0] * len(env.agents)
@@ -313,7 +319,7 @@ def run_exp(agent_count: int = 4, policy: str = "random", model_name: str = "ope
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--agent-count", type=int, default=4)
-    parser.add_argument("--policy", choices=["random", "llm"], default="random")
+    parser.add_argument("--policy", choices=["random", "llm", "human"], default="random")
     parser.add_argument("--model-name", default="openai/gpt-4o-mini")
     args = parser.parse_args()
     if args.policy == "llm":

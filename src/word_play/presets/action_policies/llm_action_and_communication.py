@@ -7,7 +7,6 @@ from typing import Any
 from word_play.core import Agent_Policy, Entity, Environment, Observation
 from word_play.core.actions import Action_Selection
 from word_play.presets.models import LLM_MODEL_REGISTRY, Model
-from word_play.presets.observation.simple_observation import format_action_details
 from word_play.presets.systems.communication.core import Communication_Policy
 
 
@@ -214,6 +213,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         return f"RECENT CONVERSATION:\n{history_str}\n\n"
 
     def _reasoning_prompt(self, observation: Observation) -> str:
+        from word_play.presets.observation.simple_observation import format_action_details
+
         return (
             "You are controlling an agent in a grid-world game.\n"
             "Think step by step about which action the agent should take next.\n"
@@ -229,6 +230,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         return any(action_selection.required_kwargs for action_selection in observation.possible_actions)
 
     def _selection_prompt(self, observation: Observation, reasoning: str | None) -> str:
+        from word_play.presets.observation.simple_observation import format_action_details
+
         reasoning_block = f"\nYour prior reasoning:\n{reasoning}\n" if reasoning else ""
         if self._observation_requires_kwargs(observation):
             example_kwargs = "{}"

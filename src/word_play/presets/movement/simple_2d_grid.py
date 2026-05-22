@@ -15,7 +15,6 @@ from word_play.core import (
 from word_play.presets.movement.common import (
     Collidable,
     check_for_collision_at_position,
-    positions_are_close_if_equal,
 )
 
 
@@ -26,6 +25,10 @@ class Position_2D(Position):
 
     def __str__(self) -> str:
         return f"({self.x}, {self.y})"
+
+
+def positions_are_adjacent_or_equal(position_a: Position_2D, position_b: Position_2D) -> bool:
+    return abs(position_a.x - position_b.x) + abs(position_a.y - position_b.y) <= 1
 
 
 class No_Collision_Will_Occur_Left(Action_Validation):
@@ -115,5 +118,5 @@ class Move_Down(Action):
 INFINITE_2D_MOVEMENT_SYSTEM = Movement_System(
     position_type=Position_2D,
     movement_options=[Move_Left(), Move_Right(), Move_Up(), Move_Down()],
-    positions_are_close=positions_are_close_if_equal,
+    positions_are_close=positions_are_adjacent_or_equal,
 )

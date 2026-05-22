@@ -18,9 +18,16 @@ from word_play.presets.systems.communication.trade_communication.trade_actions i
     Can_Start_Trade,
     Start_Trade,
 )
-from word_play.presets.systems.communication.trade_communication.presets.policies import (
-    Simple_Trading_Policy,
-)
+
+
+def __getattr__(name: str):
+    if name == "Simple_Trading_Policy":
+        from word_play.presets.systems.communication.trade_communication.presets.policies import (
+            Simple_Trading_Policy,
+        )
+
+        return Simple_Trading_Policy
+    raise AttributeError(name)
 
 __all__ = [
     "Communication_Policy",

@@ -15,7 +15,13 @@ from copy import deepcopy
 from typing import Callable
 
 from word_play.core import Action, Action_Validation, Component, Entity, Environment, Action_Arg
-from word_play.presets.action_validations import Target_Has_Component
+from word_play.presets.action_validations import (
+    Target_Has_Component,
+    Target_Has_Tag,
+    Target_Is_Nearby,
+    Target_Is_Self,
+    Target_Not_Self,
+)
 from word_play.presets.renderers.renderer import Renderable
 
 
@@ -152,8 +158,15 @@ class Pick_Up_Item(Action):
     """
 
     def __init__(self, item_tags: list[str] | None = None, reward: float | None = None):
-        super().__init__()
         self.item_tags = item_tags or ["collectable"]
+        super().__init__(
+            validation_rules=[
+                Target_Has_Tag(self.item_tags),
+                Target_Not_In_Inventory(),
+                Target_Not_Self(),
+                Target_Is_Nearby(),
+            ]
+        )
         self.reward = reward
 
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
@@ -231,10 +244,9 @@ class Put_In_Container(Action):
         destroy_item: bool | None = None,
     ):
         if target_tags:
-            from word_play.presets.action_validations import Target_Has_Tag
-            validation = [Target_Has_Tag(target_tags)]
+            validation = [Target_Not_Self(), Target_Is_Nearby(), Target_Has_Tag(target_tags)]
         else:
-            validation = [Target_Has_Component(Inventory)]
+            validation = [Target_Not_Self(), Target_Is_Nearby(), Target_Has_Component(Inventory)]
         super().__init__(
             validation_rules=validation,
             required_kwargs={"inventory_index": Inventory_Item_Index_Arg()},
@@ -329,6 +341,7 @@ class Drop_Item(Action):
 
     def __init__(self):
         super().__init__(
+            validation_rules=[Target_Is_Self()],
             required_kwargs={"inventory_index": Inventory_Item_Index_Arg()},
         )
 

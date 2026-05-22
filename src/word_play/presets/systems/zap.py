@@ -101,11 +101,13 @@ class Zap_Change(Action):
         allowed_tag: str = "zappable",
         output: Callable[[], Entity] | Entity | None = None,
         *,
+        target_is_nearby: Callable[[Entity, Entity, Environment], bool] | None = None,
         damage: int = 0,
         damage_only: bool = False,
         reward: float = 0.0,
+        action_name: str = "Transform",
     ):
-        rules = [Target_Not_Self(), Target_Is_Nearby()]
+        rules = [Target_Not_Self(), Target_Is_Nearby(target_is_nearby)]
         if allowed_tag:
             rules.append(Target_Has_Tag([allowed_tag]))
         super().__init__(validation_rules=rules)
@@ -114,6 +116,7 @@ class Zap_Change(Action):
         self.damage = damage
         self.damage_only = damage_only
         self.reward = reward
+        self.action_name = action_name
 
     def exec_action(self, actor, target, env, kwargs=None):
         # If the original target was already destroyed this step (e.g. by
@@ -158,7 +161,7 @@ class Zap_Change(Action):
         return result
 
     def action_description_text(self, actor, target, env):
-        return f"Transform {target.name}."
+        return f"{self.action_name} {target.name}."
 
 
 class Zap_Change_Inventory(Action):

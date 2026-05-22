@@ -1,0 +1,428 @@
+from __future__ import annotations
+
+import argparse
+
+from word_play.core import (
+    Agent_Policy,
+    Entity,
+    Environment,
+    Target_Is_Nearby,
+    Target_Not_Self,
+)
+from word_play.presets.action_policies.llm_action_and_communication import (
+    LLM_Action_And_Communication_Policy,
+)
+from word_play.presets.action_policies.human import Human_Takes_Action
+from word_play.presets.action_policies.random_policy import Random_Policy
+from word_play.presets.entity_orderings import randomize_agent_order
+from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
+from word_play.presets.models import (
+    LLM_MODEL_REGISTRY,
+    OpenRouter_Model,
+)
+from word_play.presets.movement.simple_2d_grid import (
+    Collidable,
+    Move_Down,
+    Move_Left,
+    Move_Right,
+    Move_Up,
+    Position_2D,
+)
+from word_play.presets.renderers import (
+    Renderable,
+    render_step,
+)
+from word_play.presets.systems.containers import (
+    Regrowable_Item_Source,
+    Take_From_Infinite_Source,
+)
+from word_play.presets.systems.crafter import (
+    Collect_From_Crafter,
+    Crafter,
+    Crafter_Recipe,
+    Load_Crafter,
+)
+from word_play.presets.systems.do_nothing import Do_Nothing
+from word_play.presets.systems.inventory import Drop_Item, Inventory, Put_In_Container
+from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_steps
+from word_play.utils import tilemap_to_entities
+from word_play.utils.tilemap import find_tile_positions
+
+
+COOKING_TIME = normalized_steps(20)
+MAX_EPISODE_LENGTH = BENCHMARK_STEPS
+DEFAULT_NUM_PLAYERS = 2
+DELIVERY_REWARD = 20.0
+
+
+def kitchen_is_nearby(actor: Entity, target: Entity, env: Environment) -> bool:
+    return abs(actor.position.x - target.position.x) + abs(actor.position.y - target.position.y) <= 1
+
+
+def soup_is_valid(actor, target, env, item: Entity) -> bool:
+    return "soup" in item.tags
+
+
+def shared_delivery_bonus(actor, target, env, item: Entity, reward: float) -> None:
+    for idx, agent in enumerate(env.agents):
+        if agent is not actor and idx < len(env.last_step_rewards):
+            env.last_step_rewards[idx] += reward
+    env.completed_orders = getattr(env, "completed_orders", 0) + 1
+
+
+class Load_Held_Item_Into_Crafter(Load_Crafter):
+    def __init__(self):
+        super().__init__()
+        self.validation_rules = [
+            Target_Not_Self(),
+            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
+        ] + self.validation_rules[2:]
+
+    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
+        return super().is_valid(actor, target, env, kwargs={"inventory index": 0})
+
+    def exec_action(self, actor, target, env, kwargs=None):
+        return super().exec_action(actor, target, env, kwargs={"inventory index": 0})
+
+    def action_description_text(self, actor, target, env) -> str:
+        return f"Load your held item into {target.name}."
+
+
+class Put_Held_Item_On_Counter(Put_In_Container):
+    def __init__(self):
+        super().__init__(target_tags=["counter"], destroy_item=False)
+        self.validation_rules = [
+            Target_Not_Self(),
+            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
+        ] + self.validation_rules[2:]
+
+    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
+        return super().is_valid(actor, target, env, kwargs={"inventory_index": 0})
+
+    def exec_action(self, actor, target, env, kwargs=None):
+        return super().exec_action(actor, target, env, kwargs={"inventory_index": 0})
+
+    def action_description_text(self, actor, target, env) -> str:
+        return f"Put your held item on {target.name}."
+
+
+class Deliver_Held_Soup(Put_In_Container):
+    def __init__(self):
+        super().__init__(
+            target_tags=["delivery"],
+            reward=DELIVERY_REWARD,
+            on_stored=shared_delivery_bonus,
+            destroy_item=True,
+        )
+        self.validation_rules = [
+            Target_Not_Self(),
+            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
+        ] + self.validation_rules[2:]
+
+    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
+        if not super().is_valid(actor, target, env, kwargs={"inventory_index": 0}):
+            return False
+        inventory = actor.get_component(Inventory)
+        return inventory is not None and bool(inventory.contents) and soup_is_valid(actor, target, env, inventory.contents[0])
+
+    def exec_action(self, actor, target, env, kwargs=None):
+        return super().exec_action(actor, target, env, kwargs={"inventory_index": 0})
+
+    def action_description_text(self, actor, target, env) -> str:
+        return f"Deliver your held soup to {target.name}."
+
+
+class Take_From_Source_Adjacent(Take_From_Infinite_Source):
+    def __init__(self):
+        super().__init__()
+        self.validation_rules = [
+            Target_Not_Self(),
+            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
+        ]
+
+
+class Collect_From_Crafter_Adjacent(Collect_From_Crafter):
+    def __init__(self):
+        super().__init__()
+        self.validation_rules = [
+            Target_Not_Self(),
+            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
+        ] + self.validation_rules[2:]
+
+
+def debug_agent_options(env: Simple_2D_Grid_World, step: int) -> None:
+    kitchen_action_names = {
+        "Take item from Tomato Source.",
+        "Take item from Dish Source.",
+        "Load your held item into Cooking Pot.",
+        "Collect the finished item from Cooking Pot.",
+        "Deliver your held soup to Delivery Window.",
+        "Drop an inventory item.",
+        "Take the first item from Counter.",
+        "Put your held item on Counter.",
+    }
+    print(f"[debug step {step}]")
+    for agent in env.agents:
+        inventory = agent.get_component(Inventory)
+        held = inventory.contents[0].name if inventory and inventory.contents else "empty"
+        possible = env.possible_actions(agent)
+        kitchen_options = [str(selection) for selection in possible if str(selection) in kitchen_action_names]
+        print(f"  {agent.name}: held={held} kitchen_options={kitchen_options}")
+
+
+def debug_agent_results(env: Simple_2D_Grid_World, step: int) -> None:
+    print(f"[debug post-step {step}]")
+    for agent_id, agent in enumerate(env.agents):
+        inventory = agent.get_component(Inventory)
+        held = [item.name for item in inventory.contents] if inventory else []
+        info = env.infos[agent_id]
+        print(
+            f"  {agent.name}: pos={agent.position} held={held or ['empty']} "
+            f"success={info.get('action_success')} info={info.get('action_info')}"
+        )
+
+
+def run_exp(
+    agent_count: int = DEFAULT_NUM_PLAYERS,
+    policy: str = "random",
+    model_name: str = "openai/gpt-4o-mini",
+    debug_actions: bool = False,
+):
+    exp_steps = MAX_EPISODE_LENGTH
+
+    if policy == "llm":
+        LLM_MODEL_REGISTRY.unload("collaborative_cooking")
+        LLM_MODEL_REGISTRY.register(
+            "collaborative_cooking",
+            OpenRouter_Model,
+            model_name=model_name,
+            generation_config={"temperature": 0.3},
+        )
+
+    entity_tilemap = """
+    WWWWWWWWWWWW
+    W.PO..D....W
+    W..........W
+    W...-CPT...W
+    W..........W
+    W....-.....W
+    WWWWWWWWWWWW
+    """
+    entity_tileset = {
+        "W": {
+            "name": "Kitchen Wall",
+            "tags": ["wall"],
+            "components": [
+                Collidable(collidable_tags=["wall"]),
+                Renderable(
+                    sprite_path="",
+                    wall_set="src/world_tiles/indoors/wall_sets/bright_brick_wall",
+                    z_index=3,
+                ),
+            ],
+        },
+        "-": {
+            "name": "Counter",
+            "tags": ["counter", "blocker"],
+            "components": [
+                Inventory(max_size=1),
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(
+                    sprite_path="src/world_tiles/indoors/stations/kitchen_counter.png",
+                    z_index=4,
+                ),
+            ],
+        },
+        "C": {
+            "name": "Cooking Pot",
+            "tags": ["pot", "blocker"],
+            "components": [
+                Crafter(
+                    recipes=[
+                        Crafter_Recipe(
+                            input_names=("Tomato", "Tomato", "Tomato"),
+                            output=Entity(
+                                name="Cooked Soup",
+                                position=Position_2D(0, 0),
+                                tags=["soup", "cooked_soup"],
+                                components=[
+                                    Renderable(
+                                        sprite_path="src/items/consumables/misc_food/soup.png",
+                                        z_index=5,
+                                    )
+                                ],
+                            ),
+                            duration=COOKING_TIME,
+                        )
+                    ]
+                ),
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(
+                    sprite_path="src/world_tiles/indoors/stations/pot.png",
+                    z_index=4,
+                ),
+            ],
+        },
+        "O": {
+            "name": "Tomato Source",
+            "tags": ["tomato_source", "source", "blocker"],
+            "components": [
+                Regrowable_Item_Source(
+                    item_factory=Entity(
+                        name="Tomato",
+                        position=Position_2D(0, 0),
+                        tags=["tomato", "ingredient"],
+                        components=[
+                            Renderable(
+                                sprite_path="src/items/consumables/vegetables/tomato_2.png",
+                                z_index=5,
+                            )
+                        ],
+                    ),
+                ),
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(
+                    sprite_path="src/world_tiles/indoors/stations/crate.png",
+                    overlay_sprite="src/items/consumables/vegetables/tomato_2.png",
+                    overlay_mode="center",
+                    overlay_scale=0.7,
+                    z_index=4,
+                ),
+            ],
+        },
+        "D": {
+            "name": "Dish Source",
+            "tags": ["dish_source", "source", "blocker"],
+            "components": [
+                Regrowable_Item_Source(
+                    item_factory=Entity(
+                        name="Dish",
+                        position=Position_2D(0, 0),
+                        tags=["dish"],
+                        components=[
+                            Renderable(
+                                sprite_path="src/items/consumables/misc_food/plate.png",
+                                z_index=5,
+                            )
+                        ],
+                    ),
+                ),
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(
+                    sprite_path="src/world_tiles/indoors/stations/crate.png",
+                    overlay_sprite="src/items/consumables/misc_food/plate.png",
+                    overlay_mode="center",
+                    overlay_scale=0.7,
+                    z_index=4,
+                ),
+            ],
+        },
+        "T": {
+            "name": "Delivery Window",
+            "tags": ["delivery", "blocker"],
+            "components": [
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(
+                    sprite_path="src/world_tiles/indoors/stations/delivery.png",
+                    z_index=4,
+                ),
+            ],
+        },
+    }
+
+    entities = tilemap_to_entities(entity_tilemap.replace("P", "."), entity_tileset)
+    spawn_positions = find_tile_positions(entity_tilemap, "P")
+    assert agent_count <= len(spawn_positions), "Not enough spawn points for requested agent_count."
+
+    for agent_id, (x, y) in enumerate(spawn_positions[:agent_count], start=1):
+        agent_policy = (
+            LLM_Action_And_Communication_Policy(
+                model_key="collaborative_cooking",
+                system_prompt=(
+                    f"You are Player {agent_id} in Collaborative Cooking. "
+                    "Coordinate to make soup efficiently: take tomatoes, load three into the pot, "
+                    "wait for cooking, take a dish, collect the soup, and deliver it for shared reward."
+                ),
+                use_chain_of_thought=True,
+                observation_memory_window=4,
+                conversation_memory_window=8,
+            )
+            if policy == "llm"
+            else Human_Takes_Action() if policy == "human" else Random_Policy()
+        )
+        entities.append(
+            Entity(
+                name=f"Player {agent_id}",
+                position=Position_2D(x, y),
+                tags=["agent", "player", "default"],
+                actions=[
+                    Do_Nothing(),
+                    Move_Up(),
+                    Move_Down(),
+                    Move_Left(),
+                    Move_Right(),
+                    Drop_Item(),
+                    Take_From_Source_Adjacent(),
+                    Load_Held_Item_Into_Crafter(),
+                    Collect_From_Crafter_Adjacent(),
+                    Deliver_Held_Soup(),
+                ],
+                components=[
+                    agent_policy,
+                    Inventory(max_size=1, accepted_tags=["tomato", "dish", "soup", "ingredient"]),
+                    Collidable(collidable_tags=["wall", "blocker"]),
+                    Renderable(
+                        sprite_path="src/characters/humanoids/human/farmer_man.png",
+                        z_index=10,
+                    ),
+                ],
+            )
+        )
+
+    env = Simple_2D_Grid_World(
+        description="Collaborative Cooking, adapted from MeltingPot into a single-file Word Play environment.",
+        entities=entities,
+        entity_order=randomize_agent_order,
+        observation_radius=3,
+    )
+    env.reward_func = lambda action_selections, current_env: list(current_env.last_step_rewards)
+    env.completed_orders = 0
+
+    for step in range(exp_steps):
+        env.tick = env.cur_step
+        if policy != "human" and not render_step(env, step_delay=0.0):
+            break
+
+        env.last_step_rewards = [0.0] * len(env.agents)
+        if debug_actions:
+            debug_agent_options(env, step)
+
+        cur_step_actions = []
+        for agent_id, agent in enumerate(env.agents):
+            observation = env.observe(agent_id)
+            action, info = agent.get_component(Agent_Policy).select_action(observation)
+            print(f"[step {step}] {agent.name} -> {action} | completed_orders={env.completed_orders}")
+            cur_step_actions.append(action)
+
+        env.step(cur_step_actions)
+        if debug_actions:
+            debug_agent_results(env, step)
+
+        if env.cur_step >= MAX_EPISODE_LENGTH:
+            env.truncations = [True] * len(env.agents)
+            break
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--agent-count", type=int, default=DEFAULT_NUM_PLAYERS)
+    parser.add_argument("--policy", choices=["random", "llm", "human"], default="random")
+    parser.add_argument("--model-name", default="openai/gpt-4o-mini")
+    parser.add_argument("--debug-actions", action="store_true")
+    args = parser.parse_args()
+    run_exp(
+        agent_count=args.agent_count,
+        policy=args.policy,
+        model_name=args.model_name,
+        debug_actions=args.debug_actions,
+    )

@@ -68,8 +68,8 @@ def entity_state_to_str(entity: Entity) -> str:
         if component_name == "Health":
             lines.append(f"health: {comp.health}/{comp.max_health}")
         elif component_name == "Inventory":
-            lines.append(f"inventory_size: {comp.inventory_size}")
-            lines.append(f"inventory: {[item.name for item in comp.inventory]}")
+            lines.append(f"max_size: {comp.max_size}")
+            lines.append(f"contents: {[item.name for item in comp.contents]}")
         elif component_name == "Collidable":
             lines.append(f"collides_with_tags: {comp.collidable_tags}")
         elif component_name == "Key":
