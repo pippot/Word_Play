@@ -209,9 +209,9 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
 
     def _reasoning_prompt(self, observation: Observation) -> str:
         return (
-            "You are controlling an agent in a grid-world game.\n"
+            "You are controlling an agent in a game.\n"
             "Think step by step about which action the agent should take next.\n"
-            "Consider the agent's state, nearby entities, and available actions.\n"
+            "Consider the current observation and available actions.\n"
             "Write your reasoning in plain text. Do NOT output JSON yet.\n\n"
             + self._observation_memory_block()
             + self._conversation_memory_block()
@@ -225,29 +225,23 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
     def _selection_prompt(self, observation: Observation, reasoning: str | None) -> str:
         reasoning_block = f"\nYour prior reasoning:\n{reasoning}\n" if reasoning else ""
         if self._observation_requires_kwargs(observation):
-            example_kwargs = "{}"
-            for sel in observation.possible_actions:
-                if sel.required_kwargs:
-                    example_kwargs = json.dumps({k: f"<{k}>" for k in sel.required_kwargs})
-                    break
-            required_format = '{"action_choice_idx": <integer>, "action_kwargs": <dict or {}>}'
-            example_output = f'{{"action_choice_idx": 0, "action_kwargs": {example_kwargs}}}'
+            required_format = '{"action_choice_idx": <one of the listed indices>, "action_kwargs": <dict>}'
             kwargs_instruction = ""
         else:
-            required_format = '{"action_choice_idx": <integer>}'
-            example_output = '{"action_choice_idx": 0}'
+            required_format = '{"action_choice_idx": <one of the listed indices>}'
             kwargs_instruction = (
                 "None of the available actions require kwargs. " 'Do not include "action_kwargs" in your response.\n\n'
             )
 
         return (
-            "You are controlling an agent in a grid-world game.\n"
+            "You are controlling an agent in a game.\n"
             "Choose exactly ONE action. Reply with ONLY a JSON object — no markdown, no extra text.\n\n"
             "REQUIRED FORMAT:\n"
             + required_format
             + "\n\n"
             + kwargs_instruction
-            + f"Example: {example_output}\n\n"
+            + "Choose based on the action meanings and current observation, not the order of the list.\n"
+            + "Use an actual integer index from AVAILABLE ACTIONS in your JSON.\n\n"
             + self._observation_memory_block()
             + self._conversation_memory_block()
             + f"CURRENT OBSERVATION:\n{observation}\n"
@@ -377,7 +371,7 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         )
         info_str = f"\nExtra context: {info}\n" if info else ""
         return (
-            "You are playing a character in a grid-world game.\n"
+            "You are playing a character in a game.\n"
             "Write ONE short in-character message. No speaker labels, no quotes.\n\n"
             f"Your character: {self.entity.name}\n"
             f"Recipients: {recipients_str}\n"

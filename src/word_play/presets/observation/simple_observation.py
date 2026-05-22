@@ -40,6 +40,7 @@ class Simple_Observation(Observation):
     info: dict
     observation_radius: int = 0
     extra_sections: tuple[str, ...] = ()
+    agent_formatter: Callable[[Entity], str] | None = None
     nearby_entities_formatter: Callable[[list[Entity], Entity], str] | None = None
 
     def __str__(self) -> str:
@@ -52,7 +53,8 @@ class Simple_Observation(Observation):
                 extra = f"\n  Details: {pprint.pformat(self.info['action_info'])}"
             prev_block = f"LAST ACTION: {status}{extra}\n\n"
 
-        agent_block = "YOUR STATE:\n" + indent(entity_state_to_str(self.agent))
+        agent_formatter = self.agent_formatter or entity_state_to_str
+        agent_block = "YOUR STATE:\n" + indent(agent_formatter(self.agent))
         visible_square_block = (
             "VISIBLE AREA:\n"
             + f"  square radius: {self.observation_radius}\n"

@@ -1,5 +1,6 @@
 experiments/exp_log_files/*
 experiments/exp_configs/*
+melting_pot_experiments/.cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

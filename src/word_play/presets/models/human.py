@@ -11,6 +11,10 @@ class Human_Model(Model):
     The human sees the exact same prompt the LLM would receive.
     """
 
+    def __init__(self, system_prompt: str = "", verbosity: int = 0) -> None:
+        super().__init__(verbosity=verbosity)
+        self.system_prompt = system_prompt
+
     def generate_chat(
         self,
         messages: Sequence[Chat_Message | Mapping[str, Any]],
@@ -18,6 +22,8 @@ class Human_Model(Model):
         max_new_tokens: int | None = None,
     ) -> str:
         normalized = normalize_chat_messages(messages)
+        if self.system_prompt and not any(message["role"] == "system" for message in normalized):
+            normalized = [{"role": "system", "content": self.system_prompt}, *normalized]
         rendered = "\n".join(f"[{message['role']}] {message['content']}" for message in normalized)
         return input(
             f"\n========================= input START =========================\n"

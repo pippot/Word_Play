@@ -28,6 +28,13 @@ class Position_2D(Position):
         return f"({self.x}, {self.y})"
 
 
+def positions_are_close_if_orthogonally_adjacent_or_equal(
+    position_a: Position_2D,
+    position_b: Position_2D,
+) -> bool:
+    return abs(position_a.x - position_b.x) + abs(position_a.y - position_b.y) <= 1
+
+
 class No_Collision_Will_Occur_Left(Action_Validation):
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
         if not actor.has_component(Collidable):
@@ -116,4 +123,10 @@ INFINITE_2D_MOVEMENT_SYSTEM = Movement_System(
     position_type=Position_2D,
     movement_options=[Move_Left(), Move_Right(), Move_Up(), Move_Down()],
     positions_are_close=positions_are_close_if_equal,
+)
+
+ADJACENT_2D_MOVEMENT_SYSTEM = Movement_System(
+    position_type=Position_2D,
+    movement_options=[Move_Left(), Move_Right(), Move_Up(), Move_Down()],
+    positions_are_close=positions_are_close_if_orthogonally_adjacent_or_equal,
 )
