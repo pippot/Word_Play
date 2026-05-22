@@ -1093,33 +1093,19 @@ def run_live_view(
 def build_policy_step_actions(
     env: "Environment",
     *,
+    batched: bool = True,
+    max_workers: int | None = None,
     on_selection: Callable[["Environment", Any, int, "Action_Selection", dict], None] | None = None,
 ) -> list["Action_Selection"]:
     """Build one action per agent by querying each attached Agent_Policy or Non_Agent_Policy."""
-    from word_play.core.components import Agent_Policy, Non_Agent_Policy
+    from word_play.presets.action_policies.batching import build_policy_step_actions as _build_policy_step_actions
 
-    selections: list[Action_Selection] = []
-    for agent_id, agent in enumerate(env.agents):
-        # Check for Agent_Policy first (LLM policies), then fall back to Non_Agent_Policy (preview/sequence policies)
-        policy = agent.get_component(Agent_Policy)
-        observation = env.observe(agent_id)
-        
-        if policy is not None:
-            # Agent_Policy: takes observation, returns (Action_Selection, info)
-            selection, info = policy.select_action(observation)
-        else:
-            # Non_Agent_Policy: takes possible_actions and env, returns Action_Selection
-            policy = agent.get_component(Non_Agent_Policy)
-            if policy is None:
-                raise ValueError(f"Agent '{agent.name}' is missing an Agent_Policy or Non_Agent_Policy component.")
-            possible_actions = env.possible_actions(agent)
-            selection = policy.select_action(possible_actions, env)
-            info = {}
-        
-        if on_selection is not None:
-            on_selection(env, observation, agent_id, selection, info)
-        selections.append(selection)
-    return selections
+    return _build_policy_step_actions(
+        env,
+        batched=batched,
+        max_workers=max_workers,
+        on_selection=on_selection,
+    )
 
 
 def run_policy_live_view(

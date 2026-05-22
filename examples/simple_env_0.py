@@ -1,8 +1,8 @@
 from word_play.core import (
-    Agent_Policy,
     Entity,
 )
 from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
+from word_play.presets.action_policies.batching import build_policy_step_actions
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import (
@@ -112,12 +112,13 @@ def run_exp():
     )
 
     for step in range(exp_steps):
-        cur_step_actions = []
-        for agent_id, agent in enumerate(env.agents):
-            observation = env.observe(agent_id)
-            action, info = agent.get_component(Agent_Policy).select_action(observation)
-            print(f"[step {step}] {agent.name} -> {action}")
-            cur_step_actions.append(action)
+        cur_step_actions = build_policy_step_actions(
+            env,
+            batched=True,
+            on_selection=lambda env, observation, agent_id, action, info: print(
+                f"[step {step}] {env.agents[agent_id].name} -> {action}"
+            ),
+        )
 
         env.step(cur_step_actions)
 

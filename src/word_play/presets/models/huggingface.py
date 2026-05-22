@@ -107,6 +107,29 @@ class HuggingFace_Model(Model):
         output = self._get_pipeline()(self._build_messages(messages), **params)
         return self._extract_generated_text(output)
 
+    def generate_chat_batch(
+        self,
+        messages_batch: Sequence[Sequence[Chat_Message | Mapping[str, Any]]],
+        generation_config: Mapping[str, Any] | None = None,
+        max_new_tokens: int | None = None,
+        max_workers: int | None = None,
+    ) -> list[str]:
+        if not messages_batch:
+            return []
+
+        params = {**self.default_generation_config, **(generation_config or {})}
+        if max_new_tokens is not None:
+            params.setdefault("max_new_tokens", max_new_tokens)
+        params.setdefault("return_full_text", False)
+
+        batch_inputs = [self._build_messages(messages) for messages in messages_batch]
+        outputs = self._get_pipeline()(batch_inputs, **params)
+        if not isinstance(outputs, list):
+            return [self._extract_generated_text(outputs)]
+        if len(messages_batch) == 1:
+            return [self._extract_generated_text(outputs)]
+        return [self._extract_generated_text(output) for output in outputs]
+
 
 def register_huggingface_model(
     model_key: str,

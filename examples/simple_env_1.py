@@ -1,6 +1,9 @@
+import argparse
+import pprint
+from typing import Any, Mapping, Sequence
+
 from word_play.core import (
     Action,
-    Agent_Policy,
     Entity,
     Target_Is_Self,
 )
@@ -11,10 +14,14 @@ from word_play.presets.action_args import (
     String_Arg,
     String_Choice_Arg,
 )
+from word_play.presets.action_policies.batching import build_policy_step_actions
 from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
 from word_play.presets.action_policies.human import Human_Takes_Action
+from word_play.presets.action_policies.llm_action_and_communication import LLM_Action_And_Communication_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
+from word_play.presets.models import Chat_Message, Model
+from word_play.presets.models.registry import LLM_MODEL_REGISTRY
 from word_play.presets.movement.simple_2d_grid import (
     Collidable,
     Move_Up,
@@ -34,8 +41,6 @@ from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.health import Health
 from word_play.presets.systems.inventory import Inventory
 from word_play.utils import tilemap_to_entities
-
-import pprint
 
 
 class Test_Action(Action):
@@ -60,8 +65,40 @@ class Test_Action(Action):
         return "Test Action."
 
 
-def run_exp():
-    exp_steps = 1000
+class Batch_Debug_Model(Model):
+    def generate_chat(
+        self,
+        messages: Sequence[Chat_Message | Mapping[str, Any]],
+        generation_config: Mapping[str, Any] | None = None,
+        max_new_tokens: int | None = None,
+    ) -> str:
+        raise AssertionError("Batch debug expects the batched model path.")
+
+    def generate_text_batch(
+        self,
+        input_texts: Sequence[str],
+        generation_config: Mapping[str, Any] | None = None,
+        max_new_tokens: int | None = None,
+        max_workers: int | None = None,
+    ) -> list[str]:
+        print(f"BATCH SIZE: {len(input_texts)}")
+        return ['{"action_choice_idx": 1}' for _ in input_texts]
+
+
+def _agent_policy(batch_debug: bool):
+    if batch_debug:
+        return LLM_Action_And_Communication_Policy(model_key="batch-debug")
+    return Human_Takes_Action()
+
+
+def _register_batch_debug_model() -> None:
+    LLM_MODEL_REGISTRY.unload("batch-debug")
+    LLM_MODEL_REGISTRY.register("batch-debug", Batch_Debug_Model)
+
+
+def run_exp(exp_steps: int = 1000, batch_debug: bool = False):
+    if batch_debug:
+        _register_batch_debug_model()
 
     entity_tilemap = """
     WWWWWWWW...
@@ -90,7 +127,7 @@ def run_exp():
                 Start_Private_Conversation(),
             ],
             "components": [
-                Human_Takes_Action(),
+                _agent_policy(batch_debug),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
@@ -115,7 +152,7 @@ def run_exp():
                 Start_Private_Conversation(),
             ],
             "components": [
-                Human_Takes_Action(),
+                _agent_policy(batch_debug),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
@@ -174,15 +211,22 @@ def run_exp():
     )
 
     for step in range(exp_steps):
-        cur_step_actions = []
-        for agent_id, agent in enumerate(env.agents):
-            observation = env.observe(agent_id)
-            action, info = agent.get_component(Agent_Policy).select_action(observation)
-            print(f"[step {step}] {agent.name} -> {action}")
-            cur_step_actions.append(action)
+        cur_step_actions = build_policy_step_actions(
+            env,
+            batched=True,
+            on_selection=lambda env, observation, agent_id, action, info: print(
+                f"[step {step}] {env.agents[agent_id].name} -> {action}"
+            ),
+        )
 
         env.step(cur_step_actions)
 
 
 if __name__ == "__main__":
-    run_exp()
+    parser = argparse.ArgumentParser(description="Run the two-agent simple env.")
+    parser.add_argument("--steps", type=int, default=None)
+    parser.add_argument("--batch-debug", action="store_true")
+    args = parser.parse_args()
+
+    default_steps = 3 if args.batch_debug else 1000
+    run_exp(exp_steps=args.steps or default_steps, batch_debug=args.batch_debug)
