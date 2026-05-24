@@ -10,6 +10,7 @@ from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Move_Left, Move_Right, Move_Up, Position_2D
+from word_play.presets.observation.simple_observation import Simple_Observation
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.cooldown import Cooldown
 from word_play.presets.systems.do_nothing import Do_Nothing
@@ -22,6 +23,217 @@ from word_play.utils.tilemap import find_tile_positions
 
 DEFAULT_NUM_PLAYERS = 8
 MODEL_KEY = "paintball__capture_the_flag"
+
+
+def _relative_text(actor: Entity, target: Entity) -> str:
+    dx = target.position.x - actor.position.x
+    dy = target.position.y - actor.position.y
+    return f"relative=({dx:+d},{dy:+d}), distance={abs(dx) + abs(dy)}"
+
+
+def _direction_to_xy(agent: Entity, xy: tuple[int, int]) -> str:
+    dx = xy[0] - agent.position.x
+    dy = xy[1] - agent.position.y
+    moves = []
+    if dx > 0:
+        moves.append("Move right")
+    elif dx < 0:
+        moves.append("Move left")
+    if dy > 0:
+        moves.append("Move up")
+    elif dy < 0:
+        moves.append("Move down")
+    return " or ".join(moves) if moves else "already here"
+
+
+def _team(entity: Entity) -> str:
+    if "red" in entity.tags:
+        return "red"
+    if "blue" in entity.tags:
+        return "blue"
+    return "unknown"
+
+
+def _paintball_manager(env) -> PaintballManager:
+    for entity in env.state.entities:
+        manager = entity.get_component(PaintballManager)
+        if manager is not None:
+            return manager
+    raise RuntimeError("Paintball manager missing.")
+
+
+def _held_flag(agent: Entity) -> str:
+    inventory = agent.get_component(Inventory)
+    if inventory is None:
+        return "none"
+    for item in inventory.contents:
+        flag = item.get_component(Flag)
+        if flag is not None:
+            return flag.team
+    return "none"
+
+
+def _flag_holder(env, flag_team: str) -> Entity | None:
+    for agent in env.agents:
+        inventory = agent.get_component(Inventory)
+        if inventory is None:
+            continue
+        for item in inventory.contents:
+            flag = item.get_component(Flag)
+            if flag is not None and flag.team == flag_team:
+                return agent
+    return None
+
+
+def _health_text(entity: Entity) -> str:
+    health = entity.get_component(Health)
+    if health is None:
+        return "health=unknown"
+    return f"health={health.health}/{health.max_health}"
+
+
+def _important_actions_text(possible_actions: list) -> str:
+    matches = [
+        f"  [{idx}] {selection}"
+        for idx, selection in enumerate(possible_actions)
+        if "Grab" in str(selection)
+        or ("Shoot paintball" in str(selection) and "Wall" not in str(selection))
+    ]
+    if not matches:
+        return (
+            "IMPORTANT AVAILABLE ACTIONS: no grab or enemy shot is valid this turn; "
+            "move toward the flag objective unless blocked."
+        )
+    return "IMPORTANT AVAILABLE ACTIONS:\n" + "\n".join(matches)
+
+
+def _ctf_map_symbol(entity: Entity, agent: Entity, env) -> tuple[int, str] | None:
+    if entity is agent:
+        return 100, "A"
+    if entity.is_agent:
+        return 90, "R" if _team(entity) == "red" else "B"
+    if (flag := entity.get_component(Flag)) is not None:
+        if _flag_holder(env, flag.team) is None:
+            return 80, "F"
+        return None
+    if "destructible" in entity.tags:
+        return 70, "X"
+    if "wall" in entity.tags:
+        return 60, "#"
+    return None
+
+
+def _ctf_local_map(env, agent: Entity, nearby_entities: list[Entity]) -> str:
+    radius = env.observation_radius
+    cells: dict[tuple[int, int], tuple[int, str]] = {
+        (x, y): (0, ".")
+        for y in range(agent.position.y - radius, agent.position.y + radius + 1)
+        for x in range(agent.position.x - radius, agent.position.x + radius + 1)
+    }
+    for entity in nearby_entities:
+        symbol = _ctf_map_symbol(entity, agent, env)
+        if symbol is None:
+            continue
+        xy = (entity.position.x, entity.position.y)
+        if xy in cells and symbol[0] >= cells[xy][0]:
+            cells[xy] = symbol
+
+    rows = []
+    for y in range(agent.position.y + radius, agent.position.y - radius - 1, -1):
+        rows.append("".join(cells[(x, y)][1] for x in range(agent.position.x - radius, agent.position.x + radius + 1)))
+    return "LOCAL MAP (visible only; A you, R/B players, F flag, X breakable wall, # wall):\n" + "\n".join(rows)
+
+
+def _format_ctf_entities(nearby_entities: list[Entity], agent: Entity, env) -> str:
+    lines = ["VISIBLE PAINTBALL ENTITIES:"]
+    ordered = sorted(
+        nearby_entities,
+        key=lambda entity: (
+            abs(entity.position.x - agent.position.x) + abs(entity.position.y - agent.position.y),
+            entity.name,
+        ),
+    )
+    for entity in ordered:
+        if entity is agent:
+            continue
+        if entity.is_agent:
+            relation = "teammate" if _team(entity) == _team(agent) else "enemy"
+            held = _held_flag(entity)
+            lines.append(
+                f"- {entity.name} ({relation}): {_relative_text(agent, entity)}, {_health_text(entity)}, held_flag={held}"
+            )
+        elif (flag := entity.get_component(Flag)) is not None and _flag_holder(env, flag.team) is None:
+            direction = _direction_to_xy(agent, (entity.position.x, entity.position.y))
+            lines.append(f"- {flag.team.title()} Flag: {_relative_text(agent, entity)}; direction={direction}")
+        elif "destructible" in entity.tags:
+            lines.append(f"- Destructible wall: {_relative_text(agent, entity)}, {_health_text(entity)}")
+    if len(lines) == 1:
+        return "VISIBLE PAINTBALL ENTITIES: none"
+    return "\n".join(lines)
+
+
+class PaintballCaptureTheFlagWorld(Simple_2D_Grid_World):
+    def observe(self, agent_id: int):
+        agent = self.agents[agent_id]
+        nearby_entities = self.entities_in_observation_square(agent.position)
+        possible_actions = self.possible_actions(agent)
+        manager = _paintball_manager(self)
+        team = _team(agent)
+        held_flag = _held_flag(agent)
+        visible_flags = [
+            entity
+            for entity in nearby_entities
+            if (flag := entity.get_component(Flag)) is not None and _flag_holder(self, flag.team) is None
+        ]
+        visible_enemy_flags = [entity for entity in visible_flags if entity.get_component(Flag).team != team]
+        visible_own_flags = [entity for entity in visible_flags if entity.get_component(Flag).team == team]
+        lines = [
+            "CAPTURE THE FLAG STATUS:",
+            f"  your_team: {team}",
+            f"  your_health: {_health_text(agent)}",
+            f"  held_flag: {held_flag}",
+            f"  score: red={manager.red_score:g}, blue={manager.blue_score:g}",
+        ]
+        if held_flag != "none":
+            lines.append("  goal_now: carry the enemy flag back to your own base.")
+            if visible_own_flags:
+                nearest = min(
+                    visible_own_flags,
+                    key=lambda entity: abs(entity.position.x - agent.position.x)
+                    + abs(entity.position.y - agent.position.y),
+                )
+                lines.append(f"  visible_home_flag_direction: {_direction_to_xy(agent, (nearest.position.x, nearest.position.y))}")
+                lines.append("  immediate_priority: move toward visible_home_flag_direction.")
+            else:
+                lines.append("  immediate_priority: navigate back using visible map cues; only shoot enemies that block the return.")
+        else:
+            lines.append("  goal_now: find and grab the enemy flag.")
+            if any("Grab" in str(selection) for selection in possible_actions):
+                lines.append("  immediate_priority: choose Grab now.")
+            elif visible_enemy_flags:
+                nearest = min(
+                    visible_enemy_flags,
+                    key=lambda entity: abs(entity.position.x - agent.position.x)
+                    + abs(entity.position.y - agent.position.y),
+                )
+                lines.append(f"  visible_enemy_flag_direction: {_direction_to_xy(agent, (nearest.position.x, nearest.position.y))}")
+                lines.append("  immediate_priority: move toward visible_enemy_flag_direction.")
+            else:
+                lines.append("  immediate_priority: explore for the enemy flag; shooting walls is only useful if blocked.")
+        return Simple_Observation(
+            possible_actions=possible_actions,
+            nearby_entities=nearby_entities,
+            agent=agent,
+            last_reward=self.last_rewards[agent_id],
+            info=self.infos[agent_id],
+            observation_radius=self.observation_radius,
+            extra_sections=(
+                "\n".join(lines),
+                _ctf_local_map(self, agent, nearby_entities),
+                _important_actions_text(possible_actions),
+            ),
+            nearby_entities_formatter=lambda entities, current_agent: _format_ctf_entities(entities, current_agent, self),
+        )
 
 
 def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", model_name: str = "openai/gpt-4o-mini"):
@@ -127,11 +339,13 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 model_key=MODEL_KEY,
                 system_prompt=(
                     f"You are Player {agent_id} on the {team} team in Paintball Capture the Flag. "
-                    "Shoot opposing players, grab the enemy flag, and carry it back to your own flag base."
+                    "Move to the enemy flag, choose Grab as soon as it is available, then carry the flag back to "
+                    "your own base. Shoot opposing players when they block the flag route. Do not shoot walls unless "
+                    "movement is actually blocked."
                 ),
                 use_chain_of_thought=True,
-                observation_memory_window=4,
-                conversation_memory_window=4,
+                observation_memory_window=1,
+                conversation_memory_window=1,
             )
         elif policy == "human":
             agent_policy = Human_Takes_Action()
@@ -172,7 +386,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
         )
     )
 
-    env = Simple_2D_Grid_World(
+    env = PaintballCaptureTheFlagWorld(
         description="Paintball: Capture the Flag, adapted from Melting Pot.",
         entities=entities,
         entity_order=randomize_agent_order,

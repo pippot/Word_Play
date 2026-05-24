@@ -5,9 +5,6 @@ import argparse
 from word_play.core import (
     Agent_Policy,
     Entity,
-    Environment,
-    Target_Is_Nearby,
-    Target_Not_Self,
 )
 from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
@@ -15,7 +12,6 @@ from word_play.presets.action_policies.llm_action_and_communication import (
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
-from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.models import (
     LLM_MODEL_REGISTRY,
     OpenRouter_Model,
@@ -37,14 +33,21 @@ from word_play.presets.systems.containers import (
     Take_From_Infinite_Source,
 )
 from word_play.presets.systems.crafter import (
-    Collect_From_Crafter,
     Crafter,
     Crafter_Recipe,
-    Load_Crafter,
 )
 from word_play.presets.systems.do_nothing import Do_Nothing
-from word_play.presets.systems.inventory import Drop_Item, Inventory, Put_In_Container
-from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_steps
+from word_play.presets.systems.inventory import Drop_Item, Inventory
+from benchmarks.text_meltingpot.common import (
+    BENCHMARK_STEPS,
+    Collaborative_Cooking_Grid_World,
+    Deliver_Held_Soup,
+    Load_Held_Item_Into_Crafter,
+    Plate_Ready_Soup_With_Dish,
+    Put_Held_Item_On_Counter,
+    Take_First_Item_From_Counter,
+    normalized_steps,
+)
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
@@ -52,125 +55,31 @@ from word_play.utils.tilemap import find_tile_positions
 COOKING_TIME = normalized_steps(20)
 MAX_EPISODE_LENGTH = BENCHMARK_STEPS
 DEFAULT_NUM_PLAYERS = 2
-DELIVERY_REWARD = 20.0
 
 
-def kitchen_is_nearby(actor: Entity, target: Entity, env: Environment) -> bool:
-    return abs(actor.position.x - target.position.x) + abs(actor.position.y - target.position.y) <= 1
-
-
-def soup_is_valid(actor, target, env, item: Entity) -> bool:
-    return "soup" in item.tags
-
-
-def shared_delivery_bonus(actor, target, env, item: Entity, reward: float) -> None:
-    for idx, agent in enumerate(env.agents):
-        if agent is not actor and idx < len(env.last_step_rewards):
-            env.last_step_rewards[idx] += reward
-    env.completed_orders = getattr(env, "completed_orders", 0) + 1
-
-
-class Load_Held_Item_Into_Crafter(Load_Crafter):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules = [
-            Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
-        ] + self.validation_rules[2:]
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        return super().is_valid(actor, target, env, kwargs={"inventory index": 0})
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        return super().exec_action(actor, target, env, kwargs={"inventory index": 0})
-
-    def action_description_text(self, actor, target, env) -> str:
-        return f"Load your held item into {target.name}."
-
-
-class Put_Held_Item_On_Counter(Put_In_Container):
-    def __init__(self):
-        super().__init__(target_tags=["counter"], destroy_item=False)
-        self.validation_rules = [
-            Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
-        ] + self.validation_rules[2:]
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        return super().is_valid(actor, target, env, kwargs={"inventory_index": 0})
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        return super().exec_action(actor, target, env, kwargs={"inventory_index": 0})
-
-    def action_description_text(self, actor, target, env) -> str:
-        return f"Put your held item on {target.name}."
-
-
-class Deliver_Held_Soup(Put_In_Container):
-    def __init__(self):
-        super().__init__(
-            target_tags=["delivery"],
-            reward=DELIVERY_REWARD,
-            on_stored=shared_delivery_bonus,
-            destroy_item=True,
-        )
-        self.validation_rules = [
-            Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
-        ] + self.validation_rules[2:]
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        if not super().is_valid(actor, target, env, kwargs={"inventory_index": 0}):
-            return False
-        inventory = actor.get_component(Inventory)
-        return inventory is not None and bool(inventory.contents) and soup_is_valid(actor, target, env, inventory.contents[0])
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        return super().exec_action(actor, target, env, kwargs={"inventory_index": 0})
-
-    def action_description_text(self, actor, target, env) -> str:
-        return f"Deliver your held soup to {target.name}."
-
-
-class Take_From_Source_Adjacent(Take_From_Infinite_Source):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules = [
-            Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
-        ]
-
-
-class Collect_From_Crafter_Adjacent(Collect_From_Crafter):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules = [
-            Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=kitchen_is_nearby),
-        ] + self.validation_rules[2:]
-
-
-def debug_agent_options(env: Simple_2D_Grid_World, step: int) -> None:
-    kitchen_action_names = {
-        "Take item from Tomato Source.",
-        "Take item from Dish Source.",
-        "Load your held item into Cooking Pot.",
-        "Collect the finished item from Cooking Pot.",
-        "Deliver your held soup to Delivery Window.",
-        "Drop an inventory item.",
-        "Take the first item from Counter.",
-        "Put your held item on Counter.",
-    }
+def debug_agent_options(env: Collaborative_Cooking_Grid_World, step: int) -> None:
+    kitchen_action_markers = (
+        "Tomato Source",
+        "Dish Source",
+        "Cooking Pot",
+        "Delivery Window",
+        "Counter",
+        "Drop ",
+    )
     print(f"[debug step {step}]")
     for agent in env.agents:
         inventory = agent.get_component(Inventory)
         held = inventory.contents[0].name if inventory and inventory.contents else "empty"
         possible = env.possible_actions(agent)
-        kitchen_options = [str(selection) for selection in possible if str(selection) in kitchen_action_names]
+        kitchen_options = [
+            str(selection)
+            for selection in possible
+            if any(marker in str(selection) for marker in kitchen_action_markers)
+        ]
         print(f"  {agent.name}: held={held} kitchen_options={kitchen_options}")
 
 
-def debug_agent_results(env: Simple_2D_Grid_World, step: int) -> None:
+def debug_agent_results(env: Collaborative_Cooking_Grid_World, step: int) -> None:
     print(f"[debug post-step {step}]")
     for agent_id, agent in enumerate(env.agents):
         inventory = agent.get_component(Inventory)
@@ -201,7 +110,7 @@ def run_exp(
 
     entity_tilemap = """
     WWWWWWWWWWWW
-    W.PO..D....W
+    W.PO..D..P.W
     W..........W
     W...-CPT...W
     W..........W
@@ -340,8 +249,11 @@ def run_exp(
                 model_key="collaborative_cooking",
                 system_prompt=(
                     f"You are Player {agent_id} in Collaborative Cooking. "
-                    "Coordinate to make soup efficiently: take tomatoes, load three into the pot, "
-                    "wait for cooking, take a dish, collect the soup, and deliver it for shared reward."
+                    "Goal: make and deliver soup for shared reward. Recipe: load exactly 3 Tomatoes into one "
+                    "Cooking Pot to cook 1 Soup. Use Take Tomato, then Load your held Tomato into the same "
+                    "Cooking Pot until it shows 3/3. Wait for the pot to say ready, then take a Dish and use it "
+                    "to collect Soup from the ready Cooking Pot. Inventory holds one item; use Counters or Drop to "
+                    "make room. Turn in held Soup at the Delivery Window."
                 ),
                 use_chain_of_thought=True,
                 observation_memory_window=4,
@@ -362,10 +274,12 @@ def run_exp(
                     Move_Left(),
                     Move_Right(),
                     Drop_Item(),
-                    Take_From_Source_Adjacent(),
+                    Take_From_Infinite_Source(),
                     Load_Held_Item_Into_Crafter(),
-                    Collect_From_Crafter_Adjacent(),
+                    Plate_Ready_Soup_With_Dish(),
                     Deliver_Held_Soup(),
+                    Take_First_Item_From_Counter(),
+                    Put_Held_Item_On_Counter(),
                 ],
                 components=[
                     agent_policy,
@@ -379,7 +293,7 @@ def run_exp(
             )
         )
 
-    env = Simple_2D_Grid_World(
+    env = Collaborative_Cooking_Grid_World(
         description="Collaborative Cooking, adapted from MeltingPot into a single-file Word Play environment.",
         entities=entities,
         entity_order=randomize_agent_order,

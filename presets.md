@@ -72,7 +72,6 @@ src/word_play/presets/
 │   ├── cooldown.py
 │   ├── crafter.py
 │   ├── currency.py
-│   ├── delivery.py
 │   ├── destructible.py
 │   ├── do_nothing.py
 │   ├── freezable.py
@@ -452,13 +451,6 @@ src/word_play/presets/
 - Class `Money`: Money component that stores amount and can be rendered as cash.
 - Class `Has_Money`: Validation that an entity has a `Money` component.
 - Class `Has_Currency`: Validation that an entity's money is positive.
-
-#### `systems/delivery.py`
-- Purpose: Delivery helpers for item validation, reward computation, and delivery side effects.
-- Class `Front_Order_Match`: Item validator that checks whether the item matches the front of an order queue.
-- Class `Named_Item_Reward`: Reward function that pays by item name with a default fallback.
-- Class `Record_Delivery`: Side-effect callback that updates score, order queue, and event log on delivery.
-- Class `Deliver_Item`: Deliver an inventory item to a tagged target for reward.
 
 #### `systems/destructible.py`
 - Purpose: Destructible system for entities that transform when their HP reaches zero.

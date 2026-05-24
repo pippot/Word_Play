@@ -108,7 +108,10 @@ class Take_From_Infinite_Source(Action):
         return result
 
     def action_description_text(self, actor, target, env) -> str:
-        return f"Take item from {target.name}."
+        source = target.get_component(Regrowable_Item_Source)
+        item_factory = source.item_factory if source is not None else None
+        item_name = item_factory.name if isinstance(item_factory, Entity) else "item"
+        return f"Take {item_name} from {target.name} into your inventory."
 
 
 class Container(Inventory):

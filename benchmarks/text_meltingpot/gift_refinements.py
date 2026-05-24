@@ -30,6 +30,7 @@ from word_play.presets.movement.simple_2d_grid import (
     Move_Up,
     Position_2D,
 )
+from word_play.presets.observation.simple_observation import Simple_Observation
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.reward import award_reward
@@ -226,6 +227,99 @@ class GiftRefinementManager(Component):
                 env.truncations = [True] * len(env.agents)
 
 
+def _relative_text(actor: Entity, target: Entity) -> str:
+    dx = target.position.x - actor.position.x
+    dy = target.position.y - actor.position.y
+    return f"relative=({dx:+d},{dy:+d}), distance={abs(dx) + abs(dy)}"
+
+
+def _direction_text(actor: Entity, target: Entity) -> str:
+    dx = target.position.x - actor.position.x
+    dy = target.position.y - actor.position.y
+    moves = []
+    if dx > 0:
+        moves.append("Move right")
+    elif dx < 0:
+        moves.append("Move left")
+    if dy > 0:
+        moves.append("Move up")
+    elif dy < 0:
+        moves.append("Move down")
+    return " or ".join(moves) if moves else "already here"
+
+
+def _token_text(entity: Entity) -> str:
+    inventory = entity.get_component(TokenInventory)
+    if inventory is None:
+        return "raw=0, refined=0, finest=0"
+    return f"raw={inventory.raw}, refined={inventory.refined}, finest={inventory.finest}"
+
+
+def _important_actions_text(possible_actions: list) -> str:
+    matches = [
+        f"  [{idx}] {selection}"
+        for idx, selection in enumerate(possible_actions)
+        if "Refine and gift" in str(selection) or "Consume all tokens" in str(selection)
+    ]
+    if not matches:
+        return "IMPORTANT AVAILABLE ACTIONS: no gift or consume action is valid this turn."
+    return "IMPORTANT AVAILABLE ACTIONS:\n" + "\n".join(matches)
+
+
+def _format_gift_entities(nearby_entities: list[Entity], agent: Entity) -> str:
+    lines = ["VISIBLE GIFT ENTITIES:"]
+    ordered = sorted(
+        nearby_entities,
+        key=lambda entity: (
+            abs(entity.position.x - agent.position.x) + abs(entity.position.y - agent.position.y),
+            entity.name,
+        ),
+    )
+    for entity in ordered:
+        if entity is agent:
+            continue
+        if entity.is_agent:
+            lines.append(f"- {entity.name}: {_relative_text(agent, entity)}, tokens=({_token_text(entity)})")
+        elif "raw_token" in entity.tags:
+            lines.append(f"- Raw Token: {_relative_text(agent, entity)}; direction={_direction_text(agent, entity)}")
+    if len(lines) == 1:
+        return "VISIBLE GIFT ENTITIES: none"
+    return "\n".join(lines)
+
+
+class GiftRefinementsWorld(Simple_2D_Grid_World):
+    def observe(self, agent_id: int):
+        agent = self.agents[agent_id]
+        nearby_entities = self.entities_in_observation_square(agent.position)
+        possible_actions = self.possible_actions(agent)
+        inventory = agent.get_component(TokenInventory)
+        total = inventory.total() if inventory is not None else 0
+        raw_tokens = [entity for entity in nearby_entities if "raw_token" in entity.tags]
+        lines = [
+            "GIFT REFINEMENT STATUS:",
+            f"  your_tokens: {_token_text(agent)}",
+            f"  consume_reward_if_used_now: {total}",
+            "  mechanics: step onto Raw Token to pick it up; gift your rawest token to a nearby player for +10; consume tokens for their stored value.",
+        ]
+        if raw_tokens:
+            nearest = min(
+                raw_tokens,
+                key=lambda entity: abs(entity.position.x - agent.position.x)
+                + abs(entity.position.y - agent.position.y),
+            )
+            lines.append(f"  nearest_raw_token: {_relative_text(agent, nearest)}; direction={_direction_text(agent, nearest)}")
+        return Simple_Observation(
+            possible_actions=possible_actions,
+            nearby_entities=nearby_entities,
+            agent=agent,
+            last_reward=self.last_rewards[agent_id],
+            info=self.infos[agent_id],
+            observation_radius=self.observation_radius,
+            extra_sections=("\n".join(lines), _important_actions_text(possible_actions)),
+            nearby_entities_formatter=lambda entities, current_agent: _format_gift_entities(entities, current_agent),
+        )
+
+
 def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", model_name: str = "openai/gpt-4o-mini"):
     if policy == "llm":
         LLM_MODEL_REGISTRY.unload(MODEL_KEY)
@@ -346,7 +440,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             )
         )
 
-    env = Simple_2D_Grid_World(
+    env = GiftRefinementsWorld(
         description="Gift Refinements, adapted from MeltingPot into a single-file Word Play environment.",
         entities=entities,
         entity_order=randomize_agent_order,

@@ -30,7 +30,7 @@ from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
 
-DEFAULT_NUM_PLAYERS = 3
+DEFAULT_NUM_PLAYERS = 12
 MODEL_KEY = "factory_commons"
 
 
@@ -132,12 +132,13 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 model_key=MODEL_KEY,
                 system_prompt=(
                     f"You are Player {agent_id} in Factory Commons. Pick up cubes, deposit them into hoppers, "
-                    "then eat the apples that spawn. Hoppers marked the same way are the same object; some produce "
-                    "more apples than others."
+                    "then eat the apples that spawn. If stamina is 0, choose Do nothing to rest. If Eat is available, "
+                    "choose Eat. If carrying a cube and Deposit is available, choose Deposit. Only pick up live Cube, "
+                    "not Waiting Cube."
                 ),
                 use_chain_of_thought=True,
-                observation_memory_window=4,
-                conversation_memory_window=4,
+                observation_memory_window=1,
+                conversation_memory_window=1,
             )
         elif policy == "human":
             agent_policy = Human_Takes_Action()

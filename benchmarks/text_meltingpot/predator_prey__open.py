@@ -7,7 +7,6 @@ from benchmarks.text_meltingpot.common import (
     BENCHMARK_STEPS,
     CatchPrey,
     PredatorPreyFood,
-    PredatorPreyManager,
     PredatorPreyRole,
 )
 from word_play.core import Agent_Policy, Entity
@@ -74,7 +73,10 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
         "G": {
             "name": "Tall Grass",
             "tags": ["grass"],
-            "components": [Renderable(sprite_path="src/world_tiles/outdoors/terrain/grass_1.png", z_index=1)],
+            "components": [
+                Collidable(collidable_tags=["predator"]),
+                Renderable(sprite_path="src/world_tiles/outdoors/terrain/grass_1.png", z_index=1),
+            ],
         },
         "A": {
             "name": "Apple",
@@ -157,8 +159,6 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 ],
             )
         )
-
-    entities.append(Entity(name="Predator Prey Manager", position=Position_2D(0, 0), components=[PredatorPreyManager()]))
 
     env = Simple_2D_Grid_World(
         description="Predator Prey: Open, adapted from Melting Pot.",

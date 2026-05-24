@@ -30,6 +30,7 @@ from word_play.presets.movement.simple_2d_grid import (
     Move_Up,
     Position_2D,
 )
+from word_play.presets.observation.simple_observation import Simple_Observation
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
 from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_probability, normalized_steps
@@ -381,6 +382,158 @@ class HiddenAgendaManager(Component):
         env.terminations = [True] * len(env.agents)
 
 
+def _relative_text(actor: Entity, target: Entity) -> str:
+    dx = target.position.x - actor.position.x
+    dy = target.position.y - actor.position.y
+    return f"relative=({dx:+d},{dy:+d}), distance={abs(dx) + abs(dy)}"
+
+
+def _direction_text(actor: Entity, target: Entity) -> str:
+    dx = target.position.x - actor.position.x
+    dy = target.position.y - actor.position.y
+    moves = []
+    if dx > 0:
+        moves.append("Move right")
+    elif dx < 0:
+        moves.append("Move left")
+    if dy > 0:
+        moves.append("Move up")
+    elif dy < 0:
+        moves.append("Move down")
+    return " or ".join(moves) if moves else "already here"
+
+
+def _state_text(entity: Entity) -> str:
+    state = entity.get_component(HiddenAgendaState)
+    if state is None:
+        return "role=unknown"
+    return (
+        f"role={state._role}, status={state.status}, held_gems={state.held_gems}, "
+        f"freeze_cooldown={state.freeze_cooldown}, vote={state.vote}"
+    )
+
+
+def _important_actions_text(possible_actions: list) -> str:
+    matches = [
+        f"  [{idx}] {selection}"
+        for idx, selection in enumerate(possible_actions)
+        if "Freeze" in str(selection) or "Vote for" in str(selection) or "Abstain" in str(selection)
+    ]
+    if not matches:
+        return "IMPORTANT AVAILABLE ACTIONS: no freeze or vote action is valid this turn; use movement to reach visible gems or deposits."
+    return "IMPORTANT AVAILABLE ACTIONS:\n" + "\n".join(matches)
+
+
+def _hidden_map_symbol(entity: Entity, agent: Entity) -> tuple[int, str] | None:
+    if entity is agent:
+        return 100, "A"
+    if entity.is_agent:
+        return 90, "P"
+    if "gem" in entity.tags and entity.name == "Gem":
+        return 80, "G"
+    if "gem_deposit" in entity.tags:
+        return 70, "D"
+    if "voting_station" in entity.tags:
+        return 60, "V"
+    if "wall" in entity.tags:
+        return 50, "#"
+    return None
+
+
+def _hidden_local_map(env: Environment, agent: Entity, nearby_entities: list[Entity]) -> str:
+    radius = env.observation_radius
+    cells: dict[tuple[int, int], tuple[int, str]] = {
+        (x, y): (0, ".")
+        for y in range(agent.position.y - radius, agent.position.y + radius + 1)
+        for x in range(agent.position.x - radius, agent.position.x + radius + 1)
+    }
+    for entity in nearby_entities:
+        symbol = _hidden_map_symbol(entity, agent)
+        if symbol is None:
+            continue
+        xy = (entity.position.x, entity.position.y)
+        if xy in cells and symbol[0] >= cells[xy][0]:
+            cells[xy] = symbol
+
+    rows = []
+    for y in range(agent.position.y + radius, agent.position.y - radius - 1, -1):
+        rows.append("".join(cells[(x, y)][1] for x in range(agent.position.x - radius, agent.position.x + radius + 1)))
+    return "LOCAL MAP (visible only; A you, P player, G gem, D deposit, V vote, # wall):\n" + "\n".join(rows)
+
+
+def _format_hidden_entities(nearby_entities: list[Entity], agent: Entity) -> str:
+    lines = ["VISIBLE HIDDEN AGENDA ENTITIES:"]
+    ordered = sorted(
+        nearby_entities,
+        key=lambda entity: (
+            abs(entity.position.x - agent.position.x) + abs(entity.position.y - agent.position.y),
+            entity.name,
+        ),
+    )
+    for entity in ordered:
+        if entity is agent:
+            continue
+        if entity.is_agent:
+            lines.append(f"- {entity.name}: {_relative_text(agent, entity)}, {_state_text(entity)}")
+        elif "gem" in entity.tags and entity.name == "Gem":
+            lines.append(f"- Gem: {_relative_text(agent, entity)}; direction={_direction_text(agent, entity)}")
+        elif "gem_deposit" in entity.tags:
+            lines.append(f"- Gem Deposit: {_relative_text(agent, entity)}; direction={_direction_text(agent, entity)}")
+    if len(lines) == 1:
+        return "VISIBLE HIDDEN AGENDA ENTITIES: none"
+    return "\n".join(lines)
+
+
+class HiddenAgendaWorld(Simple_2D_Grid_World):
+    def observe(self, agent_id: int):
+        agent = self.agents[agent_id]
+        nearby_entities = self.entities_in_observation_square(agent.position)
+        possible_actions = self.possible_actions(agent)
+        state = agent.get_component(HiddenAgendaState)
+        manager = hidden_agenda_manager(self)
+        gems = [entity for entity in nearby_entities if "gem" in entity.tags and entity.name == "Gem"]
+        deposits = [entity for entity in nearby_entities if "gem_deposit" in entity.tags]
+        lines = [
+            "HIDDEN AGENDA STATUS:",
+            f"  your_state: {_state_text(agent)}",
+            f"  team_progress: gems_deposited={manager.gems_deposited}/{GEM_GOAL}, "
+            f"voting_active={manager.voting_active}, voting_timer={manager.voting_timer}, outcome={manager.outcome}",
+        ]
+        if state is not None and state.is_crewmate:
+            if state.held_gems > 0:
+                lines.append("  goal_now: find a visible Gem Deposit tile and step onto it with your held gem.")
+            else:
+                lines.append("  goal_now: explore for a visible Gem, then step onto it to pick it up.")
+            if manager.voting_active:
+                lines.append("  voting_now: vote for the suspected impostor or abstain.")
+        elif state is not None and state.is_impostor:
+            lines.append("  goal_now: freeze active crewmates in range and survive votes.")
+        if gems:
+            nearest = min(gems, key=lambda entity: grid_distance(agent, entity))
+            lines.append(f"  nearest_visible_gem: {_relative_text(agent, nearest)}; direction={_direction_text(agent, nearest)}")
+        if deposits:
+            nearest = min(deposits, key=lambda entity: grid_distance(agent, entity))
+            lines.append(f"  nearest_visible_deposit: {_relative_text(agent, nearest)}; direction={_direction_text(agent, nearest)}")
+        if state is not None and state.is_crewmate and state.held_gems <= 0 and gems:
+            lines.append("  immediate_priority: move toward nearest_visible_gem.")
+        elif state is not None and state.is_crewmate and state.held_gems > 0 and deposits:
+            lines.append("  immediate_priority: move toward nearest_visible_deposit.")
+        return Simple_Observation(
+            possible_actions=possible_actions,
+            nearby_entities=nearby_entities,
+            agent=agent,
+            last_reward=self.last_rewards[agent_id],
+            info=self.infos[agent_id],
+            observation_radius=self.observation_radius,
+            extra_sections=(
+                "\n".join(lines),
+                _hidden_local_map(self, agent, nearby_entities),
+                _important_actions_text(possible_actions),
+            ),
+            nearby_entities_formatter=lambda entities, current_agent: _format_hidden_entities(entities, current_agent),
+        )
+
+
 def run_exp(agent_count: int = MANDATED_NUM_PLAYERS, policy: str = "random", model_name: str = "openai/gpt-4o-mini"):
     assert agent_count == MANDATED_NUM_PLAYERS, "Hidden Agenda requires exactly 5 players."
 
@@ -488,16 +641,17 @@ def run_exp(agent_count: int = MANDATED_NUM_PLAYERS, policy: str = "random", mod
         else:
             prompt = (
                 f"You are Player {agent_id} in Hidden Agenda. You are a crewmate. "
-                "Collect gems, deposit them in the central grate, watch for suspicious freezing, "
-                "and vote out the impostor during deliberations."
+                "Explore to find visible gems, step onto a Gem to pick it up, then find a visible Gem Deposit "
+                "tile and step onto it while holding the gem. "
+                "During deliberations, vote for suspicious players or abstain."
             )
         agent_policy = (
             LLM_Action_And_Communication_Policy(
                 model_key=MODEL_KEY,
                 system_prompt=prompt,
                 use_chain_of_thought=True,
-                observation_memory_window=4,
-                conversation_memory_window=8,
+                observation_memory_window=1,
+                conversation_memory_window=1,
             )
             if policy == "llm"
             else Human_Takes_Action() if policy == "human" else Random_Policy()
@@ -527,7 +681,7 @@ def run_exp(agent_count: int = MANDATED_NUM_PLAYERS, policy: str = "random", mod
             )
         )
 
-    env = Simple_2D_Grid_World(
+    env = HiddenAgendaWorld(
         description="Hidden Agenda, adapted from MeltingPot into a single-file Word Play environment.",
         entities=entities,
         entity_order=randomize_agent_order,

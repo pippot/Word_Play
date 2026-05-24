@@ -6,7 +6,6 @@ Each module provides a self-contained system:
 - crafter: Crafting recipes and stations
 - currency: Wallet and currency transfer
 - trading: Trade sessions and negotiation
-- delivery: Order fulfillment
 - combat: Attack
 - health: HP tracking and damage/death
 - ownership: Claim and give ownership
@@ -38,12 +37,6 @@ from word_play.presets.systems.currency import (
     Has_Money,
     Has_Currency,
     Currency_Amount_Arg,
-)
-from word_play.presets.systems.delivery import (
-    Deliver_Item,
-    Front_Order_Match,
-    Named_Item_Reward,
-    Record_Delivery,
 )
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.health import Health
@@ -135,11 +128,6 @@ __all__ = [
     "Has_Money",
     "Has_Currency",
     "Currency_Amount_Arg",
-    # Delivery
-    "Deliver_Item",
-    "Front_Order_Match",
-    "Named_Item_Reward",
-    "Record_Delivery",
     # Do Nothing
     "Do_Nothing",
     # Inventory

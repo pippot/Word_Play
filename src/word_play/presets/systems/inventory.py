@@ -363,4 +363,7 @@ class Drop_Item(Action):
         return {"dropped": item.name}
 
     def action_description_text(self, actor, target, env) -> str:
-        return "Drop an inventory item."
+        inv = actor.get_component(Inventory)
+        if inv is not None and len(inv.contents) == 1:
+            return f"Drop {inv.contents[0].name} from your inventory onto the ground."
+        return "Drop an item from your inventory onto the ground."

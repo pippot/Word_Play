@@ -4,15 +4,18 @@ import argparse
 
 from benchmarks.text_meltingpot.common import (
     BENCHMARK_STEPS,
+    Collaborative_Cooking_Grid_World,
     Deliver_Held_Soup,
     Load_Held_Item_Into_Crafter,
+    Plate_Ready_Soup_With_Dish,
+    Put_Held_Item_On_Counter,
+    Take_First_Item_From_Counter,
     normalized_steps,
 )
 from word_play.core import Agent_Policy, Entity
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
-from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import (
     Collidable,
     Move_Down,
@@ -23,7 +26,7 @@ from word_play.presets.movement.simple_2d_grid import (
 )
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.containers import Regrowable_Item_Source, Take_From_Infinite_Source
-from word_play.presets.systems.crafter import Collect_From_Crafter, Crafter, Crafter_Recipe
+from word_play.presets.systems.crafter import Crafter, Crafter_Recipe
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.inventory import Drop_Item, Inventory
 from word_play.utils import tilemap_to_entities
@@ -57,11 +60,12 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
     """
     entity_tileset = {
         "#": {
-            "name": "Kitchen Wall",
-            "tags": ["wall", "blocker"],
+            "name": "Counter",
+            "tags": ["counter", "blocker"],
             "components": [
-                Collidable(collidable_tags=["wall", "blocker"]),
-                Renderable(sprite_path="", wall_set="src/world_tiles/indoors/wall_sets/bright_brick_wall", z_index=3),
+                Inventory(max_size=1),
+                Collidable(collidable_tags=["blocker"]),
+                Renderable(sprite_path="src/world_tiles/indoors/stations/kitchen_counter.png", z_index=4),
             ],
         },
         "O": {
@@ -159,8 +163,11 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 model_key=MODEL_KEY,
                 system_prompt=(
                     f"You are Player {agent_id} in Collaborative Cooking: Asymmetric. "
-                    "Coordinate to make soup: collect tomatoes, load three tomatoes into a pot, "
-                    "collect the soup, and deliver it for shared reward."
+                    "Goal: make and deliver soup for shared reward. Recipe: load exactly 3 Tomatoes into one "
+                    "Cooking Pot to cook 1 Soup. Use Take Tomato, then Load your held Tomato into the same "
+                    "Cooking Pot until it shows 3/3. Wait for the pot to say ready, then take a Dish and use it "
+                    "to collect Soup from the ready Cooking Pot. Inventory holds one item; use Counters or Drop to "
+                    "make room. Turn in held Soup at the Delivery Window."
                 ),
                 use_chain_of_thought=True,
                 observation_memory_window=4,
@@ -185,8 +192,10 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                     Drop_Item(),
                     Take_From_Infinite_Source(),
                     Load_Held_Item_Into_Crafter(),
-                    Collect_From_Crafter(),
+                    Plate_Ready_Soup_With_Dish(),
                     Deliver_Held_Soup(),
+                    Take_First_Item_From_Counter(),
+                    Put_Held_Item_On_Counter(),
                 ],
                 components=[
                     agent_policy,
@@ -197,7 +206,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             )
         )
 
-    env = Simple_2D_Grid_World(
+    env = Collaborative_Cooking_Grid_World(
         description="Collaborative Cooking: Asymmetric, adapted from Melting Pot.",
         entities=entities,
         entity_order=randomize_agent_order,

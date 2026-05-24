@@ -117,6 +117,44 @@ class Crafter(Component):
         return item
 
 
+def _crafter_status_text(crafter: Crafter | None) -> str:
+    if crafter is None:
+        return "station state unknown"
+    if crafter.ready_item is not None:
+        return f"ready: {crafter.ready_item.name}"
+    if crafter.remaining_steps is not None:
+        return f"cooking: {crafter.remaining_steps} steps left"
+
+    recipe = None
+    for candidate_recipe in crafter.recipes:
+        if Crafter._is_partial_match(candidate_recipe, crafter.loaded_items):
+            recipe = candidate_recipe
+            break
+    if recipe is None and crafter.recipes:
+        recipe = crafter.recipes[0]
+
+    if recipe is None:
+        return "no recipe loaded"
+
+    loaded_count = len(crafter.loaded_items)
+    total_count = len(recipe.input_names)
+    if recipe.input_names and len(set(recipe.input_names)) == 1:
+        return f"loaded {loaded_count}/{total_count} {recipe.input_names[0]}"
+    if crafter.loaded_items:
+        return f"loaded {loaded_count}/{total_count} inputs: {crafter.loaded_items}"
+    return f"loaded 0/{total_count} inputs"
+
+
+def _first_compatible_held_item_name(actor, crafter: Crafter | None) -> str | None:
+    inventory = actor.get_component(Inventory)
+    if inventory is None or crafter is None:
+        return None
+    for item in inventory.contents:
+        if crafter.can_accept(item):
+            return item.name
+    return None
+
+
 class Load_Crafter(Action):
     """Load an item into the crafter's container."""
 
@@ -157,7 +195,8 @@ class Load_Crafter(Action):
         return {"loaded_item": item.name}
 
     def action_description_text(self, actor, target, env) -> str:
-        return f"Load an inventory item into {target.name}."
+        crafter = target.get_component(Crafter)
+        return f"Load an inventory item into {target.name} ({_crafter_status_text(crafter)})."
 
 
 class Load_First_Into_Crafter(Action):
@@ -199,7 +238,10 @@ class Load_First_Into_Crafter(Action):
         return {"success": False, "reason": "no_matching_item"}
 
     def action_description_text(self, actor, target, env) -> str:
-        return f"Load a held ingredient into {target.name}."
+        crafter = target.get_component(Crafter)
+        item_name = _first_compatible_held_item_name(actor, crafter)
+        held_text = f"your held {item_name}" if item_name else "a held ingredient"
+        return f"Load {held_text} into {target.name} ({_crafter_status_text(crafter)})."
 
 
 class Collect_From_Crafter(Action):
@@ -231,7 +273,9 @@ class Collect_From_Crafter(Action):
         return {"collected_item": item.name, "from": target.name}
 
     def action_description_text(self, actor, target, env) -> str:
-        return f"Collect the finished item from {target.name}."
+        crafter = target.get_component(Crafter)
+        item_name = crafter.ready_item.name if crafter is not None and crafter.ready_item is not None else "item"
+        return f"Collect the finished {item_name} from {target.name} into your inventory."
 
 
 class Zap_Change(Action):

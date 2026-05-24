@@ -29,6 +29,7 @@ from word_play.utils.tilemap import find_tile_positions
 
 
 MAX_EPISODE_LENGTH = BENCHMARK_STEPS
+DEFAULT_NUM_PLAYERS = 5
 MIN_EPISODE_LENGTH = normalized_steps(1000)
 INTERVAL_LENGTH = normalized_steps(100)
 TERMINATION_PROBABILITY = 0.2
@@ -282,7 +283,11 @@ class Externality_Mushroom(Component):
         return zap_state is not None and zap_state.removed_ticks > 0
 
 
-def run_exp(agent_count: int, policy: str, model_name: str) -> None:
+def run_exp(
+    agent_count: int = DEFAULT_NUM_PLAYERS,
+    policy: str = "random",
+    model_name: str = "openai/gpt-4o-mini",
+) -> None:
     entity_tilemap = """
     WWWWWWWWWWWWWWWWWWWWWWW
     W....R....WWW.....G...W
@@ -436,7 +441,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--agent-count", type=int, default=5)
+    parser.add_argument("--agent-count", type=int, default=DEFAULT_NUM_PLAYERS)
     parser.add_argument("--policy", choices=["random", "llm", "human"], default="random")
     parser.add_argument("--model-name", default="openai/gpt-4o-mini")
     args = parser.parse_args()

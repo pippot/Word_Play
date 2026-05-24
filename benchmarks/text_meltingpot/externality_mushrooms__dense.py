@@ -28,7 +28,14 @@ from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
 
-def run_exp(agent_count: int, policy: str, model_name: str):
+DEFAULT_NUM_PLAYERS = 5
+
+
+def run_exp(
+    agent_count: int = DEFAULT_NUM_PLAYERS,
+    policy: str = "random",
+    model_name: str = "openai/gpt-4o-mini",
+):
     entity_tilemap = """
     WWWWWWWWWWWWWWWWWWWWWWW
     W.....................W
@@ -181,7 +188,7 @@ def run_exp(agent_count: int, policy: str, model_name: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--agent-count", type=int, default=5)
+    parser.add_argument("--agent-count", type=int, default=DEFAULT_NUM_PLAYERS)
     parser.add_argument("--policy", choices=["random", "llm", "human"], default="random")
     parser.add_argument("--model-name", default="openai/gpt-4o-mini")
     args = parser.parse_args()

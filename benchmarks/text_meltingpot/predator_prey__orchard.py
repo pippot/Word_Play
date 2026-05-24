@@ -7,7 +7,6 @@ from benchmarks.text_meltingpot.common import (
     BENCHMARK_STEPS,
     CatchPrey,
     PredatorPreyFood,
-    PredatorPreyManager,
     PredatorPreyRole,
 )
 from word_play.core import Agent_Policy, Entity
@@ -74,7 +73,10 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
         "G": {
             "name": "Tall Grass",
             "tags": ["grass"],
-            "components": [Renderable(sprite_path="src/world_tiles/outdoors/terrain/grass_1.png", z_index=1)],
+            "components": [
+                Collidable(collidable_tags=["predator"]),
+                Renderable(sprite_path="src/world_tiles/outdoors/terrain/grass_1.png", z_index=1),
+            ],
         },
         "A": {
             "name": "Apple",
@@ -134,7 +136,14 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 name=f"{role.title()} {agent_id}",
                 position=Position_2D(x, y),
                 tags=["agent", "player", "default"],
-                actions=[Do_Nothing(), Move_Up(), Move_Down(), Move_Left(), Move_Right(), CatchPrey()],
+                actions=[
+                    Do_Nothing(),
+                    Move_Up(),
+                    Move_Down(),
+                    Move_Left(),
+                    Move_Right(),
+                    CatchPrey(),
+                ],
                 components=[
                     agent_policy,
                     PredatorPreyRole(role, (x, y)),
@@ -150,8 +159,6 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 ],
             )
         )
-
-    entities.append(Entity(name="Predator Prey Manager", position=Position_2D(0, 0), components=[PredatorPreyManager()]))
 
     env = Simple_2D_Grid_World(
         description="Predator Prey: Orchard, adapted from Melting Pot.",

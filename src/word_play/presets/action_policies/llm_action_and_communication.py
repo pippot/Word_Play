@@ -108,23 +108,45 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
                 last_exc = exc
                 selection_prompt = self._retry_prompt(selection_prompt, raw, str(exc))
 
-        raise RuntimeError(
-            f"LLM failed to produce a valid action after {self.MAX_ATTEMPTS} attempts. "
-            f"Last error: {last_exc}\n"
-            f"Last raw response:\n{last_raw}"
-        )
+        fallback = self._fallback_selection(observation)
+        self._record_observation(observation)
+        return fallback, {
+            "raw_response": last_raw,
+            "reasoning": reasoning,
+            "attempt": self.MAX_ATTEMPTS,
+            "fallback": True,
+            "fallback_reason": str(last_exc),
+        }
 
     def _record_last_selection(self, action_selection: Action_Selection, info: dict) -> None:
         self._last_action = action_selection
         self._last_info = {**info, "_last_action": action_selection}
 
     def _record_observation(self, observation: Observation) -> None:
-        observation_text = self._truncate_text(str(observation), self.max_stored_observation_chars)
+        observation_text = self._truncate_text(
+            self._memory_safe_observation_text(str(observation)),
+            self.max_stored_observation_chars,
+        )
         self.observation_history.append(observation_text)
         if len(self.observation_history) > self.observation_memory_window:
             overflow = self.observation_history[: -self.observation_memory_window]
             self._update_observation_summary(overflow)
             self.observation_history = self.observation_history[-self.observation_memory_window :]
+
+    def _memory_safe_observation_text(self, observation_text: str) -> str:
+        """Store state memory without stale action indices that can poison later choices."""
+        lines = []
+        skip = False
+        for line in observation_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("AVAILABLE ACTIONS") or stripped.startswith("IMPORTANT AVAILABLE ACTIONS"):
+                skip = True
+                continue
+            if skip and (stripped.startswith("[") or not stripped):
+                continue
+            skip = False
+            lines.append(line)
+        return "\n".join(lines)
 
     def _update_observation_summary(self, observations: list[str]) -> None:
         summary_lines: list[str] = []
@@ -159,11 +181,6 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             ):
                 state_lines.append(stripped)
 
-        action_lines = [
-            line.strip() for line in observation_text.splitlines() if line.strip().startswith("[") and "]" in line
-        ]
-        if action_lines:
-            summary_parts.append(f"actions={', '.join(action_lines[:3])}")
         if state_lines:
             summary_parts.extend(state_lines[:4])
 
@@ -257,6 +274,9 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             + "\n\n"
             + kwargs_instruction
             + f"Example: {example_output}\n\n"
+            + f"The only valid action indices this turn are 0 through {len(observation.possible_actions) - 1}. "
+            "Use the CURRENT OBSERVATION action list only. Ignore any remembered action indices. "
+            "If no useful action is available, choose action 0.\n\n"
             + self._observation_memory_block()
             + self._conversation_memory_block()
             + f"CURRENT OBSERVATION:\n{observation}\n"
@@ -273,7 +293,7 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             f"Your previous response was invalid.\n"
             f"  Response: {bad_response}\n"
             f"  Error: {error}\n\n"
-            "Try again. Output ONLY the JSON object."
+            "Try again. Use only an index from the CURRENT OBSERVATION action list. Output ONLY the JSON object."
         )
 
     def _with_system(self, prompt: str) -> str:
@@ -308,6 +328,15 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         if not action_selection.is_valid():
             raise ValueError(f"Action [{idx}] is invalid in the current state.")
 
+        return action_selection
+
+    def _fallback_selection(self, observation: Observation) -> Action_Selection:
+        for action_selection in observation.possible_actions:
+            if str(action_selection).lower().startswith("do nothing"):
+                action_selection.action_kwargs = None
+                return action_selection
+        action_selection = observation.possible_actions[0]
+        action_selection.action_kwargs = None
         return action_selection
 
     def _extract_json(self, text: str) -> dict:
