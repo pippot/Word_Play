@@ -44,6 +44,9 @@ try:
 except ImportError:
     Single_Item_Holder = None
 
+ACTION_ARG_OPTION_PATTERN = re.compile(r"(\d+)\s*\(([^)]+)\)")
+
+
 def _inventory_items(inventory: Any) -> list[Any]:
     """Return items from either the legacy inventory list or newer contents list."""
     items = getattr(inventory, "contents", None)
@@ -156,6 +159,115 @@ def _expire_render_messages(env) -> None:
             renderable._last_message_step = None
 
 
+def _renderer_for_observation(observation: Any) -> Any | None:
+    """Return the active renderer from an observation's first available action."""
+    possible_actions = list(getattr(observation, "possible_actions", []))
+    if not possible_actions:
+        return None
+    return getattr(possible_actions[0].env, "renderer_impl", None)
+
+
+def _action_arg_options(arg_description: str) -> list[tuple[int, str]]:
+    """Parse numbered option labels from an action-argument description."""
+    return [
+        (int(idx), label)
+        for idx, label in ACTION_ARG_OPTION_PATTERN.findall(arg_description)
+    ]
+
+
+def _get_human_action_kwargs_with_renderer(
+    active_renderer: Any,
+    action_selection: Any,
+) -> dict[str, Any]:
+    """Collect and validate required action kwargs through renderer prompts."""
+    error_message = None
+    while True:
+        if action_selection.required_kwargs and len(action_selection.required_kwargs) == 1:
+            arg_name, arg = next(iter(action_selection.required_kwargs.items()))
+            arg_description = arg.arg_description(
+                action_selection.actor,
+                action_selection.target_entity,
+                action_selection.env,
+            )
+            options = _action_arg_options(arg_description)
+            if options:
+                text = prompt_human_multi_select(
+                    active_renderer,
+                    action_selection.env,
+                    entity_name=action_selection.actor.name,
+                    position_label=str(action_selection.actor.position),
+                    header="Action Arguments",
+                    instructions=[
+                        str(action_selection),
+                        f"Choose values for: {arg_name}",
+                        "Use Up/Down to move, Space to toggle, Enter to submit.",
+                        *([f"Error: {error_message}"] if error_message else []),
+                    ],
+                    options=options,
+                )
+                try:
+                    return action_selection.parse_and_validate_kwarg_list(text)
+                except Exception as exc:
+                    error_message = str(exc)
+                    continue
+
+        instructions = [
+            str(action_selection),
+            "Type the required values separated by ';'.",
+            "Press Enter to submit.",
+        ]
+        for name, arg in action_selection.required_kwargs.items():
+            instructions.append(
+                f"{name}: {arg.arg_description(action_selection.actor, action_selection.target_entity, action_selection.env)}"
+            )
+        if error_message:
+            instructions.append(f"Error: {error_message}")
+
+        text = prompt_human_text(
+            active_renderer,
+            action_selection.env,
+            entity_name=action_selection.actor.name,
+            position_label=str(action_selection.actor.position),
+            header="Action Arguments",
+            instructions=instructions,
+        )
+        try:
+            return action_selection.parse_and_validate_kwarg_list(text)
+        except Exception as exc:
+            error_message = str(exc)
+
+
+def _prompt_human_chat_with_renderer(
+    comm_policy: Any,
+    recipients: list[Any],
+    env: Any,
+    info: Any | None,
+) -> str:
+    """Collect one human chat message from the renderer sidebar."""
+    recipient_names = ", ".join(recipient.name for recipient in recipients) or "nobody"
+    transcript = list(getattr(env, "_renderer_conversation_log", []))
+    instructions = [
+        f"Recipients: {recipient_names}",
+        *([str(info)] if info else []),
+    ]
+    if transcript:
+        instructions.append("Conversation so far:")
+        instructions.extend(transcript[-6:])
+    instructions.extend([
+        f"Now speaking: {comm_policy.entity.name}",
+        "Type your message.",
+        "Press Enter to send.",
+    ])
+    return prompt_human_text(
+        env.renderer_impl,
+        env,
+        entity_name=comm_policy.entity.name,
+        position_label=str(comm_policy.entity.position),
+        header="Chat",
+        instructions=instructions,
+    )
+
+
 def _install_renderer_human_input_hooks(env) -> None:
     """Route human action and chat prompts through the renderer HUD.
 
@@ -171,120 +283,39 @@ def _install_renderer_human_input_hooks(env) -> None:
         if not hasattr(entity, "get_component"):
             continue
 
-        if Human_Takes_Action is not None:
-            action_policy = entity.get_component(Human_Takes_Action)
-            if action_policy is not None and not getattr(action_policy, "_renderer_prompt_hook_installed", False):
-                original_choose = action_policy._choose_action
-                original_kwargs = action_policy._get_action_kwargs
+        action_policy = entity.get_component(Human_Takes_Action)
+        if action_policy is not None and not getattr(action_policy, "_renderer_prompt_hook_installed", False):
+            original_choose = action_policy._choose_action
+            original_kwargs = action_policy._get_action_kwargs
 
-                def wrapped_choose(self, observation, *, _original=original_choose):
-                    active_renderer = getattr(observation.possible_actions[0].env, "renderer_impl", None) if observation.possible_actions else None
-                    if active_renderer is None:
-                        return _original(observation)
-                    return prompt_human_action(active_renderer, observation.possible_actions[0].env, observation)
+            def wrapped_choose(self, observation, *, _original=original_choose):
+                active_renderer = _renderer_for_observation(observation)
+                if active_renderer is None:
+                    return _original(observation)
+                return prompt_human_action(active_renderer, observation.possible_actions[0].env, observation)
 
-                def wrapped_kwargs(self, action_selection, *, _original=original_kwargs):
-                    active_renderer = getattr(action_selection.env, "renderer_impl", None)
-                    if active_renderer is None:
-                        return _original(action_selection)
-                    error_message = None
-                    while True:
-                        if (
-                            action_selection.required_kwargs
-                            and len(action_selection.required_kwargs) == 1
-                        ):
-                            arg_name, arg = next(iter(action_selection.required_kwargs.items()))
-                            arg_description = arg.arg_description(
-                                action_selection.actor,
-                                action_selection.target_entity,
-                                action_selection.env,
-                            )
-                            matches = re.findall(r"(\d+)\s*\(([^)]+)\)", arg_description)
-                            if matches:
-                                text = prompt_human_multi_select(
-                                    active_renderer,
-                                    action_selection.env,
-                                    entity_name=action_selection.actor.name,
-                                    position_label=str(action_selection.actor.position),
-                                    header="Action Arguments",
-                                    instructions=[
-                                        str(action_selection),
-                                        f"Choose values for: {arg_name}",
-                                        "Use Up/Down to move, Space to toggle, Enter to submit.",
-                                        *([f"Error: {error_message}"] if error_message else []),
-                                    ],
-                                    options=[(int(idx), label) for idx, label in matches],
-                                )
-                                try:
-                                    return action_selection.parse_and_validate_kwarg_list(text)
-                                except Exception as exc:
-                                    error_message = str(exc)
-                                    continue
+            def wrapped_kwargs(self, action_selection, *, _original=original_kwargs):
+                active_renderer = getattr(action_selection.env, "renderer_impl", None)
+                if active_renderer is None:
+                    return _original(action_selection)
+                return _get_human_action_kwargs_with_renderer(active_renderer, action_selection)
 
-                        instructions = [
-                            str(action_selection),
-                            "Type the required values separated by ';'.",
-                            "Press Enter to submit.",
-                        ]
-                        if action_selection.required_kwargs:
-                            for name, arg in action_selection.required_kwargs.items():
-                                instructions.append(
-                                    f'{name}: {arg.arg_description(action_selection.actor, action_selection.target_entity, action_selection.env)}'
-                                )
-                        if error_message:
-                            instructions.append(f"Error: {error_message}")
+            action_policy._choose_action = MethodType(wrapped_choose, action_policy)
+            action_policy._get_action_kwargs = MethodType(wrapped_kwargs, action_policy)
+            action_policy._renderer_prompt_hook_installed = True
 
-                        text = prompt_human_text(
-                            active_renderer,
-                            action_selection.env,
-                            entity_name=action_selection.actor.name,
-                            position_label=str(action_selection.actor.position),
-                            header="Action Arguments",
-                            instructions=instructions,
-                        )
-                        try:
-                            return action_selection.parse_and_validate_kwarg_list(text)
-                        except Exception as exc:
-                            error_message = str(exc)
+        comm_policy = entity.get_component(Human_Communication_Policy)
+        if comm_policy is not None and not getattr(comm_policy, "_renderer_prompt_hook_installed", False):
+            original_send = comm_policy.send_message
 
-                action_policy._choose_action = MethodType(wrapped_choose, action_policy)
-                action_policy._get_action_kwargs = MethodType(wrapped_kwargs, action_policy)
-                action_policy._renderer_prompt_hook_installed = True
+            def wrapped_send(self, recipients, env, info=None, *, _original=original_send):
+                active_renderer = getattr(env, "renderer_impl", None)
+                if active_renderer is None or self.entity is None:
+                    return _original(recipients, env, info)
+                return _prompt_human_chat_with_renderer(self, recipients, env, info)
 
-        if Human_Communication_Policy is not None:
-            comm_policy = entity.get_component(Human_Communication_Policy)
-            if comm_policy is not None and not getattr(comm_policy, "_renderer_prompt_hook_installed", False):
-                original_send = comm_policy.send_message
-
-                def wrapped_send(self, recipients, env, info=None, *, _original=original_send):
-                    active_renderer = getattr(env, "renderer_impl", None)
-                    if active_renderer is None or self.entity is None:
-                        return _original(recipients, env, info)
-                    recipient_names = ", ".join(recipient.name for recipient in recipients) or "nobody"
-                    transcript = list(getattr(env, "_renderer_conversation_log", []))
-                    instructions = [
-                        f"Recipients: {recipient_names}",
-                        *([str(info)] if info else []),
-                    ]
-                    if transcript:
-                        instructions.append("Conversation so far:")
-                        instructions.extend(transcript[-6:])
-                    instructions.extend([
-                        f"Now speaking: {self.entity.name}",
-                        "Type your message.",
-                        "Press Enter to send.",
-                    ])
-                    return prompt_human_text(
-                        active_renderer,
-                        env,
-                        entity_name=self.entity.name,
-                        position_label=str(self.entity.position),
-                        header="Chat",
-                        instructions=instructions,
-                    )
-
-                comm_policy.send_message = MethodType(wrapped_send, comm_policy)
-                comm_policy._renderer_prompt_hook_installed = True
+            comm_policy.send_message = MethodType(wrapped_send, comm_policy)
+            comm_policy._renderer_prompt_hook_installed = True
 
 
 class Position_Layout_Adapter(ABC):
