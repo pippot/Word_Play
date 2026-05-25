@@ -2,17 +2,22 @@
 
 Each module provides a self-contained system:
 - inventory: Item storage and movement
-- containers: Storage containers and infinite sources
+- containers.core: Storage containers
+- containers.presets: Infinite item sources and regenerating shared pools
 - crafter: Crafting recipes and stations
 - currency: Wallet and currency transfer
 - trading: Trade sessions and negotiation
 - combat: Attack
+- coordinated_action: Actions that require multiple actors in the same turn
 - health: HP tracking and damage/death
 - ownership: Claim and give ownership
+- role: Gameplay role labels and role-based validations
 - action_compositions: Action chaining with per-step validation
 - do_nothing: No-op action
 - regrowable: Consumable entities that reappear on a timer
 - freezable: Temporarily hold an entity in place
+- respawnable: Temporarily remove and restore an entity
+- stamina: Action resource gating and recovery
 - destructible: Entities that transform when their HP hits zero
 - team_marker: Team identification and ally/enemy validators
 """
@@ -21,10 +26,13 @@ from word_play.presets.systems.action_compositions import (
     Step, Required, Optional,
 )
 from word_play.presets.systems.combat import Attack
+from word_play.presets.systems.coordinated_action import Coordinated_Action
 from word_play.presets.systems.containers import (
     Container,
     Open_Container,
     Single_Item_Holder,
+)
+from word_play.presets.systems.containers.presets import (
     Regrowable_Item_Source,
     Regen_Pool,
     Take_From_Infinite_Source,
@@ -46,6 +54,8 @@ from word_play.presets.systems.inventory import (
     Target_Not_In_Inventory,
     Pick_Up_Item,
     Put_In_Container,
+    Take_First_From_Container,
+    Consume_Held_Item,
     Drop_Item,
 )
 from word_play.presets.systems.ownership import (
@@ -75,6 +85,13 @@ from word_play.presets.systems.freezable import (
     Freezable,
     Freeze,
 )
+from word_play.presets.systems.respawnable import Actor_Is_Active, Respawnable, Target_Is_Active
+from word_play.presets.systems.role import (
+    Actor_Has_Role,
+    Role,
+    Target_Doesnt_Have_Role,
+    Target_Has_Role,
+)
 from word_play.presets.systems.destructible import Destructible
 from word_play.presets.systems.team_marker import (
     Team,
@@ -84,6 +101,7 @@ from word_play.presets.systems.team_marker import (
 from word_play.presets.systems.preferences import Preference
 from word_play.presets.systems.reward import Rewardable, award_reward
 from word_play.presets.systems.cooldown import Cooldown, Action_On_Cooldown
+from word_play.presets.systems.stamina import Stamina, Has_Stamina
 
 
 def __getattr__(name: str):
@@ -104,12 +122,15 @@ __all__ = [
     "Optional",
     # Combat
     "Attack",
+    # Coordinated action
+    "Coordinated_Action",
     # Health
     "Health",
     # Containers
     "Container",
     "Open_Container",
     "Single_Item_Holder",
+    # Item sources
     "Regrowable_Item_Source",
     "Regen_Pool",
     "Take_From_Infinite_Source",
@@ -136,6 +157,8 @@ __all__ = [
     "Target_Not_In_Inventory",
     "Pick_Up_Item",
     "Put_In_Container",
+    "Take_First_From_Container",
+    "Consume_Held_Item",
     "Drop_Item",
     # Trading
     "Trade_Session",
@@ -152,6 +175,11 @@ __all__ = [
     "Claim",
     "Give_Ownership",
     "Target_Is_Unowned",
+    # Role
+    "Role",
+    "Actor_Has_Role",
+    "Target_Has_Role",
+    "Target_Doesnt_Have_Role",
     # Regrowable
     "Regrowable",
     "Consume_Regrowable",
@@ -159,6 +187,13 @@ __all__ = [
     # Freezable
     "Freezable",
     "Freeze",
+    # Respawnable
+    "Respawnable",
+    "Actor_Is_Active",
+    "Target_Is_Active",
+    # Stamina
+    "Stamina",
+    "Has_Stamina",
     # Destructible
     "Destructible",
     # Team marker

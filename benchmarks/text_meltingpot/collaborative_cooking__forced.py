@@ -4,24 +4,22 @@ import argparse
 
 from benchmarks.text_meltingpot.common import (
     BENCHMARK_STEPS,
-    Collaborative_Cooking_Grid_World,
-    Deliver_Held_Soup,
-    Load_Held_Item_Into_Crafter,
+    COOKING_DELIVERY_REWARD,
     Plate_Ready_Soup_With_Dish,
-    Put_Held_Item_On_Counter,
-    Take_First_Item_From_Counter,
     normalized_steps,
 )
 from word_play.core import Agent_Policy, Entity
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
+from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Move_Left, Move_Right, Move_Up, Position_2D
 from word_play.presets.renderers import Renderable, render_step
-from word_play.presets.systems.containers import Regrowable_Item_Source, Take_From_Infinite_Source
-from word_play.presets.systems.crafter import Crafter, Crafter_Recipe
+from word_play.presets.systems.containers.presets import Regrowable_Item_Source, Take_From_Infinite_Source
+from word_play.presets.systems.crafter import Crafter, Crafter_Recipe, Load_First_Into_Crafter
 from word_play.presets.systems.do_nothing import Do_Nothing
-from word_play.presets.systems.inventory import Drop_Item, Inventory
+from word_play.presets.systems.inventory import Drop_Item, Inventory, Put_In_Container, Take_First_From_Container
+from word_play.presets.systems.reward import Rewardable
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
@@ -143,6 +141,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             "name": "Delivery Window",
             "tags": ["delivery", "blocker"],
             "components": [
+                Rewardable(amount=COOKING_DELIVERY_REWARD, recipients="all", counter_attr="completed_orders"),
                 Collidable(collidable_tags=["blocker"]),
                 Renderable(sprite_path="src/world_tiles/indoors/stations/delivery.png", z_index=4),
             ],
@@ -192,11 +191,11 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                     Move_Right(),
                     Drop_Item(),
                     Take_From_Infinite_Source(),
-                    Load_Held_Item_Into_Crafter(),
+                    Load_First_Into_Crafter(),
                     Plate_Ready_Soup_With_Dish(),
-                    Deliver_Held_Soup(),
-                    Take_First_Item_From_Counter(),
-                    Put_Held_Item_On_Counter(),
+                    Put_In_Container(["delivery"], ["soup"], destroy_item=True),
+                    Take_First_From_Container(target_tags=["counter"]),
+                    Put_In_Container(target_tags=["counter"], destroy_item=False),
                 ],
                 components=[
                     agent_policy,
@@ -207,7 +206,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             )
         )
 
-    env = Collaborative_Cooking_Grid_World(
+    env = Simple_2D_Grid_World(
         description="Collaborative Cooking: Forced, adapted from Melting Pot.",
         entities=entities,
         entity_order=randomize_agent_order,

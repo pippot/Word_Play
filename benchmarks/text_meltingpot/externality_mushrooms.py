@@ -22,6 +22,7 @@ from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.cooldown import Action_On_Cooldown, Cooldown
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.freezable import Freezable
+from word_play.presets.systems.respawnable import Respawnable
 from word_play.presets.systems.reward import award_reward
 from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_steps
 from word_play.utils import tilemap_to_entities
@@ -76,13 +77,12 @@ def configure_externality_mushrooms(env: Environment, potential_positions: list[
     env.environment_end_of_step = environment_end_of_step
 
 
-class Externality_Zap_State(Component):
+class Externality_Zap_State(Respawnable):
     def __init__(self, recovery_time: int = normalized_steps(50)):
-        super().__init__()
+        super().__init__(inactive_tag="removed")
         self.mark_level = 0
         self.recovery_time = recovery_time
         self.recovery_ticks = 0
-        self.removed_ticks = 0
 
     def hit(self, freeze_duration: int, remove_duration: int) -> dict:
         freezable = self.entity.get_component(Freezable)
@@ -95,12 +95,9 @@ class Externality_Zap_State(Component):
 
         self.mark_level = 0
         self.recovery_ticks = 0
-        self.removed_ticks = remove_duration
+        self.remove_temporarily(remove_duration)
         if freezable is not None:
             freezable.freeze(remove_duration)
-        renderable = self.entity.get_component(Renderable)
-        if renderable is not None:
-            renderable.visible = False
         return {"level": 2, "effect": "removed", "duration": remove_duration}
 
     def post_actions_step(self, env: Environment) -> None:
@@ -108,13 +105,6 @@ class Externality_Zap_State(Component):
             self.recovery_ticks -= 1
             if self.recovery_ticks == 0:
                 self.mark_level = 0
-
-        if self.removed_ticks > 0:
-            self.removed_ticks -= 1
-            if self.removed_ticks == 0:
-                renderable = self.entity.get_component(Renderable)
-                if renderable is not None:
-                    renderable.visible = True
 
 
 class Externality_Zap(Action):
@@ -126,11 +116,7 @@ class Externality_Zap(Action):
         super().__init__(
             validation_rules=[
                 Action_On_Cooldown("zap"),
-                Target_Is_Nearby(
-                    lambda actor, target, env: abs(actor.position.x - target.position.x)
-                    + abs(actor.position.y - target.position.y)
-                    <= 1
-                ),
+                Target_Is_Nearby(),
                 Target_Not_Self(),
                 Target_Has_Tag(["player"]),
             ]
@@ -280,7 +266,7 @@ class Externality_Mushroom(Component):
 
     def _is_removed(self, entity: Entity) -> bool:
         zap_state = entity.get_component(Externality_Zap_State)
-        return zap_state is not None and zap_state.removed_ticks > 0
+        return zap_state is not None and not zap_state.active
 
 
 def run_exp(

@@ -10,7 +10,6 @@ from word_play.core import (
     Component,
     Entity,
     Environment,
-    Target_Is_Nearby,
     Target_Is_Self,
     Target_Not_Self,
 )
@@ -19,6 +18,7 @@ from word_play.presets.action_policies.llm_action_and_communication import (
 )
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
+from word_play.presets.action_validations import Target_Within_Range
 from word_play.presets.entity_orderings import randomize_agent_order
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.models import LLM_MODEL_REGISTRY, OpenRouter_Model
@@ -51,10 +51,6 @@ TERMINATION_PROBABILITY = 0.2
 GIFT_RANGE = 5
 GIFT_MULTIPLIER = 5
 SUCCESSFUL_GIFT_REWARD = 10.0
-
-
-def nearby_range(actor: Entity, target: Entity, env: Environment) -> bool:
-    return abs(actor.position.x - target.position.x) + abs(actor.position.y - target.position.y) <= GIFT_RANGE
 
 
 class TokenInventory(Component):
@@ -169,7 +165,7 @@ class RefineAndGift(Action):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(nearby_range),
+                Target_Within_Range(GIFT_RANGE),
                 HasAnyToken(),
                 TargetCanReceiveGift(),
             ]

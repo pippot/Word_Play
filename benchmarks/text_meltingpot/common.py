@@ -13,19 +13,23 @@ from word_play.core import (
     Target_Is_Self,
     Target_Not_Self,
 )
-from word_play.presets.action_validations import Target_Has_Component, Target_Has_Tag
-from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
+from word_play.presets.action_validations import Target_Has_Component, Target_Has_Tag, Target_Within_Range
 from word_play.presets.systems.combat import Attack
-from word_play.presets.systems.containers import Regrowable_Item_Source
 from word_play.presets.systems.cooldown import Action_On_Cooldown, Cooldown
-from word_play.presets.systems.crafter import Crafter, Load_First_Into_Crafter
+from word_play.presets.systems.coordinated_action import Coordinated_Action
+from word_play.presets.systems.crafter import Crafter
 from word_play.presets.systems.freezable import Freezable
-from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Move_Left, Move_Right, Move_Up, Position_2D
-from word_play.presets.observation.simple_observation import Simple_Observation
+from word_play.presets.movement.simple_2d_grid import (
+    Collidable,
+    Position_2D,
+)
 from word_play.presets.renderers import Renderable
-from word_play.presets.systems.inventory import Inventory, Pick_Up_Item, Put_In_Container, Target_Not_In_Inventory
+from word_play.presets.systems.inventory import Inventory, Target_Not_In_Inventory
 from word_play.presets.systems.preferences import Preference
-from word_play.presets.systems.reward import award_reward
+from word_play.presets.systems.regrowable import Regrowable
+from word_play.presets.systems.respawnable import Respawnable
+from word_play.presets.systems.reward import Rewardable, award_reward
+from word_play.presets.systems.role import Role
 from word_play.presets.systems.zap import ZapMarking
 
 BENCHMARK_TIMING_BASE_STEPS = 500
@@ -42,14 +46,6 @@ def normalized_probability(probability: float) -> float:
     if probability >= 1:
         return 1.0
     return 1 - (1 - probability) ** (BENCHMARK_TIMING_BASE_STEPS / BENCHMARK_STEPS)
-
-
-class Room_In_Inventory(Action_Validation):
-    """Validate that the actor has an inventory with free capacity."""
-
-    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
-        inventory = actor.get_component(Inventory)
-        return inventory is not None and inventory.has_space()
 
 
 CHEMISTRY_START_POSITIONS = [
@@ -124,13 +120,6 @@ class Allelopathic_Berry_Patch(Component):
     def available(self) -> bool:
         return self.color is not None and self.ripe and not self.harvested
 
-    def set_color(self, color: str) -> None:
-        self.color = color
-        self.ripe = True
-        self.age = self.minimum_time_to_ripen
-        self.harvested = False
-        self._sync()
-
     def plant(self, color: str) -> None:
         self.color = color
         self.ripe = False
@@ -154,13 +143,6 @@ class Allelopathic_Berry_Patch(Component):
         self.harvested = False
         self._sync()
         return color
-
-    def harvest_color(self) -> str | None:
-        if not self.available:
-            return None
-        self.harvested = True
-        self._sync()
-        return self.color
 
     def _sync(self) -> None:
         for tag in (*ALLELOPATHIC_COLORS, "berry", "ripe_berry", "unripe_berry", "empty_patch"):
@@ -223,77 +205,6 @@ class Allelopathic_Berry_Patch(Component):
     def _is_removed(self, agent: Entity) -> bool:
         zap_state = agent.get_component(Allelopathic_Zap_State)
         return zap_state is not None and zap_state.removed
-
-
-class Target_Has_Available_Berry(Action_Validation):
-    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
-        patch = target_entity.get_component(Allelopathic_Berry_Patch)
-        return patch is not None and patch.available
-
-
-class Harvest_Berry(Action):
-    def __init__(self):
-        super().__init__(
-            validation_rules=[
-                Target_Not_Self(),
-                Target_Is_Nearby(),
-                Target_Has_Available_Berry(),
-                Room_In_Inventory(),
-            ]
-        )
-        self.pick_up = Pick_Up_Item(["berry"])
-
-    def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs=None) -> dict:
-        color = target_entity.get_component(Allelopathic_Berry_Patch).harvest_color()
-        if color is None:
-            return {"success": False, "reason": "berry_unavailable"}
-        item = Entity(
-            name=f"{color.title()} Berry",
-            position=Position_2D(target_entity.position.x, target_entity.position.y),
-            tags=["berry", color],
-            components=[
-                Renderable(
-                    sprite_path=(
-                        "src/items/consumables/vegetables/mushroom_red.png"
-                        if color == "red"
-                        else "src/items/consumables/vegetables/mushroom_green.png"
-                        if color == "green"
-                        else "src/items/consumables/vegetables/mushroom_blue.png"
-                    ),
-                    z_index=5,
-                )
-            ],
-        )
-        env.instantiate_entity(item)
-        self.pick_up(actor, item, env, None)
-        preference = actor.get_component(Preference)
-        reward = preference.reward_for(item) if preference is not None else 1.0
-        award_reward(env, actor, reward)
-        return {"harvested": item.name, "reward": reward}
-
-    def action_description_text(self, actor: Entity, target_entity: Entity, env: Environment) -> str:
-        return f"Harvest {target_entity.name}."
-
-
-class Paint_Berry(Action):
-    def __init__(self, color: str):
-        super().__init__(
-            validation_rules=[
-                Action_On_Cooldown("color"),
-                Target_Not_Self(),
-                Target_Is_Nearby(),
-                Target_Has_Component(Allelopathic_Berry_Patch),
-            ]
-        )
-        self.color = color
-
-    def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs=None) -> dict:
-        actor.get_component(Cooldown).start("color")
-        target_entity.get_component(Allelopathic_Berry_Patch).set_color(self.color)
-        return {"painted": target_entity.name, "color": self.color}
-
-    def action_description_text(self, actor: Entity, target_entity: Entity, env: Environment) -> str:
-        return f"Paint {target_entity.name} {self.color}."
 
 
 class Allelopathic_Plant_Berry(Action):
@@ -517,7 +428,7 @@ class Cycle_Site(Component):
         )
         inhibitor = "iy" if self.cycle == "blue" else "ix" if self.cycle == "green" else None
         blocked_product = "x" if self.cycle == "blue" else "y" if self.cycle == "green" else None
-        if inhibitor is not None and first_molecule_at(env, inhibitor, self.entity.position) is not None:
+        if inhibitor is not None and first_molecule_near(env, inhibitor, self.entity.position, distance=0) is not None:
             products.remove(blocked_product)
             chemistry_events(env).append(
                 f"{self.cycle.title()} cycle inhibited at {self.entity.position}: "
@@ -561,30 +472,19 @@ def molecule_position(entity: Entity, env: Environment) -> Position_2D:
     return carrier.position if carrier is not None else entity.position
 
 
-def first_molecule_at(
-    env: Environment,
-    kind: str,
-    position: Position_2D,
-    exclude: Entity | None = None,
-) -> Entity | None:
-    for entity in env.state.entities:
-        if entity is not exclude and molecule_kind(entity) == kind and molecule_position(entity, env) == position:
-            return entity
-    return None
-
-
 def first_molecule_near(
     env: Environment,
     kind: str,
     position: Position_2D,
     exclude: Entity | None = None,
+    distance: int = 1,
 ) -> Entity | None:
     for entity in env.state.entities:
         entity_position = molecule_position(entity, env)
         if (
             entity is not exclude
             and molecule_kind(entity) == kind
-            and abs(entity_position.x - position.x) + abs(entity_position.y - position.y) <= 1
+            and abs(entity_position.x - position.x) + abs(entity_position.y - position.y) <= distance
         ):
             return entity
     return None
@@ -602,41 +502,34 @@ def remove_molecule(env: Environment, molecule: Entity) -> None:
         env.destroy_entity(molecule)
 
 
-class Commons_Apple_Patch(Component):
+class Commons_Apple_Patch(Regrowable):
     def __init__(self, apple_regrowth_probs: list[float] | None = None):
-        super().__init__(tags=["apple_patch", "apple"])
-        self.apple_regrowth_probs = [
-            normalized_probability(prob)
-            for prob in (apple_regrowth_probs or [0.0, 0.0025, 0.005, 0.025])
-        ]
-        self.consumed = False
+        super().__init__(
+            regrow_tick_interval=1,
+            density_dependent=True,
+            density_radius=2,
+            density_regrow_probs=[
+                normalized_probability(prob)
+                for prob in (apple_regrowth_probs or [0.0, 0.0025, 0.005, 0.025])
+            ],
+            active_tags=["apple"],
+            inactive_tags=["depleted_apple_patch"],
+        )
+        self.tags.append("apple_patch")
 
     def pre_actions_step(self, env: Environment) -> None:
         if getattr(env, "_commons_events_step", None) != env.cur_step:
             env.tick = env.cur_step
             env.commons_events = []
             env._commons_events_step = env.cur_step
+        was_consumed = self.consumed
+        super().pre_actions_step(env)
+        if was_consumed and not self.consumed:
+            env.commons_events.append(f"{self.entity.name} regrew.")
 
     def post_actions_step(self, env: Environment) -> None:
         self._collect(env)
-        self._regrow(env)
         self._maybe_end_episode(env)
-
-    def consume(self) -> None:
-        self.consumed = True
-        if "apple" in self.entity.tags:
-            self.entity.tags.remove("apple")
-        renderable = self.entity.get_component(Renderable)
-        if renderable is not None:
-            renderable.visible = False
-
-    def regrow(self) -> None:
-        self.consumed = False
-        if "apple" not in self.entity.tags:
-            self.entity.tags.append("apple")
-        renderable = self.entity.get_component(Renderable)
-        if renderable is not None:
-            renderable.visible = True
 
     def _collect(self, env: Environment) -> None:
         if self.consumed:
@@ -644,34 +537,12 @@ class Commons_Apple_Patch(Component):
         for agent in env.agents:
             if agent.position == self.entity.position:
                 self.consume()
-                award_reward(env, agent, 1.0)
-                env.commons_events.append(f"{agent.name} ate {self.entity.name} for +1.")
+                rewardable = self.entity.get_component(Rewardable)
+                reward = rewardable.reward_for(agent, env) if rewardable is not None else 1.0
+                if rewardable is None:
+                    award_reward(env, agent, reward)
+                env.commons_events.append(f"{agent.name} ate {self.entity.name} for +{reward:g}.")
                 break
-
-    def _regrow(self, env: Environment) -> None:
-        if not self.consumed:
-            return
-
-        ripe_apples = [
-            entity for entity in env.state.entities
-            if (
-                (patch := entity.get_component(Commons_Apple_Patch)) is not None
-                and not patch.consumed
-            )
-        ]
-        nearby_ripe_count = sum(
-            1
-            for ripe in ripe_apples
-            if (ripe.position.x - self.entity.position.x) ** 2
-            + (ripe.position.y - self.entity.position.y) ** 2
-            <= 4
-        )
-        regrowth_prob = self.apple_regrowth_probs[
-            min(nearby_ripe_count, len(self.apple_regrowth_probs) - 1)
-        ]
-        if random.random() < regrowth_prob:
-            self.regrow()
-            env.commons_events.append(f"{self.entity.name} regrew.")
 
     def _maybe_end_episode(self, env: Environment) -> None:
         if getattr(env, "_commons_end_step", None) == env.cur_step:
@@ -715,11 +586,7 @@ class Commons_Zap(Action):
         super().__init__(
             validation_rules=[
                 Action_On_Cooldown("zap"),
-                Target_Is_Nearby(
-                    lambda actor, target, env: abs(actor.position.x - target.position.x)
-                    + abs(actor.position.y - target.position.y)
-                    <= 1
-                ),
+                Target_Is_Nearby(),
                 Target_Not_Self(),
                 Target_Has_Tag(["player"]),
             ],
@@ -745,53 +612,12 @@ class Commons_Zap(Action):
 # ============================================================================
 
 
-def grid_distance(first: Entity, second: Entity) -> int:
-    return abs(first.position.x - second.position.x) + abs(first.position.y - second.position.y)
-
-
-def nearby_within(distance: int):
-    def _nearby(actor: Entity, target: Entity, env: Environment) -> bool:
-        return grid_distance(actor, target) <= distance
-
-    return _nearby
-
-
 # ---------------------------------------------------------------------------
 # Collaborative Cooking
 # ---------------------------------------------------------------------------
 
 
 COOKING_DELIVERY_REWARD = 20.0
-
-
-def soup_is_valid(item: Entity) -> bool:
-    return "soup" in item.tags
-
-
-def held_soup_index(inventory: Inventory) -> int | None:
-    for idx, item in enumerate(inventory.contents):
-        if soup_is_valid(item):
-            return idx
-    return None
-
-
-def held_item_index_with_tag(inventory: Inventory, tag: str) -> int | None:
-    for idx, item in enumerate(inventory.contents):
-        if tag in item.tags:
-            return idx
-    return None
-
-
-def shared_delivery_bonus(actor, target, env, item: Entity, reward: float) -> None:
-    for idx, agent in enumerate(env.agents):
-        if agent is not actor and idx < len(env.last_step_rewards):
-            env.last_step_rewards[idx] += reward
-    env.completed_orders = getattr(env, "completed_orders", 0) + 1
-
-
-class Load_Held_Item_Into_Crafter(Load_First_Into_Crafter):
-    def action_description_text(self, actor, target, env) -> str:
-        return super().action_description_text(actor, target, env)
 
 
 class Plate_Ready_Soup_With_Dish(Action):
@@ -809,23 +635,20 @@ class Plate_Ready_Soup_With_Dish(Action):
             return False
         inventory = actor.get_component(Inventory)
         crafter = target.get_component(Crafter)
-        if inventory is None or crafter is None or not crafter.has_output():
-            return False
-        if crafter.ready_item is None or not soup_is_valid(crafter.ready_item):
-            return False
-        return held_item_index_with_tag(inventory, "dish") is not None
+        return (
+            inventory is not None
+            and crafter is not None
+            and crafter.ready_item is not None
+            and "soup" in crafter.ready_item.tags
+            and inventory.first_index_with_tags("dish") is not None
+        )
 
     def exec_action(self, actor, target, env, kwargs=None):
         inventory = actor.get_component(Inventory)
         crafter = target.get_component(Crafter)
-        dish_idx = held_item_index_with_tag(inventory, "dish")
-        if dish_idx is None or crafter is None or not crafter.has_output():
-            return {"success": False, "reason": "missing_dish_or_soup"}
-
-        dish = inventory.remove_by_index(dish_idx)
+        dish = inventory.remove_by_index(inventory.first_index_with_tags("dish"))
         if dish in env.state.entities:
             env.destroy_entity(dish)
-
         soup = crafter.collect_output()
         inventory.store(soup, env)
         return {"success": True, "plated": soup.name, "used": "Dish", "from": target.name}
@@ -834,353 +657,74 @@ class Plate_Ready_Soup_With_Dish(Action):
         return f"Use held Dish to collect ready Soup from {target.name}."
 
 
-class Put_Held_Item_On_Counter(Put_In_Container):
-    def __init__(self):
-        super().__init__(target_tags=["counter"], destroy_item=False)
-        self.required_kwargs = None
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        inventory = actor.get_component(Inventory)
-        counter_inventory = target.get_component(Inventory)
-        if inventory is None or counter_inventory is None or not inventory.contents:
-            return False
-        if not counter_inventory.can_accept(inventory.contents[0]):
-            return False
-        return super().is_valid(actor, target, env, kwargs={"inventory_index": 0})
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        return super().exec_action(actor, target, env, kwargs={"inventory_index": 0})
-
-    def action_description_text(self, actor, target, env) -> str:
-        inventory = actor.get_component(Inventory)
-        item_name = inventory.contents[0].name if inventory is not None and inventory.contents else "held item"
-        return f"Put held {item_name} on {target.name}."
-
-
-class Take_First_Item_From_Counter(Action):
-    def __init__(self):
-        super().__init__(
-            validation_rules=[
-                Target_Not_Self(),
-                Target_Is_Nearby(),
-                Target_Has_Tag(["counter"]),
-            ]
-        )
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        if not super().is_valid(actor, target, env, kwargs=kwargs):
-            return False
-        inventory = actor.get_component(Inventory)
-        counter_inventory = target.get_component(Inventory)
-        if inventory is None or counter_inventory is None or not counter_inventory.contents:
-            return False
-        return inventory.can_accept(counter_inventory.contents[0])
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        inventory = actor.get_component(Inventory)
-        counter_inventory = target.get_component(Inventory)
-        item = counter_inventory.remove_by_index(0)
-        if item is None:
-            return {"success": False, "reason": "counter_empty"}
-        inventory.store(item, env)
-        return {"success": True, "taken": item.name, "from": target.name}
-
-    def action_description_text(self, actor, target, env) -> str:
-        counter_inventory = target.get_component(Inventory)
-        item_name = (
-            counter_inventory.contents[0].name
-            if counter_inventory is not None and counter_inventory.contents
-            else "item"
-        )
-        return f"Take {item_name} from {target.name}."
-
-
-class Deliver_Held_Soup(Put_In_Container):
-    def __init__(self):
-        super().__init__(
-            target_tags=["delivery"],
-            reward=COOKING_DELIVERY_REWARD,
-            on_stored=shared_delivery_bonus,
-            destroy_item=True,
-        )
-        self.required_kwargs = None
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        inventory = actor.get_component(Inventory)
-        if inventory is None or not inventory.contents:
-            return False
-        soup_idx = held_soup_index(inventory)
-        if soup_idx is None:
-            return False
-        return super().is_valid(actor, target, env, kwargs={"inventory_index": soup_idx})
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        inventory = actor.get_component(Inventory)
-        soup_idx = held_soup_index(inventory)
-        if soup_idx is None:
-            return {"success": False, "reason": "no_held_soup"}
-        return super().exec_action(actor, target, env, kwargs={"inventory_index": soup_idx})
-
-    def action_description_text(self, actor, target, env) -> str:
-        inventory = actor.get_component(Inventory)
-        soup_idx = held_soup_index(inventory) if inventory is not None else None
-        item_name = inventory.contents[soup_idx].name if inventory is not None and soup_idx is not None else "soup"
-        return f"Turn in your held {item_name} at {target.name} for shared reward."
-
-
-def cooking_inventory_names(entity: Entity) -> list[str]:
-    inventory = entity.get_component(Inventory)
-    return [item.name for item in inventory.contents] if inventory is not None else []
-
-
-def cooking_relative_position(actor: Entity, target: Entity) -> str:
-    dx = target.position.x - actor.position.x
-    dy = target.position.y - actor.position.y
-    return f"relative=({dx:+d},{dy:+d}), distance={abs(dx) + abs(dy)}"
-
-
-def cooking_entity_in_inventory(entity: Entity, env: Environment) -> bool:
-    for holder in env.state.entities:
-        inventory = holder.get_component(Inventory)
-        if inventory is not None and entity in inventory.contents:
-            return True
-    return False
-
-
-def cooking_source_item_name(source: Regrowable_Item_Source | None) -> str:
-    if source is None:
-        return "item"
-    item_factory = source.item_factory
-    return item_factory.name if isinstance(item_factory, Entity) else "item"
-
-
-def cooking_pot_status(crafter: Crafter | None) -> str:
-    if crafter is None:
-        return "state unknown"
-    if crafter.ready_item is not None:
-        return f"READY with {crafter.ready_item.name}; requires held Dish to collect"
-    if crafter.remaining_steps is not None:
-        return f"cooking; {crafter.remaining_steps} steps until Soup is ready"
-
-    recipe = crafter.active_recipe or (crafter.recipes[0] if crafter.recipes else None)
-    total = len(recipe.input_names) if recipe is not None else 0
-    loaded = len(crafter.loaded_items)
-    if recipe is not None and recipe.input_names and len(set(recipe.input_names)) == 1:
-        item_name = recipe.input_names[0]
-        return f"loaded {loaded}/{total} {item_name}; accepts more {item_name}" if loaded < total else "loaded"
-    return f"loaded inputs: {crafter.loaded_items or []}"
-
-
-def cooking_entity_symbol(entity: Entity, agent: Entity, env: Environment) -> str:
-    if entity is agent:
-        return "A"
-    if entity.is_agent:
-        return "P"
-    if cooking_entity_in_inventory(entity, env):
-        return ""
-    tags = set(entity.tags)
-    if entity.get_component(Crafter) is not None:
-        crafter = entity.get_component(Crafter)
-        return "S" if crafter is not None and crafter.ready_item is not None else "C"
-    if "tomato_source" in tags:
-        return "O"
-    if "dish_source" in tags:
-        return "D"
-    if "delivery" in tags:
-        return "T"
-    if "counter" in tags:
-        return "-"
-    if "tomato" in tags:
-        return "o"
-    if "dish" in tags:
-        return "d"
-    if "soup" in tags:
-        return "s"
-    if "wall" in tags:
-        return "#"
-    return "?"
-
-
-def cooking_local_map(env: Simple_2D_Grid_World, agent: Entity) -> str:
-    radius = env.observation_radius
-    visible_entities = env.entities_in_observation_square(agent.position)
-    by_position: dict[tuple[int, int], str] = {}
-    priority = {"A": 9, "P": 8, "S": 7, "C": 6, "O": 6, "D": 6, "T": 6, "s": 5, "o": 5, "d": 5, "-": 4, "#": 3, "?": 1}
-    for entity in visible_entities:
-        symbol = cooking_entity_symbol(entity, agent, env)
-        if not symbol:
-            continue
-        key = (entity.position.x, entity.position.y)
-        if priority.get(symbol, 0) >= priority.get(by_position.get(key, "."), 0):
-            by_position[key] = symbol
-
-    rows = []
-    for y in range(agent.position.y + radius, agent.position.y - radius - 1, -1):
-        row = []
-        for x in range(agent.position.x - radius, agent.position.x + radius + 1):
-            row.append(by_position.get((x, y), "."))
-        rows.append("  " + " ".join(row))
-    return (
-        "LOCAL KITCHEN MAP:\n"
-        "  legend: A=you, P=other player, C=pot, S=ready soup pot, O=tomato source, D=dish source, "
-        "T=delivery, -=counter, #=wall, o/d/s=dropped item\n"
-        + "\n".join(rows)
-    )
-
-
-def cooking_status_section(env: Simple_2D_Grid_World, agent: Entity) -> str:
-    visible_entities = env.entities_in_observation_square(agent.position)
-    inventory = agent.get_component(Inventory)
-    held = cooking_inventory_names(agent)
-    lines = [
-        "KITCHEN STATUS:",
-        f"  completed_orders: {getattr(env, 'completed_orders', 0)}",
-        f"  you_hold: {held or ['empty']}",
-    ]
-
-    visible_pots = [entity for entity in visible_entities if entity.get_component(Crafter) is not None]
-    if visible_pots:
-        lines.append("  visible_pots:")
-        for pot in visible_pots:
-            lines.append(
-                f"    - {pot.name} at {pot.position} ({cooking_relative_position(agent, pot)}): "
-                f"{cooking_pot_status(pot.get_component(Crafter))}"
-            )
-
-    visible_sources = [
-        entity for entity in visible_entities if entity.get_component(Regrowable_Item_Source) is not None
-    ]
-    if visible_sources:
-        lines.append("  visible_sources:")
-        for source_entity in visible_sources:
-            source = source_entity.get_component(Regrowable_Item_Source)
-            lines.append(
-                f"    - {source_entity.name} at {source_entity.position} "
-                f"({cooking_relative_position(agent, source_entity)}): gives {cooking_source_item_name(source)}"
-            )
-
-    visible_delivery = [entity for entity in visible_entities if "delivery" in entity.tags]
-    if visible_delivery:
-        lines.append("  visible_delivery:")
-        for delivery in visible_delivery:
-            lines.append(f"    - {delivery.name} at {delivery.position} ({cooking_relative_position(agent, delivery)}): accepts held Soup")
-
-    ready_pot_visible = any(
-        pot.get_component(Crafter) is not None and pot.get_component(Crafter).ready_item is not None
-        for pot in visible_pots
-    )
-    if inventory is not None and held_soup_index(inventory) is not None:
-        lines.append("  relevant_mechanic: holding Soup means the delivery action is the reward action when next to Delivery Window.")
-    elif ready_pot_visible:
-        if inventory is not None and held_item_index_with_tag(inventory, "dish") is not None:
-            lines.append("  relevant_mechanic: visible pot has ready Soup and you hold Dish, so plating Soup is available when adjacent to the pot.")
-        else:
-            lines.append("  relevant_mechanic: visible pot has ready Soup; hold Dish, then use Dish on the ready pot to collect Soup.")
-    elif inventory is not None and any(held_item_index_with_tag(inventory, tag) is not None for tag in ("tomato", "ingredient")):
-        lines.append("  relevant_mechanic: holding Tomato means you can load it into a visible Cooking Pot when adjacent.")
-    else:
-        lines.append("  relevant_mechanic: Soup needs 3 Tomatoes loaded into one pot, then a Dish to collect, then delivery.")
-
-    return "\n".join(lines)
-
-
-def format_cooking_nearby_entities(nearby_entities: list[Entity], agent: Entity, env: Environment) -> str:
-    lines = ["VISIBLE KITCHEN ENTITIES:"]
-    for entity in sorted(
-        nearby_entities,
-        key=lambda candidate: (abs(candidate.position.x - agent.position.x) + abs(candidate.position.y - agent.position.y), candidate.name),
-    ):
-        if entity is agent or cooking_entity_in_inventory(entity, env):
-            continue
-        tags = set(entity.tags)
-        if entity.is_agent:
-            lines.append(
-                f"- {entity.name} at {entity.position} ({cooking_relative_position(agent, entity)}), "
-                f"holding {cooking_inventory_names(entity) or ['empty']}"
-            )
-        elif entity.get_component(Crafter) is not None:
-            lines.append(
-                f"- {entity.name} at {entity.position} ({cooking_relative_position(agent, entity)}): "
-                f"{cooking_pot_status(entity.get_component(Crafter))}"
-            )
-        elif entity.get_component(Regrowable_Item_Source) is not None:
-            source = entity.get_component(Regrowable_Item_Source)
-            lines.append(
-                f"- {entity.name} at {entity.position} ({cooking_relative_position(agent, entity)}): "
-                f"gives {cooking_source_item_name(source)}"
-            )
-        elif "delivery" in tags:
-            lines.append(f"- {entity.name} at {entity.position} ({cooking_relative_position(agent, entity)}): accepts held Soup")
-        elif "counter" in tags:
-            contents = cooking_inventory_names(entity)
-            if contents:
-                lines.append(
-                    f"- {entity.name} at {entity.position} ({cooking_relative_position(agent, entity)}): holding {contents}"
-                )
-        elif tags.intersection({"tomato", "dish", "soup", "ingredient"}):
-            lines.append(f"- {entity.name} item at {entity.position} ({cooking_relative_position(agent, entity)})")
-    if len(lines) == 1:
-        return "VISIBLE KITCHEN ENTITIES: None"
-    return "\n".join(lines)
-
-
-class Collaborative_Cooking_Grid_World(Simple_2D_Grid_World):
-    def observe(self, agent_id: int):
-        agent = self.agents[agent_id]
-        return Simple_Observation(
-            possible_actions=self.possible_actions(agent),
-            nearby_entities=self.entities_in_observation_square(agent.position),
-            agent=agent,
-            last_reward=self.last_rewards[agent_id],
-            info=self.infos[agent_id],
-            observation_radius=self.observation_radius,
-            extra_sections=(cooking_local_map(self, agent), cooking_status_section(self, agent)),
-            nearby_entities_formatter=lambda nearby_entities, current_agent: format_cooking_nearby_entities(
-                nearby_entities, current_agent, self
-            ),
-        )
-
 # ---------------------------------------------------------------------------
 # Boat Race
 # ---------------------------------------------------------------------------
 
 
-class BoatRower(Component):
+def advance_boat_race(env: Environment, participants: list[Entity], reward: float, event: str) -> None:
+    if not hasattr(env, "boat_events"):
+        env.boat_events = []
+    env.boat_progress = getattr(env, "boat_progress", 0) + 1
+    for participant in participants:
+        award_reward(env, participant, reward)
+    env.boat_events.append(event.format(progress=env.boat_progress, participants=len(participants)))
+    if env.boat_progress >= getattr(env, "boat_num_races", 8):
+        env.terminations = [True] * len(env.agents)
+
+
+class Paddle(Coordinated_Action):
     def __init__(self):
-        super().__init__()
-        self.intent = "none"
-        self.row_count = 0
+        super().__init__(
+            "Paddle the boat.",
+            2,
+            coordination_key="boat_paddle",
+            same_target=False,
+            validation_rules=[Target_Is_Self()],
+        )
 
-    def pre_actions_step(self, env: Environment) -> None:
-        self.intent = "none"
-
-
-class Paddle(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self()])
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        rower = actor.get_component(BoatRower)
-        if rower is None:
-            return {"success": False}
-        rower.intent = "paddle"
-        rower.row_count += 1
-        return {"paddle": True}
+    def exec_coordinated_action(self, actor, target, env, participants, kwargs=None):
+        advance_boat_race(
+            env,
+            participants,
+            0.2,
+            "{participants} paddlers coordinated; race progress is {progress}.",
+        )
+        return {"paddle": True, "progress": env.boat_progress, "reward_each": 0.2}
 
     def action_description_text(self, actor, target, env):
         return "Paddle the boat."
 
 
-class Flail(Action):
+class Flail(Coordinated_Action):
     def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self()])
+        super().__init__(
+            "Flail the oar.",
+            1,
+            coordination_key="boat_flail",
+            same_target=False,
+            validation_rules=[Target_Is_Self()],
+        )
 
-    def exec_action(self, actor, target, env, kwargs=None):
-        rower = actor.get_component(BoatRower)
-        if rower is None:
-            return {"success": False}
-        rower.intent = "flail"
-        return {"flail": True}
+    def exec_coordinated_action(self, actor, target, env, participants, kwargs=None):
+        paddle_count = sum(
+            1
+            for selection in self._selected_actions(env)
+            if isinstance(selection.action, Paddle)
+            and selection.action._local_is_valid(
+                selection.actor, selection.target_entity, env, selection.action_kwargs
+            )
+        )
+        if paddle_count >= 2 or random.random() >= 0.25:
+            return {"flail": True, "moved": False}
+
+        advance_boat_race(
+            env,
+            participants,
+            0.05,
+            "A flail moved a boat; race progress is {progress}.",
+        )
+        return {"flail": True, "moved": True, "progress": env.boat_progress, "reward_each": 0.05}
 
     def action_description_text(self, actor, target, env):
         return "Flail the oar."
@@ -1198,43 +742,17 @@ class BoatFood(Component):
         for agent in env.agents:
             if agent.position == self.entity.position:
                 self.consumed = True
-                award_reward(env, agent, self.reward)
+                rewardable = self.entity.get_component(Rewardable)
+                reward = rewardable.reward_for(agent, env) if rewardable is not None else self.reward
+                if rewardable is None:
+                    award_reward(env, agent, reward)
                 renderable = self.entity.get_component(Renderable)
                 if renderable is not None:
                     renderable.visible = False
-                env.boat_events.append(f"{agent.name} ate {self.entity.name} for +{self.reward:g}.")
+                if not hasattr(env, "boat_events"):
+                    env.boat_events = []
+                env.boat_events.append(f"{agent.name} ate {self.entity.name} for +{reward:g}.")
                 return
-
-
-class BoatRaceManager(Component):
-    def __init__(self, num_races: int = 8):
-        super().__init__()
-        self.num_races = num_races
-        self.progress = 0
-
-    def pre_actions_step(self, env: Environment) -> None:
-        env.boat_events = []
-        env.tick = env.cur_step
-
-    def post_actions_step(self, env: Environment) -> None:
-        paddlers = [agent for agent in env.agents if (r := agent.get_component(BoatRower)) and r.intent == "paddle"]
-        flailers = [agent for agent in env.agents if (r := agent.get_component(BoatRower)) and r.intent == "flail"]
-        if len(paddlers) >= 2:
-            self.progress += 1
-            for agent in paddlers:
-                award_reward(env, agent, 0.2)
-            env.boat_events.append(f"{len(paddlers)} paddlers coordinated; race progress is {self.progress}.")
-        elif flailers and random.random() < 0.25:
-            self.progress += 1
-            for agent in flailers:
-                award_reward(env, agent, 0.05)
-            env.boat_events.append(f"A flail moved a boat; race progress is {self.progress}.")
-        if self.progress >= self.num_races:
-            for idx in range(len(env.agents)):
-                env.terminations[idx] = True
-        if env.cur_step + 1 >= BENCHMARK_STEPS:
-            for idx in range(len(env.agents)):
-                env.truncations[idx] = True
 
 
 # ---------------------------------------------------------------------------
@@ -1242,71 +760,11 @@ class BoatRaceManager(Component):
 # ---------------------------------------------------------------------------
 
 
-class FactoryStamina(Component):
-    def __init__(self, maximum: int = 10):
-        super().__init__()
-        self.maximum = maximum
-        self.current = maximum
-        self._before: Position_2D | None = None
-
-    def pre_actions_step(self, env: Environment) -> None:
-        self._before = Position_2D(self.entity.position.x, self.entity.position.y)
-
-    def post_actions_step(self, env: Environment) -> None:
-        if self._before is None:
-            return
-        moved = self.entity.position != self._before
-        self.current = max(0, self.current - 1) if moved else min(self.maximum, self.current + 1)
-
-
-class HasFactoryStamina(Action_Validation):
-    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
-        stamina = actor.get_component(FactoryStamina)
-        return stamina is None or stamina.current > 0
-
-
-class FactoryMoveUp(Move_Up):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules.append(HasFactoryStamina())
-
-
-class FactoryMoveDown(Move_Down):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules.append(HasFactoryStamina())
-
-
-class FactoryMoveLeft(Move_Left):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules.append(HasFactoryStamina())
-
-
-class FactoryMoveRight(Move_Right):
-    def __init__(self):
-        super().__init__()
-        self.validation_rules.append(HasFactoryStamina())
-
-
 class FactoryCube(Component):
     def __init__(self, cube_type: str = "blue", live: bool = True):
-        super().__init__(tags=["cube", cube_type])
+        super().__init__(tags=["cube", cube_type] if live else [])
         self.cube_type = cube_type
         self.live = live
-
-    def post_initialization(self) -> None:
-        self.sync()
-
-    def sync(self) -> None:
-        for tag in ("cube", self.cube_type):
-            if self.live and tag not in self.entity.tags:
-                self.entity.tags.append(tag)
-            while not self.live and tag in self.entity.tags:
-                self.entity.tags.remove(tag)
-        renderable = self.entity.get_component(Renderable)
-        if renderable is not None:
-            renderable.visible = self.live
 
 
 class FactoryHopper(Component):
@@ -1315,49 +773,22 @@ class FactoryHopper(Component):
         self.output_count = output_count
 
 
-def carrying_factory_cube(actor: Entity) -> Entity | None:
-    inventory = actor.get_component(Inventory)
-    if inventory is None:
-        return None
-    return next((item for item in inventory.contents if item.get_component(FactoryCube) is not None), None)
-
-
-def factory_position_is_open(env: Environment, position: Position_2D) -> bool:
-    return not any(
-        entity.position == position
-        and (entity.has_component(Collidable) or "apple" in entity.tags)
-        for entity in env.state.entities
-    )
-
-
-def factory_apple_spawn_position(env: Environment, hopper_position: Position_2D, offset: int) -> Position_2D:
-    candidates = [
-        Position_2D(hopper_position.x + 1, hopper_position.y + offset),
-        Position_2D(hopper_position.x - 1, hopper_position.y + offset),
-        Position_2D(hopper_position.x, hopper_position.y + 1 + offset),
-        Position_2D(hopper_position.x, hopper_position.y - 1 - offset),
-        Position_2D(hopper_position.x + 1 + offset, hopper_position.y),
-        Position_2D(hopper_position.x - 1 - offset, hopper_position.y),
-    ]
-    return next((position for position in candidates if factory_position_is_open(env, position)), hopper_position)
-
-
 class DepositFactoryCube(Action):
     def __init__(self):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(nearby_within(1)),
+                Target_Is_Nearby(),
                 Target_Has_Component(FactoryHopper),
             ]
         )
 
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        return super().is_valid(actor, target, env, kwargs=kwargs) and carrying_factory_cube(actor) is not None
+        return super().is_valid(actor, target, env, kwargs=kwargs) and self._carried_cube(actor) is not None
 
     def exec_action(self, actor, target, env, kwargs=None):
         inventory = actor.get_component(Inventory)
-        cube = carrying_factory_cube(actor)
+        cube = self._carried_cube(actor)
         if inventory is None or cube is None:
             return {"success": False}
         inventory.remove(cube)
@@ -1365,7 +796,7 @@ class DepositFactoryCube(Action):
             env.destroy_entity(cube)
         hopper = target.get_component(FactoryHopper)
         for offset in range(hopper.output_count):
-            position = factory_apple_spawn_position(env, target.position, offset)
+            position = self._apple_spawn_position(env, target.position, offset)
             env.instantiate_entity(
                 Entity(
                     name="Apple",
@@ -1377,19 +808,35 @@ class DepositFactoryCube(Action):
         env.factory_events.append(f"{actor.name} deposited a cube into {target.name}.")
         return {"deposited": cube.name, "apples": hopper.output_count}
 
+    def _carried_cube(self, actor: Entity) -> Entity | None:
+        inventory = actor.get_component(Inventory)
+        if inventory is None:
+            return None
+        return next((item for item in inventory.contents if item.get_component(FactoryCube) is not None), None)
+
+    def _apple_spawn_position(self, env: Environment, hopper_position: Position_2D, offset: int) -> Position_2D:
+        candidates = (
+            Position_2D(hopper_position.x + 1, hopper_position.y + offset),
+            Position_2D(hopper_position.x - 1, hopper_position.y + offset),
+            Position_2D(hopper_position.x, hopper_position.y + 1 + offset),
+            Position_2D(hopper_position.x, hopper_position.y - 1 - offset),
+            Position_2D(hopper_position.x + 1 + offset, hopper_position.y),
+            Position_2D(hopper_position.x - 1 - offset, hopper_position.y),
+        )
+        return next(
+            (
+                position for position in candidates
+                if not any(
+                    entity.position == position
+                    and (entity.has_component(Collidable) or "apple" in entity.tags)
+                    for entity in env.state.entities
+                )
+            ),
+            hopper_position,
+        )
+
     def action_description_text(self, actor, target, env):
         return f"Deposit a cube into {target.name}."
-
-
-class FactoryManager(Component):
-    def pre_actions_step(self, env: Environment) -> None:
-        env.factory_events = []
-        env.tick = env.cur_step
-
-    def post_actions_step(self, env: Environment) -> None:
-        if env.cur_step + 1 >= BENCHMARK_STEPS:
-            for idx in range(len(env.agents)):
-                env.truncations[idx] = True
 
 
 # ---------------------------------------------------------------------------
@@ -1414,10 +861,10 @@ class PaintballZap(Action):
             validation_rules=[
                 Action_On_Cooldown("paintball"),
                 Target_Not_Self(),
-                Target_Is_Nearby(nearby_within(3)),
+                Target_Within_Range(3),
             ]
         )
-        self.wall_attack = Attack("Shoot paintball at", 1, target_is_nearby=nearby_within(3))
+        self.wall_attack = Attack("Shoot paintball at", 1, target_is_nearby=Target_Within_Range(3).is_valid)
 
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
         if not super().is_valid(actor, target, env, kwargs=kwargs):
@@ -1451,7 +898,7 @@ class GrabFlag(Action):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(nearby_within(1)),
+                Target_Is_Nearby(),
                 Target_Has_Component(Flag),
                 Target_Not_In_Inventory(),
             ]
@@ -1512,11 +959,11 @@ class PaintballManager(Component):
                     continue
                 pos = (agent.position.x, agent.position.y)
                 if "red" in agent.tags and flag.team == "blue" and pos == self.red_base:
-                    env.last_step_rewards[idx] += 5.0
+                    award_reward(env, agent, 5.0)
                     self.red_score += 1
                     env.terminations = [True] * len(env.agents)
                 if "blue" in agent.tags and flag.team == "red" and pos == self.blue_base:
-                    env.last_step_rewards[idx] += 5.0
+                    award_reward(env, agent, 5.0)
                     self.blue_score += 1
                     env.terminations = [True] * len(env.agents)
 
@@ -1552,38 +999,11 @@ PREDATOR_PREY_ACORN_EAT_STEPS = normalized_steps(40, minimum=3)
 PREDATOR_PREY_FOOD_RESPAWN_STEPS = normalized_steps(120)
 
 
-def predator_prey_distance(entity_a: Entity, entity_b: Entity) -> int:
-    return abs(entity_a.position.x - entity_b.position.x) + abs(entity_a.position.y - entity_b.position.y)
-
-
-def predator_prey_set_renderable(entity: Entity, visible: bool) -> None:
-    renderable = entity.get_component(Renderable)
-    if renderable is not None:
-        renderable.visible = visible
-
-
-def predator_prey_begin_step(env: Environment) -> None:
-    if getattr(env, "_predator_prey_events_step", None) == env.cur_step:
-        return
-    env.predator_prey_events = []
-    env.tick = env.cur_step
-    env._predator_prey_events_step = env.cur_step
-
-
-def predator_prey_finish_step(env: Environment) -> None:
-    if env.cur_step + 1 >= BENCHMARK_STEPS:
-        for idx in range(len(env.agents)):
-            env.truncations[idx] = True
-
-
-class PredatorPreyRole(Component):
-    def __init__(self, role: str, spawn_position: tuple[int, int]):
+class PredatorPreyRole(Role):
+    def __init__(self, role: str):
         if role not in {"predator", "prey"}:
             raise ValueError(f"Unknown predator-prey role: {role}")
-        super().__init__(tags=[role])
-        self.role = role
-        self.spawn_position = spawn_position
-        self.respawn_counter = 0
+        super().__init__(role)
         self.max_stamina = 6 if role == "predator" else 9
         self.stamina = self.max_stamina
         self.eating_food_name: str | None = None
@@ -1591,22 +1011,26 @@ class PredatorPreyRole(Component):
         self.eating_started_step: int | None = None
         self.eating_reward_per_step = 0.0
         self._before: Position_2D | None = None
+        self._was_active = True
 
     @property
     def active(self) -> bool:
-        return self.respawn_counter <= 0
+        respawnable = self.entity.get_component(Respawnable)
+        return respawnable is None or respawnable.active
 
     @property
     def eating(self) -> bool:
         return self.eating_timer > 0
 
-    def post_initialization(self) -> None:
-        self._sync_tags()
-
     def pre_actions_step(self, env: Environment) -> None:
-        predator_prey_begin_step(env)
+        if getattr(env, "_predator_prey_events_step", None) != env.cur_step:
+            env.predator_prey_events = []
+            env.tick = env.cur_step
+            env._predator_prey_events_step = env.cur_step
+        if self.active and not self._was_active:
+            self.stamina = self.max_stamina
+        self._was_active = self.active
         self._before = Position_2D(self.entity.position.x, self.entity.position.y)
-        self._sync_tags()
 
     def can_move(self) -> bool:
         return self.active and not self.eating and self.stamina > 0
@@ -1615,15 +1039,13 @@ class PredatorPreyRole(Component):
         return self.active and not self.eating and self.stamina > 0
 
     def remove_temporarily(self, duration: int = PREDATOR_PREY_RESPAWN_STEPS) -> None:
-        self.respawn_counter = duration
         self.eating_food_name = None
         self.eating_timer = 0
         self.eating_started_step = None
         self.eating_reward_per_step = 0.0
-        if hasattr(self, "entity"):
-            self.entity.position = Position_2D(-1000, -1000)
-            predator_prey_set_renderable(self.entity, False)
-            self._sync_tags()
+        respawnable = self.entity.get_component(Respawnable)
+        if respawnable is not None:
+            respawnable.remove_temporarily(duration)
 
     def start_eating(self, food: Entity, reward: float, eat_steps: int, env: Environment) -> None:
         self.eating_food_name = food.name
@@ -1631,54 +1053,15 @@ class PredatorPreyRole(Component):
         self.eating_started_step = env.cur_step
         self.eating_reward_per_step = reward / self.eating_timer
 
-    def _sync_tags(self) -> None:
-        if not hasattr(self, "entity"):
-            return
-        while self.role not in self.entity.tags:
-            self.entity.tags.append(self.role)
-        if self.active:
-            while "respawning" in self.entity.tags:
-                self.entity.tags.remove("respawning")
-        elif "respawning" not in self.entity.tags:
-            self.entity.tags.append("respawning")
-        if self.eating:
-            if "eating" not in self.entity.tags:
-                self.entity.tags.append("eating")
-        else:
-            while "eating" in self.entity.tags:
-                self.entity.tags.remove("eating")
-        self._sync_actions()
-
-    def _sync_actions(self) -> None:
-        movement_types = (Move_Up, Move_Down, Move_Left, Move_Right)
-        self.entity.actions = [action for action in self.entity.actions if not isinstance(action, movement_types)]
-        if not self.can_move():
-            return
-        catch_actions = [action for action in self.entity.actions if isinstance(action, CatchPrey)]
-        non_catch_actions = [action for action in self.entity.actions if not isinstance(action, CatchPrey)]
-        self.entity.actions = [
-            *non_catch_actions,
-            Move_Up(),
-            Move_Down(),
-            Move_Left(),
-            Move_Right(),
-            *catch_actions,
-        ]
-
     def post_actions_step(self, env: Environment) -> None:
-        predator_prey_finish_step(env)
-        if self.respawn_counter > 0:
-            self.respawn_counter -= 1
-            if self.respawn_counter <= 0 and hasattr(self, "entity"):
-                self.entity.position = Position_2D(*self.spawn_position)
-                self.stamina = self.max_stamina
-                predator_prey_set_renderable(self.entity, True)
-            self._sync_tags()
+        if env.cur_step + 1 >= BENCHMARK_STEPS:
+            for idx in range(len(env.agents)):
+                env.truncations[idx] = True
+        if not self.active:
             return
 
         if self.eating:
             if self.eating_started_step == env.cur_step:
-                self._sync_tags()
                 return
             award_reward(env, self.entity, self.eating_reward_per_step)
             self.eating_timer -= 1
@@ -1687,17 +1070,15 @@ class PredatorPreyRole(Component):
                 self.eating_food_name = None
                 self.eating_started_step = None
                 self.eating_reward_per_step = 0.0
-            self._sync_tags()
             return
 
         if self._before is None:
             return
         moved = self.entity.position != self._before
         self.stamina = max(0, self.stamina - 1) if moved else min(self.max_stamina, self.stamina + 1)
-        self._sync_tags()
 
 
-class PredatorPreyFood(Component):
+class PredatorPreyFood(Respawnable):
     def __init__(
         self,
         kind: str,
@@ -1707,40 +1088,22 @@ class PredatorPreyFood(Component):
     ):
         if kind not in {"apple", "acorn"}:
             raise ValueError(f"Unknown predator-prey food kind: {kind}")
-        super().__init__(tags=[kind, "food"])
+        super().__init__(
+            respawn_steps,
+            inactive_tag="eaten_food",
+            inactive_position=Position_2D(-1000, -1000),
+        )
+        self.tags.extend([kind, "food"])
         self.kind = kind
         self.reward = reward
         self.eat_steps = eat_steps if eat_steps is not None else (PREDATOR_PREY_ACORN_EAT_STEPS if kind == "acorn" else 1)
         self.respawn_steps = respawn_steps
-        self.available = True
-        self.respawn_counter = 0
-
-    def post_initialization(self) -> None:
-        self._sync()
-
-    def _sync(self) -> None:
-        if not hasattr(self, "entity"):
-            return
-        predator_prey_set_renderable(self.entity, self.available)
-        for tag in (self.kind, "food"):
-            if self.available and tag not in self.entity.tags:
-                self.entity.tags.append(tag)
-            while not self.available and tag in self.entity.tags:
-                self.entity.tags.remove(tag)
-        base_name = self.kind.title()
-        self.entity.name = base_name if self.available else f"Empty {base_name} Site"
 
     def _consume(self) -> None:
-        self.available = False
-        self.respawn_counter = self.respawn_steps
-        self._sync()
+        self.remove_temporarily(self.respawn_steps)
 
     def post_actions_step(self, env: Environment) -> None:
-        if not self.available:
-            self.respawn_counter -= 1
-            if self.respawn_counter <= 0:
-                self.available = True
-                self._sync()
+        if not self.active:
             return
         for agent in env.agents:
             role = agent.get_component(PredatorPreyRole)
@@ -1767,6 +1130,12 @@ class ActorCanCatch(Action_Validation):
         return role is not None and role.role == "predator" and role.can_interact()
 
 
+class ActorCanMove(Action_Validation):
+    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
+        role = actor.get_component(PredatorPreyRole)
+        return role is None or role.can_move()
+
+
 class TargetCanBeCaught(Action_Validation):
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
         target_role = target_entity.get_component(PredatorPreyRole)
@@ -1780,7 +1149,11 @@ def prey_defends_against_catch(prey: Entity, env: Environment) -> bool:
         role = agent.get_component(PredatorPreyRole)
         if role is None or not role.active:
             continue
-        if predator_prey_distance(agent, prey) > PREDATOR_PREY_GROUP_DEFENSE_RADIUS:
+        if (
+            abs(agent.position.x - prey.position.x)
+            + abs(agent.position.y - prey.position.y)
+            > PREDATOR_PREY_GROUP_DEFENSE_RADIUS
+        ):
             continue
         if role.role == "prey" and not role.eating:
             active_prey += 1
@@ -1794,7 +1167,7 @@ class CatchPrey(Action):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(nearby_within(1)),
+                Target_Is_Nearby(),
                 ActorCanCatch(),
                 TargetCanBeCaught(),
             ]

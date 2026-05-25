@@ -26,6 +26,7 @@ from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.cooldown import Cooldown
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.freezable import Freezable
+from word_play.presets.systems.reward import Rewardable
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
@@ -79,6 +80,7 @@ def run_exp(agent_count: int = 7, policy: str = "random", model_name: str = "ope
             "name": "Apple",
             "components": [
                 Commons_Apple_Patch(apple_regrowth_probs=[0.0, 0.0025, 0.005, 0.025]),
+                Rewardable(amount=1.0),
                 Renderable(sprite_path="src/items/consumables/lpc_food/apple.png", z_index=4),
             ],
         },

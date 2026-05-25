@@ -72,8 +72,8 @@ class No_Collision_Will_Occur_Down(Action_Validation):
 
 
 class Move_Left(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Left()])
+    def __init__(self, *extra_validation_rules: Action_Validation):
+        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Left(), *extra_validation_rules])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         actor.position.x -= 1
@@ -83,8 +83,8 @@ class Move_Left(Action):
 
 
 class Move_Right(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Right()])
+    def __init__(self, *extra_validation_rules: Action_Validation):
+        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Right(), *extra_validation_rules])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         actor.position.x += 1
@@ -94,8 +94,8 @@ class Move_Right(Action):
 
 
 class Move_Up(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Up()])
+    def __init__(self, *extra_validation_rules: Action_Validation):
+        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Up(), *extra_validation_rules])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         actor.position.y += 1
@@ -105,8 +105,8 @@ class Move_Up(Action):
 
 
 class Move_Down(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Down()])
+    def __init__(self, *extra_validation_rules: Action_Validation):
+        super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Down(), *extra_validation_rules])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         actor.position.y -= 1

@@ -12,6 +12,7 @@ from word_play.presets.action_policies.llm_action_and_communication import (
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
+from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.models import (
     LLM_MODEL_REGISTRY,
     OpenRouter_Model,
@@ -28,24 +29,22 @@ from word_play.presets.renderers import (
     Renderable,
     render_step,
 )
-from word_play.presets.systems.containers import (
+from word_play.presets.systems.containers.presets import (
     Regrowable_Item_Source,
     Take_From_Infinite_Source,
 )
 from word_play.presets.systems.crafter import (
     Crafter,
     Crafter_Recipe,
+    Load_First_Into_Crafter,
 )
 from word_play.presets.systems.do_nothing import Do_Nothing
-from word_play.presets.systems.inventory import Drop_Item, Inventory
+from word_play.presets.systems.inventory import Drop_Item, Inventory, Put_In_Container, Take_First_From_Container
+from word_play.presets.systems.reward import Rewardable
 from benchmarks.text_meltingpot.common import (
     BENCHMARK_STEPS,
-    Collaborative_Cooking_Grid_World,
-    Deliver_Held_Soup,
-    Load_Held_Item_Into_Crafter,
+    COOKING_DELIVERY_REWARD,
     Plate_Ready_Soup_With_Dish,
-    Put_Held_Item_On_Counter,
-    Take_First_Item_From_Counter,
     normalized_steps,
 )
 from word_play.utils import tilemap_to_entities
@@ -57,45 +56,10 @@ MAX_EPISODE_LENGTH = BENCHMARK_STEPS
 DEFAULT_NUM_PLAYERS = 2
 
 
-def debug_agent_options(env: Collaborative_Cooking_Grid_World, step: int) -> None:
-    kitchen_action_markers = (
-        "Tomato Source",
-        "Dish Source",
-        "Cooking Pot",
-        "Delivery Window",
-        "Counter",
-        "Drop ",
-    )
-    print(f"[debug step {step}]")
-    for agent in env.agents:
-        inventory = agent.get_component(Inventory)
-        held = inventory.contents[0].name if inventory and inventory.contents else "empty"
-        possible = env.possible_actions(agent)
-        kitchen_options = [
-            str(selection)
-            for selection in possible
-            if any(marker in str(selection) for marker in kitchen_action_markers)
-        ]
-        print(f"  {agent.name}: held={held} kitchen_options={kitchen_options}")
-
-
-def debug_agent_results(env: Collaborative_Cooking_Grid_World, step: int) -> None:
-    print(f"[debug post-step {step}]")
-    for agent_id, agent in enumerate(env.agents):
-        inventory = agent.get_component(Inventory)
-        held = [item.name for item in inventory.contents] if inventory else []
-        info = env.infos[agent_id]
-        print(
-            f"  {agent.name}: pos={agent.position} held={held or ['empty']} "
-            f"success={info.get('action_success')} info={info.get('action_info')}"
-        )
-
-
 def run_exp(
     agent_count: int = DEFAULT_NUM_PLAYERS,
     policy: str = "random",
     model_name: str = "openai/gpt-4o-mini",
-    debug_actions: bool = False,
 ):
     exp_steps = MAX_EPISODE_LENGTH
 
@@ -230,6 +194,7 @@ def run_exp(
             "name": "Delivery Window",
             "tags": ["delivery", "blocker"],
             "components": [
+                Rewardable(amount=COOKING_DELIVERY_REWARD, recipients="all", counter_attr="completed_orders"),
                 Collidable(collidable_tags=["blocker"]),
                 Renderable(
                     sprite_path="src/world_tiles/indoors/stations/delivery.png",
@@ -275,11 +240,11 @@ def run_exp(
                     Move_Right(),
                     Drop_Item(),
                     Take_From_Infinite_Source(),
-                    Load_Held_Item_Into_Crafter(),
+                    Load_First_Into_Crafter(),
                     Plate_Ready_Soup_With_Dish(),
-                    Deliver_Held_Soup(),
-                    Take_First_Item_From_Counter(),
-                    Put_Held_Item_On_Counter(),
+                    Put_In_Container(["delivery"], ["soup"], destroy_item=True),
+                    Take_First_From_Container(target_tags=["counter"]),
+                    Put_In_Container(target_tags=["counter"], destroy_item=False),
                 ],
                 components=[
                     agent_policy,
@@ -293,7 +258,7 @@ def run_exp(
             )
         )
 
-    env = Collaborative_Cooking_Grid_World(
+    env = Simple_2D_Grid_World(
         description="Collaborative Cooking, adapted from MeltingPot into a single-file Word Play environment.",
         entities=entities,
         entity_order=randomize_agent_order,
@@ -308,8 +273,6 @@ def run_exp(
             break
 
         env.last_step_rewards = [0.0] * len(env.agents)
-        if debug_actions:
-            debug_agent_options(env, step)
 
         cur_step_actions = []
         for agent_id, agent in enumerate(env.agents):
@@ -319,8 +282,6 @@ def run_exp(
             cur_step_actions.append(action)
 
         env.step(cur_step_actions)
-        if debug_actions:
-            debug_agent_results(env, step)
 
         if env.cur_step >= MAX_EPISODE_LENGTH:
             env.truncations = [True] * len(env.agents)
@@ -332,11 +293,9 @@ if __name__ == "__main__":
     parser.add_argument("--agent-count", type=int, default=DEFAULT_NUM_PLAYERS)
     parser.add_argument("--policy", choices=["random", "llm", "human"], default="random")
     parser.add_argument("--model-name", default="openai/gpt-4o-mini")
-    parser.add_argument("--debug-actions", action="store_true")
     args = parser.parse_args()
     run_exp(
         agent_count=args.agent_count,
         policy=args.policy,
         model_name=args.model_name,
-        debug_actions=args.debug_actions,
     )

@@ -40,6 +40,7 @@ from word_play.presets.systems.cooldown import (
     Action_On_Cooldown,
     Cooldown,
 )
+from word_play.presets.systems.coordinated_action import Coordinated_Action
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.reward import award_reward
 from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_probability, normalized_steps
@@ -58,7 +59,6 @@ GOLD_REWARD = 8.0
 IRON_REGROW_PROB = normalized_probability(0.0002)
 GOLD_REGROW_PROB = normalized_probability(0.00008)
 GOLD_MINERS_REQUIRED = 2
-GOLD_MINING_WINDOW = normalized_steps(3, minimum=2)
 
 
 ASCII_MAP = """
@@ -96,91 +96,37 @@ def sample_ore_type() -> str:
     return "gold" if random.random() < 0.2 else "iron"
 
 
-def ore_is_reachable(actor: Entity, target: Entity, env: Environment) -> bool:
-    return abs(actor.position.x - target.position.x) + abs(actor.position.y - target.position.y) <= 1
-
-
 class OreNode(Component):
     def __init__(self, ore_type: str | None = None):
         super().__init__(tags=["ore_node"])
         self.ore_type = ore_type
         self.depleted = False
-        self.partial_miners: set[str] = set()
-        self.partial_timer = 0
 
     def post_initialization(self) -> None:
         if self.ore_type is None:
             self.ore_type = sample_ore_type()
-        self._sync_visual()
 
-    def _sync_visual(self) -> None:
-        renderable = self.entity.get_component(Renderable)
-        if renderable is None:
-            return
-
-        if self.depleted:
-            renderable.sprite_path = "src/items/materials/misc/gray_rocks.png"
-            renderable.overlay_sprite = None
-            return
-
-        if self.ore_type == "iron":
-            renderable.sprite_path = "src/items/materials/misc/iron_ore.png"
-            renderable.overlay_sprite = None
-            return
-
-        renderable.sprite_path = "src/world_tiles/treasure/gold_ore.png"
-        renderable.overlay_sprite = (
-            "src/items/materials/valuables/gold_coin.png" if self.partial_timer > 0 else None
-        )
-        renderable.overlay_mode = "badge"
-        renderable.overlay_scale = 0.7
-
-    def begin_gold_window(self, actor_name: str) -> None:
-        self.partial_miners = {actor_name}
-        self.partial_timer = GOLD_MINING_WINDOW
-        self._sync_visual()
-
-    def resolve_gold(self, actor_name: str) -> list[str]:
-        miners = sorted(self.partial_miners | {actor_name})
-        self.partial_miners = set()
-        self.partial_timer = 0
+    def mine(self) -> None:
         self.depleted = True
-        self._sync_visual()
-        return miners
-
-    def mine_iron(self) -> None:
-        self.depleted = True
-        self.partial_miners = set()
-        self.partial_timer = 0
-        self._sync_visual()
 
     def pre_actions_step(self, env: Environment) -> None:
         if self.depleted:
             if random.random() < GOLD_REGROW_PROB:
                 self.depleted = False
                 self.ore_type = "gold"
-                self._sync_visual()
                 return
             if random.random() < IRON_REGROW_PROB:
                 self.depleted = False
                 self.ore_type = "iron"
-                self._sync_visual()
                 return
 
-        if not self.depleted and self.ore_type == "gold" and self.partial_timer > 0:
-            self.partial_timer -= 1
-            if self.partial_timer <= 0:
-                self.partial_miners = set()
-                self.partial_timer = 0
-            self._sync_visual()
 
-
-class Mine_Ore(Action):
+class Mine_Iron_Ore(Action):
     def __init__(self):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(target_is_nearby=ore_is_reachable),
+                Target_Is_Nearby(),
                 Target_Has_Component(OreNode),
                 Action_On_Cooldown("mine"),
             ]
@@ -190,55 +136,61 @@ class Mine_Ore(Action):
         if not super().is_valid(actor, target, env, kwargs=kwargs):
             return False
         ore = target.get_component(OreNode)
-        return ore is not None and not ore.depleted
+        return ore is not None and ore.ore_type == "iron" and not ore.depleted
 
     def exec_action(self, actor, target, env, kwargs=None):
         cooldown = actor.get_component(Cooldown)
         if cooldown is not None:
             cooldown.start("mine")
-
         ore = target.get_component(OreNode)
         assert ore is not None
-
-        if ore.ore_type == "iron":
-            ore.mine_iron()
-            award_reward(env, actor, IRON_REWARD)
-            env.iron_mined = getattr(env, "iron_mined", 0) + 1
-            return {
-                "success": True,
-                "ore_type": "iron",
-                "reward": IRON_REWARD,
-            }
-
-        if ore.partial_timer > 0 and actor.name not in ore.partial_miners:
-            miners = ore.resolve_gold(actor.name)
-            rewarded = []
-            for agent in env.agents:
-                if agent.name in miners:
-                    award_reward(env, agent, GOLD_REWARD)
-                    rewarded.append(agent.name)
-            env.gold_mined = getattr(env, "gold_mined", 0) + 1
-            return {
-                "success": True,
-                "ore_type": "gold",
-                "miners": rewarded,
-                "reward_each": GOLD_REWARD,
-            }
-
-        ore.begin_gold_window(actor.name)
-        return {
-            "success": True,
-            "ore_type": "gold",
-            "status": "partial",
-            "miners_needed": GOLD_MINERS_REQUIRED - len(ore.partial_miners),
-            "window_remaining": ore.partial_timer,
-        }
+        ore.mine()
+        award_reward(env, actor, IRON_REWARD)
+        env.iron_mined = getattr(env, "iron_mined", 0) + 1
+        return {"success": True, "ore_type": "iron", "reward": IRON_REWARD}
 
     def action_description_text(self, actor, target, env) -> str:
+        return "Mine Iron Ore."
+
+
+class Mine_Gold_Ore(Coordinated_Action):
+    def __init__(self):
+        super().__init__(
+            "Mine Gold Ore together.",
+            GOLD_MINERS_REQUIRED,
+            coordination_key="mine_gold_ore",
+            validation_rules=[
+                Target_Not_Self(),
+                Target_Is_Nearby(),
+                Target_Has_Component(OreNode),
+                Action_On_Cooldown("mine"),
+            ],
+        )
+
+    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
+        if self._cached_result(actor, target, env) is not None:
+            return True
+        if not super().is_valid(actor, target, env, kwargs=kwargs):
+            return False
         ore = target.get_component(OreNode)
-        if ore is None:
-            return f"Mine {target.name}."
-        return f"Mine {ore.ore_type.title()} Ore."
+        return ore is not None and ore.ore_type == "gold" and not ore.depleted
+
+    def exec_coordinated_action(self, actor, target, env, participants, kwargs=None):
+        ore = target.get_component(OreNode)
+        assert ore is not None
+        ore.mine()
+        rewarded = []
+        for participant in participants:
+            cooldown = participant.get_component(Cooldown)
+            if cooldown is not None:
+                cooldown.start("mine")
+            award_reward(env, participant, GOLD_REWARD)
+            rewarded.append(participant.name)
+        env.gold_mined = getattr(env, "gold_mined", 0) + 1
+        return {"ore_type": "gold", "miners": rewarded, "reward_each": GOLD_REWARD}
+
+    def action_description_text(self, actor, target, env) -> str:
+        return "Mine Gold Ore together."
 
 
 def run_exp(agent_count: int = MANDATED_NUM_PLAYERS, policy: str = "random", model_name: str = "openai/gpt-4o-mini"):
@@ -302,7 +254,8 @@ def run_exp(agent_count: int = MANDATED_NUM_PLAYERS, policy: str = "random", mod
                     Move_Down(),
                     Move_Left(),
                     Move_Right(),
-                    Mine_Ore(),
+                    Mine_Iron_Ore(),
+                    Mine_Gold_Ore(),
                 ],
                 components=[
                     agent_policy,

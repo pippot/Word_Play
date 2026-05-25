@@ -4,6 +4,7 @@ import argparse
 import random
 
 from benchmarks.text_meltingpot.common import (
+    ActorCanMove,
     BENCHMARK_STEPS,
     CatchPrey,
     PredatorPreyFood,
@@ -17,6 +18,7 @@ from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_W
 from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Move_Left, Move_Right, Move_Up, Position_2D
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
+from word_play.presets.systems.respawnable import Respawnable
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
@@ -142,15 +144,16 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 tags=["agent", "player", "default"],
                 actions=[
                     Do_Nothing(),
-                    Move_Up(),
-                    Move_Down(),
-                    Move_Left(),
-                    Move_Right(),
+                    Move_Up(ActorCanMove()),
+                    Move_Down(ActorCanMove()),
+                    Move_Left(ActorCanMove()),
+                    Move_Right(ActorCanMove()),
                     CatchPrey(),
                 ],
                 components=[
                     agent_policy,
-                    PredatorPreyRole(role, (x, y)),
+                    Respawnable(respawn_position=Position_2D(x, y), inactive_position=Position_2D(-1000, -1000)),
+                    PredatorPreyRole(role),
                     Collidable(collidable_tags=["wall", "blocker"]),
                     Renderable(
                         sprite_path=(

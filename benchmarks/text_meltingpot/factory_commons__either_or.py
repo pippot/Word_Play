@@ -8,23 +8,18 @@ from benchmarks.text_meltingpot.common import (
     DepositFactoryCube,
     FactoryCube,
     FactoryHopper,
-    FactoryManager,
-    FactoryMoveDown,
-    FactoryMoveLeft,
-    FactoryMoveRight,
-    FactoryMoveUp,
-    FactoryStamina,
-    nearby_within,
 )
 from word_play.core import Agent_Policy, Entity
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
+from word_play.presets.action_validations import Target_Within_Range
 from word_play.presets.entity_orderings import randomize_agent_order
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
-from word_play.presets.movement.simple_2d_grid import Collidable, Position_2D
+from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Move_Left, Move_Right, Move_Up, Position_2D
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.inventory import Inventory, Pick_Up_Item
+from word_play.presets.systems.stamina import Has_Stamina, Stamina
 from word_play.presets.systems.zap import Zap_Change
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
@@ -152,15 +147,15 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 tags=["agent", "player", "default"],
                 actions=[
                     Do_Nothing(),
-                    FactoryMoveUp(),
-                    FactoryMoveDown(),
-                    FactoryMoveLeft(),
-                    FactoryMoveRight(),
+                    Move_Up(Has_Stamina("move")),
+                    Move_Down(Has_Stamina("move")),
+                    Move_Left(Has_Stamina("move")),
+                    Move_Right(Has_Stamina("move")),
                     Pick_Up_Item(["cube"]),
                     DepositFactoryCube(),
                     Zap_Change(
                         allowed_tag="apple",
-                        target_is_nearby=nearby_within(2),
+                        target_is_nearby=Target_Within_Range(2).is_valid,
                         reward=1.0,
                         action_name="Eat",
                     ),
@@ -168,14 +163,12 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 components=[
                     agent_policy,
                     Inventory(max_size=1, accepted_tags=["cube"]),
-                    FactoryStamina(maximum=10),
+                    Stamina(maximum=10, action_costs={"move": 1}),
                     Collidable(collidable_tags=["wall", "blocker"]),
                     Renderable(sprite_path="src/characters/humanoids/human/factory_worker.png", z_index=10),
                 ],
             )
         )
-
-    entities.append(Entity(name="Factory Manager", position=Position_2D(0, 0), components=[FactoryManager()]))
 
     env = Simple_2D_Grid_World(
         description="Factory Commons: Either Or, adapted from Melting Pot.",
@@ -197,9 +190,11 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             info = info or {}
             if info.get("raw_response"):
                 print(f"[step {step}] {agent.name} raw -> {info['raw_response'].strip()}")
-            stamina = agent.get_component(FactoryStamina).current
+            stamina = agent.get_component(Stamina).current
             print(f"[step {step}] {agent.name} stamina={stamina} -> {action}")
             cur_step_actions.append(action)
+        env.tick = env.cur_step
+        env.factory_events = []
         env.step(cur_step_actions)
         for event in env.factory_events:
             print(f"[step {step}] factory -> {event}")

@@ -90,11 +90,7 @@ class Clean_Dirt(Action):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(
-                    lambda actor, target, env: abs(actor.position.x - target.position.x)
-                    + abs(actor.position.y - target.position.y)
-                    <= 1
-                ),
+                Target_Is_Nearby(),
             ]
         )
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import random
 
-from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, BoatFood, BoatRaceManager, BoatRower, Flail, Paddle
+from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, BoatFood, Flail, Paddle
 from word_play.core import Agent_Policy, Entity
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.action_policies.random_policy import Random_Policy
@@ -13,6 +13,7 @@ from word_play.presets.movement.simple_2d_grid import Collidable, Move_Down, Mov
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.inventory import Inventory
+from word_play.presets.systems.reward import Rewardable
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
@@ -120,6 +121,7 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             "tags": ["apple", "food"],
             "components": [
                 BoatFood(reward=1.0),
+                Rewardable(amount=1.0),
                 Renderable(sprite_path="src/items/consumables/lpc_food/apple.png", z_index=4),
             ],
         },
@@ -180,15 +182,12 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 actions=[Do_Nothing(), Move_Up(), Move_Down(), Move_Left(), Move_Right(), Paddle(), Flail()],
                 components=[
                     agent_policy,
-                    BoatRower(),
                     Inventory(max_size=0),
                     Collidable(collidable_tags=["wall", "blocker"]),
                     Renderable(sprite_path="src/characters/humanoids/human/sailor.png", z_index=10),
                 ],
             )
         )
-
-    entities.append(Entity(name="Boat Race Manager", position=Position_2D(0, 0), components=[BoatRaceManager(8)]))
 
     env = Simple_2D_Grid_World(
         description="Boat Race: Eight Races, adapted from Melting Pot.",
@@ -197,11 +196,15 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
         observation_radius=4,
     )
     env.boat_events = []
+    env.boat_progress = 0
+    env.boat_num_races = 8
     env.reward_func = lambda action_selections, current_env: list(current_env.last_step_rewards)
 
     for step in range(exp_steps):
         if policy != "human" and not render_step(env, step_delay=0.0):
             break
+        env.boat_events = []
+        env.tick = env.cur_step
         env.last_step_rewards = [0.0] * len(env.agents)
         cur_step_actions = []
         for agent_id, agent in enumerate(env.agents):
@@ -217,6 +220,8 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
             print(f"[step {step}] boat -> {event}")
         if any(env.last_step_rewards):
             print(f"[step {step}] rewards -> {env.last_step_rewards}")
+        if env.cur_step >= exp_steps:
+            env.truncations = [True] * len(env.agents)
         if all(env.terminations) or all(env.truncations):
             break
 

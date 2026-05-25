@@ -140,6 +140,8 @@ class Environment(ABC):
         self.terminations = [False] * len(self.agents)
         self.truncations = [False] * len(self.agents)
         self.infos = [{} for _ in self.agents]
+        self.current_action_selections = None
+        self._current_action_selections_step = None
 
         self._reorder_entities()
 
@@ -191,6 +193,8 @@ class Environment(ABC):
         agent_to_action_selection = {
             agent: action_selection for agent, action_selection in zip(self.agents, action_selections)
         }
+        self.current_action_selections = action_selections
+        self._current_action_selections_step = self.cur_step
 
         self.environment_start_of_step(action_selections)
 

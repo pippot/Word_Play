@@ -10,10 +10,10 @@ from word_play.core import (
     Component,
     Entity,
     Environment,
-    Target_Is_Nearby,
     Target_Is_Self,
     Target_Not_Self,
 )
+from word_play.presets.action_validations import Target_Within_Range
 from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
 )
@@ -33,6 +33,7 @@ from word_play.presets.movement.simple_2d_grid import (
 from word_play.presets.observation.simple_observation import Simple_Observation
 from word_play.presets.renderers import Renderable, render_step
 from word_play.presets.systems.do_nothing import Do_Nothing
+from word_play.presets.systems.role import Role
 from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_probability, normalized_steps
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
@@ -53,10 +54,6 @@ def grid_distance(first: Entity, second: Entity) -> int:
     return abs(first.position.x - second.position.x) + abs(first.position.y - second.position.y)
 
 
-def freeze_range(actor: Entity, target: Entity, env: Environment) -> bool:
-    return grid_distance(actor, target) <= FREEZE_RANGE
-
-
 def hidden_agenda_manager(env: Environment) -> "HiddenAgendaManager":
     for entity in env.state.entities:
         manager = entity.get_component(HiddenAgendaManager)
@@ -65,9 +62,9 @@ def hidden_agenda_manager(env: Environment) -> "HiddenAgendaManager":
     raise RuntimeError("Hidden Agenda manager missing.")
 
 
-class HiddenAgendaState(Component):
+class HiddenAgendaState(Role):
     def __init__(self, role: str, spawn_position: Position_2D):
-        super().__init__()
+        super().__init__(role)
         self._role = role
         self.spawn_position = Position_2D(spawn_position.x, spawn_position.y)
         self.held_gems = 0
@@ -196,7 +193,7 @@ class FreezeCrewmate(Action):
         super().__init__(
             validation_rules=[
                 Target_Not_Self(),
-                Target_Is_Nearby(freeze_range),
+                Target_Within_Range(FREEZE_RANGE),
                 ActorIsImpostor(),
                 FreezeReady(),
                 TargetIsActiveCrewmate(),

@@ -18,6 +18,7 @@ from word_play.presets.action_validations import (
 )
 from word_play.presets.renderers import Renderable
 from word_play.presets.systems.inventory import Inventory, materialize_item
+from word_play.presets.systems.reward import Rewardable, award_reward
 
 
 class Regrowable(Component):
@@ -25,7 +26,8 @@ class Regrowable(Component):
 
     Handles visibility toggling and regrowth timing. Supports three
     regrowth conditions: fixed interval, probability-per-tick, and
-    density-dependent (fewer nearby = faster regrowth).
+    density-dependent probability tables. It can also swap active/inactive
+    tags while toggling visibility.
     """
 
     def __init__(
@@ -35,13 +37,19 @@ class Regrowable(Component):
         regrow_prob: float = 1.0,
         density_dependent: bool = False,
         density_radius: int = 2,
+        density_regrow_probs: list[float] | None = None,
+        active_tags: list[str] | None = None,
+        inactive_tags: list[str] | None = None,
         consumed: bool = False,
     ):
-        super().__init__()
+        self.active_tags = active_tags or []
+        self.inactive_tags = inactive_tags or []
+        super().__init__(tags=list(self.inactive_tags if consumed else self.active_tags))
         self.regrow_tick_interval = regrow_tick_interval
         self.regrow_prob = regrow_prob
         self.density_dependent = density_dependent
         self.density_radius = density_radius
+        self.density_regrow_probs = density_regrow_probs or [0.0, 0.0025, 0.005, 0.025]
         self._consumed = consumed
 
     @property
@@ -52,6 +60,7 @@ class Regrowable(Component):
         if self._consumed:
             return False
         self._consumed = True
+        self._sync_tags()
         renderable = self.entity.get_component(Renderable) if hasattr(self, "entity") else None
         if renderable is not None:
             renderable.visible = False
@@ -61,10 +70,23 @@ class Regrowable(Component):
         if not self._consumed:
             return False
         self._consumed = False
+        self._sync_tags()
         renderable = self.entity.get_component(Renderable) if hasattr(self, "entity") else None
         if renderable is not None:
             renderable.visible = True
         return True
+
+    def _sync_tags(self) -> None:
+        if not hasattr(self, "entity"):
+            return
+        removed_tags = self.active_tags if self._consumed else self.inactive_tags
+        added_tags = self.inactive_tags if self._consumed else self.active_tags
+        for tag in removed_tags:
+            while tag in self.entity.tags:
+                self.entity.tags.remove(tag)
+        for tag in added_tags:
+            if tag not in self.entity.tags:
+                self.entity.tags.append(tag)
 
     def _regrow_prob_this_tick(self, env: Environment) -> float:
         if not self.density_dependent:
@@ -74,8 +96,7 @@ class Regrowable(Component):
             if (r := e.get_component(Regrowable)) and not r.consumed and e is not self.entity
             and abs(self.entity.position.x - e.position.x) + abs(self.entity.position.y - e.position.y) <= self.density_radius
         )
-        probs = [0.0, 0.0025, 0.005, 0.025]
-        return probs[min(nearby, len(probs) - 1)]
+        return self.density_regrow_probs[min(nearby, len(self.density_regrow_probs) - 1)]
 
     def pre_actions_step(self, env: Environment) -> None:
         if not self._consumed:
@@ -95,7 +116,7 @@ class Consume_Regrowable(Action):
     hidden and will regrow on its timer (common-pool style).
     """
 
-    def __init__(self, *, reward: float = 1.0, destroy: bool = True):
+    def __init__(self, *, reward: float | None = None, destroy: bool = True):
         super().__init__(validation_rules=[Target_Is_Nearby(), Target_Has_Component(Regrowable)])
         self.reward = reward
         self.destroy = destroy
@@ -105,7 +126,14 @@ class Consume_Regrowable(Action):
         if regrowable is None or regrowable.consumed:
             return {"success": False, "reason": "already_consumed" if regrowable else "not_regrowable"}
         regrowable.consume()
-        result = {"success": True, "reward": self.reward}
+        reward = self.reward
+        if reward is not None:
+            award_reward(env, actor, reward)
+        elif (rewardable := target.get_component(Rewardable)) is not None:
+            reward = rewardable.reward_for(actor, env)
+        result = {"success": True}
+        if reward is not None:
+            result["reward"] = reward
         if self.destroy:
             env.destroy_entity(target)
         return result

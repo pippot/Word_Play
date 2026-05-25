@@ -5,13 +5,13 @@ import random
 
 from word_play.core import (
     Action,
+    Action_Validation,
     Agent_Policy,
     Component,
     Entity,
     Environment,
     Target_Is_Nearby,
     Target_Not_Self,
-    Target_Is_Self,
 )
 from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
@@ -38,8 +38,10 @@ from word_play.presets.renderers import (
     render_step,
 )
 from word_play.presets.systems.do_nothing import Do_Nothing
-from word_play.presets.systems.inventory import Inventory
+from word_play.presets.systems.inventory import Consume_Held_Item, Inventory
+from word_play.presets.systems.respawnable import Respawnable
 from word_play.presets.systems.reward import award_reward
+from word_play.presets.systems.role import Role
 from benchmarks.text_meltingpot.common import BENCHMARK_STEPS, normalized_probability, normalized_steps
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
@@ -145,22 +147,20 @@ class FruitPatch(Component):
             self._sync_state()
 
 
-class AvatarState(Component):
-    def __init__(self, role: str, spawn_position: Position_2D):
-        super().__init__(tags=[role])
-        self.role = role
-        self.spawn_position = Position_2D(spawn_position.x, spawn_position.y)
+class AvatarState(Role):
+    def __init__(self, role: str):
+        super().__init__(role)
         self.hunger_timer = 0
         self.is_hungry = False
-        self.active = True
-        self.respawn_timer = 0
+
+    @property
+    def active(self) -> bool:
+        respawnable = self.entity.get_component(Respawnable)
+        return respawnable is None or respawnable.active
 
     def enter_respawn(self, env: Environment) -> None:
-        self.active = False
-        self.respawn_timer = FRAMES_TILL_RESPAWN
         self.hunger_timer = 0
         self.is_hungry = False
-        self.entity.position = Position_2D(self.spawn_position.x, self.spawn_position.y)
 
         inventory = self.entity.get_component(Inventory)
         if inventory is not None:
@@ -171,9 +171,9 @@ class AvatarState(Component):
                 if item in env.state.entities:
                     env.destroy_entity(item)
 
-        renderable = self.entity.get_component(Renderable)
-        if renderable is not None:
-            renderable.visible = False
+        respawnable = self.entity.get_component(Respawnable)
+        if respawnable is not None:
+            respawnable.remove_temporarily(FRAMES_TILL_RESPAWN)
 
     def reset_after_eating(self) -> None:
         self.hunger_timer = 0
@@ -181,14 +181,6 @@ class AvatarState(Component):
 
     def pre_actions_step(self, env: Environment) -> None:
         if not self.active:
-            if self.respawn_timer > 0:
-                self.respawn_timer -= 1
-            if self.respawn_timer <= 0:
-                self.active = True
-                self.entity.position = Position_2D(self.spawn_position.x, self.spawn_position.y)
-                renderable = self.entity.get_component(Renderable)
-                if renderable is not None:
-                    renderable.visible = True
             return
 
         self.hunger_timer += 1
@@ -197,27 +189,23 @@ class AvatarState(Component):
             self.enter_respawn(env)
 
 
-def actor_can_act(actor: Entity) -> bool:
-    state = actor.get_component(AvatarState)
-    return state is not None and state.active
-
-
-def daycare_is_adjacent(actor: Entity, target: Entity, env: Environment) -> bool:
-    return abs(actor.position.x - target.position.x) + abs(actor.position.y - target.position.y) <= 1
+class ActorCanAct(Action_Validation):
+    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
+        state = actor.get_component(AvatarState)
+        return state is not None and state.active
 
 
 class Grasp(Action):
     def __init__(self):
         super().__init__()
         self.validation_rules = [
+            ActorCanAct(),
             Target_Not_Self(),
-            Target_Is_Nearby(target_is_nearby=daycare_is_adjacent),
+            Target_Is_Nearby(),
             Target_Has_Component(FruitPatch),
         ]
 
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        if not actor_can_act(actor):
-            return False
         if not super().is_valid(actor, target, env, kwargs=kwargs):
             return False
 
@@ -265,38 +253,18 @@ class Grasp(Action):
         return f"Grasp fruit from {target.name}."
 
 
-class Eat_Held_Fruit(Action):
-    def __init__(self):
-        super().__init__(validation_rules=[Target_Is_Self()])
-
-    def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:
-        if not actor_can_act(actor):
-            return False
-        inventory = actor.get_component(Inventory)
-        return (
-            super().is_valid(actor, target, env, kwargs=kwargs)
-            and inventory is not None
-            and any("fruit" in item.tags for item in inventory.contents)
-        )
-
-    def exec_action(self, actor, target, env, kwargs=None):
-        inventory = actor.get_component(Inventory)
-        item = next(item for item in inventory.contents if "fruit" in item.tags)
-        inventory.contents.remove(item)
-        if "in_inventory" in item.tags:
-            item.tags.remove("in_inventory")
-        if item in env.state.entities:
-            env.destroy_entity(item)
-        Eating.on_consumed(actor, target, env, item, 0.0)
-        return {"success": True, "ate": item.name}
-
-    def action_description_text(self, actor, target, env) -> str:
-        return "Eat your held fruit."
-
-
 class Eating(Component):
     def __init__(self):
-        super().__init__(actions=[Eat_Held_Fruit()])
+        super().__init__(
+            actions=[
+                Consume_Held_Item(
+                    ["fruit"],
+                    action_name="Eat your held fruit.",
+                    validation_rules=[ActorCanAct()],
+                    on_consumed=self.on_consumed,
+                )
+            ]
+        )
 
     @staticmethod
     def on_consumed(actor: Entity, target: Entity, env: Environment, item: Entity, reward: float) -> None:
@@ -381,7 +349,12 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
                 ],
                 components=[
                     agent_policy,
-                    AvatarState(role=role, spawn_position=Position_2D(x, y)),
+                    Respawnable(
+                        FRAMES_TILL_RESPAWN,
+                        respawn_position=Position_2D(x, y),
+                        inactive_position=Position_2D(-1000, -1000),
+                    ),
+                    AvatarState(role=role),
                     Eating(),
                     Inventory(accepted_tags=["fruit"], max_size=1),
                     Collidable(collidable_tags=["wall"]),
@@ -410,7 +383,8 @@ def run_exp(agent_count: int = DEFAULT_NUM_PLAYERS, policy: str = "random", mode
 
         cur_step_actions = []
         for agent_id, agent in enumerate(env.agents):
-            if not actor_can_act(agent):
+            state = agent.get_component(AvatarState)
+            if state is not None and not state.active:
                 action = next(
                     selection
                     for selection in env.possible_actions(agent)

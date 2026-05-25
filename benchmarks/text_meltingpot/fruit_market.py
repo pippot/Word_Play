@@ -54,10 +54,6 @@ def grid_distance(first: Entity, second: Entity) -> int:
     return abs(first.position.x - second.position.x) + abs(first.position.y - second.position.y)
 
 
-def target_within(distance: int):
-    return lambda actor, target, env: grid_distance(actor, target) <= distance
-
-
 def position_is_blocked(position: Position_2D, actor: Entity, env: Environment) -> bool:
     for entity in env.state.entities:
         if entity is actor or entity.position != position:
@@ -260,7 +256,7 @@ class CancelTradeOffer(Action):
 
 class ShovePlayer(Action):
     def __init__(self, direction: int):
-        super().__init__(validation_rules=[Target_Not_Self(), Target_Is_Nearby(target_within(1))])
+        super().__init__(validation_rules=[Target_Not_Self(), Target_Is_Nearby()])
         self.direction = direction
 
     def is_valid(self, actor, target, env, kwargs="unconsidered") -> bool:

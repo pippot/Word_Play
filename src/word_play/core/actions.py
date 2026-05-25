@@ -14,6 +14,9 @@ class Action_Validation(ABC):
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
         pass
 
+    def on_action_success(self, actor: Entity, target_entity: Entity, env: Environment, action_result: dict | None):
+        pass
+
 
 class Target_Is_Self(Action_Validation):
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
@@ -75,7 +78,10 @@ class Action(ABC):
 
     def __call__(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
         assert self.is_valid(actor, target_entity, env, kwargs=kwargs)
-        return self.exec_action(actor, target_entity, env, kwargs)
+        result = self.exec_action(actor, target_entity, env, kwargs)
+        for rule in self.validation_rules:
+            rule.on_action_success(actor, target_entity, env, result)
+        return result
 
     @abstractmethod
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:

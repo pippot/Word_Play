@@ -6,7 +6,7 @@ Exports:
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Literal
 
 from word_play.core import Component, Entity, Environment
 
@@ -30,16 +30,23 @@ class Rewardable(Component):
     Args:
         amount: Fixed reward amount, or None to delegate to actor's Preference.
         on_reward: Optional callback(actor, target, env, reward) after reward is applied.
+        recipients: Who receives the reward: the actor, everyone except the actor, or all agents.
+        counter_attr: Optional env attribute to increment after a reward interaction.
     """
 
     def __init__(
         self,
         amount: float | None = None,
         on_reward: Callable[[Entity, Entity, Environment, float], None] | None = None,
+        *,
+        recipients: Literal["actor", "others", "all"] = "actor",
+        counter_attr: str | None = None,
     ):
         super().__init__()
         self.amount = amount
         self.on_reward = on_reward
+        self.recipients = recipients
+        self.counter_attr = counter_attr
 
     def reward_for(self, actor: Entity, env: Environment) -> float | None:
         """Compute and apply reward for the actor interacting with this entity."""
@@ -51,15 +58,27 @@ class Rewardable(Component):
             reward = pref.reward_for(self.entity)
 
         if reward is not None and reward != 0:
-            award_reward(env, actor, reward)
+            self._award_recipients(actor, env, reward)
 
         if pref is not None:
             pref.apply_mismatch_penalty(actor, self.entity, env)
+
+        if self.counter_attr is not None:
+            setattr(env, self.counter_attr, getattr(env, self.counter_attr, 0) + 1)
 
         if reward is not None and self.on_reward is not None:
             self.on_reward(actor, self.entity, env, reward)
 
         return reward
+
+    def _award_recipients(self, actor: Entity, env: Environment, reward: float) -> None:
+        if self.recipients == "actor":
+            award_reward(env, actor, reward)
+            return
+        for agent in env.agents:
+            if self.recipients == "others" and agent is actor:
+                continue
+            award_reward(env, agent, reward)
 
 
 def award_reward(env: Environment, actor: Entity, reward: float) -> None:

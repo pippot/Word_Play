@@ -60,3 +60,15 @@ class Target_Has_Component(Action_Validation):
 
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
         return target_entity.get_component(self.target_component) is not None
+
+
+class Target_Within_Range(Action_Validation):
+    def __init__(self, distance: int):
+        self.distance = distance
+
+    def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
+        return (
+            abs(actor.position.x - target_entity.position.x)
+            + abs(actor.position.y - target_entity.position.y)
+            <= self.distance
+        )
