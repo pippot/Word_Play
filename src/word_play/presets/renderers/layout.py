@@ -10,7 +10,6 @@ from word_play.core import Environment, Position
 from word_play.presets.action_policies.human import Human_Takes_Action
 from word_play.presets.movement.single_point import Single_Point_Position
 from word_play.presets.systems import Inventory
-from word_play.presets.systems.communication import Communication_Policy
 from word_play.presets.systems.communication.chat_room_action_communication.presets.policies import (
     Human_Communication_Policy,
 )
@@ -76,72 +75,6 @@ def _is_in_closed_container(item, env) -> bool:
     return False
 
 
-def _install_renderer_conversation_transcript_hooks(env) -> None:
-    """Attach renderer-only chat bookkeeping to communication policies.
-
-    Communication policies still own the actual conversation behavior. These
-    wrappers only copy outgoing messages into ``Renderable.last_message`` for
-    speech bubbles and keep a short transcript for human chat prompts.
-    """
-    for entity in getattr(getattr(env, "state", None), "entities", []):
-        if not hasattr(entity, "get_component"):
-            continue
-        renderable = entity.get_component(Renderable)
-        policy = entity.get_component(Communication_Policy)
-        if renderable is None or policy is None:
-            continue
-        if getattr(policy, "_renderer_message_hook_installed", False):
-            continue
-
-        original_start = policy.start_conversation
-        original_send = policy.send_message
-        original_end = policy.end_conversation
-
-        def wrapped_start(self, participants, env, info=None, *, _original=original_start):
-            depth = int(getattr(env, "_renderer_conversation_depth", 0))
-            if depth == 0:
-                env._renderer_conversation_log = []
-                env._renderer_conversation_participants = [participant.name for participant in participants]
-                starter_name = getattr(getattr(self, "entity", None), "name", "Unknown")
-                env._renderer_conversation_starter = starter_name
-                env._renderer_conversation_log.append(f"Conversation started by {starter_name}")
-            env._renderer_conversation_depth = depth + 1
-            return _original(participants, env, info)
-
-        def wrapped_send(self, recipients, env, info=None, *, _original=original_send, _renderable=renderable):
-            message = _original(recipients, env, info)
-            if message is not None:
-                _renderable.last_message = str(message)
-                _renderable._last_message_step = getattr(env, "cur_step", 0)
-                conversation_log = list(getattr(env, "_renderer_conversation_log", []))
-                speaker_name = getattr(getattr(self, "entity", None), "name", "Unknown")
-                participant_count = max(1, len(getattr(env, "_renderer_conversation_participants", [])))
-                prior_messages = max(
-                    0,
-                    len([entry for entry in conversation_log if entry.startswith("Round ") and ": " in entry])
-                )
-                round_number = prior_messages // participant_count + 1
-                conversation_log.append(f"Round {round_number} - {speaker_name}: {message}")
-                env._renderer_conversation_log = conversation_log[-8:]
-            return message
-
-        def wrapped_end(self, participants, env, info=None, *, _original=original_end):
-            try:
-                return _original(participants, env, info)
-            finally:
-                depth = max(0, int(getattr(env, "_renderer_conversation_depth", 0)) - 1)
-                env._renderer_conversation_depth = depth
-                if depth == 0:
-                    env._renderer_conversation_participants = []
-                    env._renderer_conversation_log = []
-                    env._renderer_conversation_starter = None
-
-        policy.start_conversation = MethodType(wrapped_start, policy)
-        policy.send_message = MethodType(wrapped_send, policy)
-        policy.end_conversation = MethodType(wrapped_end, policy)
-        policy._renderer_message_hook_installed = True
-
-
 def _expire_render_messages(env) -> None:
     """Clear transient speech bubbles after they have been visible for one step."""
     current_step = getattr(env, "cur_step", 0)
@@ -151,12 +84,17 @@ def _expire_render_messages(env) -> None:
         renderable = entity.get_component(Renderable)
         if renderable is None:
             continue
-        message_step = getattr(renderable, "_last_message_step", None)
-        if message_step is None:
-            continue
-        if current_step > message_step + 1:
+        chat_step = getattr(renderable, "_last_chat_message_step", getattr(renderable, "_last_message_step", None))
+        if chat_step is not None and current_step > chat_step + 1:
+            renderable.last_chat_message = None
             renderable.last_message = None
+            renderable._last_chat_message_step = None
             renderable._last_message_step = None
+        trade_step = getattr(renderable, "_last_trade_message_step", None)
+        if trade_step is not None and current_step > trade_step + 1:
+            renderable.last_trade_message = None
+            renderable.last_trade_chat_message = None
+            renderable._last_trade_message_step = None
 
 
 def _renderer_for_observation(observation: Any) -> Any | None:
@@ -245,14 +183,21 @@ def _prompt_human_chat_with_renderer(
 ) -> str:
     """Collect one human chat message from the renderer sidebar."""
     recipient_names = ", ".join(recipient.name for recipient in recipients) or "nobody"
-    transcript = list(getattr(env, "_renderer_conversation_log", []))
+    recent_messages = []
+    for entity in getattr(getattr(env, "state", None), "entities", []):
+        renderable = entity.get_component(Renderable) if hasattr(entity, "get_component") else None
+        if renderable is None or entity is comm_policy.entity:
+            continue
+        message = getattr(renderable, "last_chat_message", None) or getattr(renderable, "last_message", None)
+        if message:
+            recent_messages.append(f"{entity.name}: {message}")
     instructions = [
         f"Recipients: {recipient_names}",
         *([str(info)] if info else []),
     ]
-    if transcript:
-        instructions.append("Conversation so far:")
-        instructions.extend(transcript[-6:])
+    if recent_messages:
+        instructions.append("Recent chat:")
+        instructions.extend(recent_messages[-6:])
     instructions.extend([
         f"Now speaking: {comm_policy.entity.name}",
         "Type your message.",
@@ -848,7 +793,6 @@ class Environment_Layout_Adapter(Grid_Layout_Adapter):
     def prepare_env(self, env: "Environment") -> None:
         """Apply common renderer-side sync for inventories, holders, crafters, and containers."""
         _install_renderer_human_input_hooks(env)
-        _install_renderer_conversation_transcript_hooks(env)
         _expire_render_messages(env)
 
         for entity in getattr(getattr(env, "state", None), "entities", []):

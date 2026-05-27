@@ -273,7 +273,9 @@ def _build_phase_step_builder(discuss_steps: int, act_steps: int, discussion_gen
             for agent in env.agents:
                 renderable = agent.get_component(Renderable)
                 if renderable:
-                    renderable.last_message = discussion_generator(agent, env)
+                    message = discussion_generator(agent, env)
+                    renderable.last_chat_message = message
+                    renderable.last_message = message
             env.step([])
             return {"action_selections": [], "phase": "discuss", "step": current_step}
         else:
@@ -1392,7 +1394,7 @@ def _run_render_session_with_phases(
 ) -> str | None:
     """Run a rendered session with alternating discuss/act phases.
 
-    DISCUSS phase: Agents "chat" via last_message on Renderable (no actions)
+    DISCUSS phase: Agents "chat" via last_chat_message on Renderable (no actions)
     ACT phase: Agents select and execute actions normally
     """
     renderer = Pygame_Renderer(layout=layout, tile_size=tile_size)
@@ -1432,7 +1434,9 @@ def _run_render_session_with_phases(
                 for agent in env.agents:
                     renderable = agent.get_component(Renderable)
                     if renderable:
-                        renderable.last_message = discussion_generator(agent, env)
+                        message = discussion_generator(agent, env)
+                        renderable.last_chat_message = message
+                        renderable.last_message = message
 
             return []
         else:

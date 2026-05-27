@@ -4,6 +4,7 @@ from typing import Callable
 
 from word_play.core import Action, Entity, Environment, Action_Validation, Target_Is_Self
 from word_play.presets.action_args import Int_Arg, List_Arg
+from word_play.presets.renderers.renderer import Renderable
 from word_play.presets.systems.communication.core import Communication_Policy
 
 
@@ -19,6 +20,21 @@ def nearby_conversation_partners(actor: Entity, env: Environment) -> list[Entity
     ]
 
 
+def record_chat_message(speaker: Entity, message: str | None, env: Environment) -> None:
+    renderable = speaker.get_component(Renderable)
+    if renderable is not None and message is not None:
+        renderable.last_chat_message = str(message)
+        renderable.last_message = str(message)
+        renderable._last_chat_message_step = getattr(env, "cur_step", 0)
+
+
+def record_trade_chat_message(speaker: Entity, message: str | None, env: Environment) -> None:
+    renderable = speaker.get_component(Renderable)
+    if renderable is not None and message is not None:
+        renderable.last_trade_chat_message = str(message)
+        renderable._last_trade_message_step = getattr(env, "cur_step", 0)
+
+
 # TODO: could add a turn order arg which takes as input an ordering func or a str keyword. Just need to be careful to
 #       make sure that the same entity doesn't send a message twice in a row.
 def sim_simple_conversation(participants: list[Entity], env: Environment, conversation_duration: int = 3) -> None:
@@ -29,6 +45,7 @@ def sim_simple_conversation(participants: list[Entity], env: Environment, conver
         for speaker in participants:
             recipients = [entity for entity in participants if entity is not speaker]
             message = speaker.get_component(Communication_Policy).send_message(recipients, env)
+            record_chat_message(speaker, message, env)
             for recipient in recipients:
                 recipient.get_component(Communication_Policy).receive_message(message, speaker, env)
 

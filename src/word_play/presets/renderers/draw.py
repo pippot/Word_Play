@@ -1080,39 +1080,105 @@ def collect_speech_bubbles(env: "Environment") -> list[dict[str, Any]]:
 
     Priority:
     1. If env has speech_bubbles attribute, use those directly
-    2. Otherwise, scan entity Renderable components for last_message
+    2. Otherwise, scan entity Renderable components for last_chat_message
     """
-    # If environment already has defined speech_bubbles, use them
     bubbles = list(getattr(env, "speech_bubbles", []))
     if bubbles:
         return bubbles
 
-    # Auto-collect from Renderable components
-    for entity in getattr(env, "state", None).entities if hasattr(env, "state") else []:
+    for entity in getattr(getattr(env, "state", None), "entities", []):
         renderable = entity.get_component(Renderable)
-        if renderable and renderable.last_message:
+        if renderable is None:
+            continue
+        message = getattr(renderable, "last_chat_message", None) or getattr(renderable, "last_message", None)
+        if message:
             bubbles.append({
                 "entity_name": entity.name,
-                "text": str(renderable.last_message),
+                "text": str(message),
             })
 
     return bubbles
 
 
-def parse_trade_message(text: str) -> dict[str, Any] | None:
-    """Parse a trade message format: TRADE:|you_offer:X|you_currency:N|they_offer:Y|they_currency:M|you_accepted:yes/no|they_accepted:yes/no|partner:NAME"""
-    if not text.startswith("TRADE:|"):
+TRADE_DATA_FIELDS = (
+    "you_offer",
+    "you_currency",
+    "they_offer",
+    "they_currency",
+    "you_accepted",
+    "they_accepted",
+    "partner",
+)
+
+
+def trade_data_from_message(message: Any) -> dict[str, Any] | None:
+    """Normalize a renderer trade payload stored on Renderable.last_trade_message."""
+    if message is None:
         return None
+    if isinstance(message, dict):
+        return dict(message)
+
+    data = {
+        field: getattr(message, field)
+        for field in TRADE_DATA_FIELDS
+        if hasattr(message, field)
+    }
+    return data or None
+
+
+def collect_trade_bubbles(env: "Environment") -> list[dict[str, Any]]:
+    """Collect trade bubbles from environment or renderable components."""
+    bubbles = list(getattr(env, "trade_bubbles", []))
+    entities = list(getattr(getattr(env, "state", None), "entities", []))
+    entity_lookup = {entity.name: entity for entity in entities}
+
+    for entity in entities:
+        renderable = entity.get_component(Renderable)
+        if renderable is None:
+            continue
+        trade_data = trade_data_from_message(getattr(renderable, "last_trade_message", None))
+        trade_chat_message = getattr(renderable, "last_trade_chat_message", None)
+        if not trade_data and not trade_chat_message:
+            continue
+        trade_data = trade_data or {}
+        if trade_chat_message:
+            trade_data["trade_chat_message"] = str(trade_chat_message)
+        trade_data.setdefault("_entity_lookup", entity_lookup)
+        bubbles.append({
+            "entity_name": entity.name,
+            "trade_data": trade_data,
+        })
+
+    return bubbles
+
+
+def trade_item_names(value: Any) -> list[str]:
+    """Return item names from either a comma string or a concrete iterable."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [
+            item.strip()
+            for item in value.split(",")
+            if item.strip() and item.strip().lower() != "none"
+        ]
     try:
-        parts = text.split("|")
-        result: dict[str, Any] = {}
-        for part in parts[1:]:  # Skip "TRADE:"
-            if ":" in part:
-                key, value = part.split(":", 1)
-                result[key] = value
-        return result
-    except Exception:
-        return None
+        items = []
+        for item in value:
+            item_name = str(getattr(item, "name", str(item))).strip()
+            if item_name and item_name.lower() != "none":
+                items.append(item_name)
+        return items
+    except TypeError:
+        item_name = str(getattr(value, "name", str(value))).strip()
+        return [] if item_name.lower() == "none" else [item_name]
+
+
+def trade_flag_is_set(value: Any) -> bool:
+    """Return whether a trade accepted-like value is enabled."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "ok", "accepted", "done"}
 
 
 def draw_trade_bubble(
@@ -1134,18 +1200,15 @@ def draw_trade_bubble(
     center_x = px + tile_s // 2
     agent_bottom = py + tile_s
 
-    # Parse trade data from viewer's perspective
-    you_offer = trade_data.get("you_offer", "none")
-    you_currency = trade_data.get("you_currency", "").strip()
-    they_offer = trade_data.get("they_offer", "none")
-    they_currency = trade_data.get("they_currency", "").strip()
-    you_accepted = trade_data.get("you_accepted", "no") == "yes"
-    they_accepted = trade_data.get("they_accepted", "no") == "yes"
-    partner = trade_data.get("partner", "Partner")
+    you_currency = "" if trade_data.get("you_currency") is None else str(trade_data.get("you_currency", "")).strip()
+    they_currency = "" if trade_data.get("they_currency") is None else str(trade_data.get("they_currency", "")).strip()
+    you_accepted = trade_flag_is_set(trade_data.get("you_accepted", False))
+    they_accepted = trade_flag_is_set(trade_data.get("they_accepted", False))
+    partner = str(trade_data.get("partner", "Partner"))
+    trade_chat_message = str(trade_data.get("trade_chat_message", "")).strip()
 
-    # Parse items from offers
-    your_items = [i.strip() for i in you_offer.split(",") if i.strip() and i.strip() != "none"]
-    their_items = [i.strip() for i in they_offer.split(",") if i.strip() and i.strip() != "none"]
+    your_items = trade_item_names(trade_data.get("you_offer"))
+    their_items = trade_item_names(trade_data.get("they_offer"))
     entity_lookup = trade_data.get("_entity_lookup", {})
 
     # Calculate dynamic scale based on tile size (base: 64px)
@@ -1164,7 +1227,8 @@ def draw_trade_bubble(
     # Calculate window dimensions
     header_height = int(tile_s * 0.5)  # ~32px
     item_row_height = item_size + int(tile_s * 0.15)  # ~39px
-    currency_row_height = int(tile_s * 0.4) if has_currency else 0  # ~26px
+    currency_row_height = int(tile_s * 0.4) if has_currency or you_accepted else 0  # ~26px
+    trade_chat_row_height = int(tile_s * 0.58) if trade_chat_message else 0
     footer_height = int(tile_s * 0.2)  # ~13px
     pad = int(tile_s * 0.12)  # ~8px
 
@@ -1179,7 +1243,7 @@ def draw_trade_bubble(
     ) + int(tile_s * 1.5)  # arrow + margins
 
     bubble_width = max(min_width, min(max_width, items_width))
-    bubble_height = header_height + item_row_height + currency_row_height + footer_height + (pad * 3)
+    bubble_height = header_height + item_row_height + currency_row_height + trade_chat_row_height + footer_height + (pad * 3)
 
     # Smart positioning - try above first, then below if not enough space
     world_height = renderer.effect_surface.get_height()
@@ -1396,9 +1460,7 @@ def draw_trade_bubble(
         renderer.effect_surface.blit(overflow_surf, (x_pos_right - overflow_surf.get_width(), items_y + (item_size - overflow_surf.get_height()) // 2))
 
 
-    # Currency row
-    if you_currency or they_currency:
-        y_offset += item_size + int(8 * scale)
+    y_offset = items_y + item_size + int(8 * scale)
 
     # Draw currency you offer
     if you_currency:
@@ -1424,6 +1486,39 @@ def draw_trade_bubble(
         check_x = bubble_rect.centerx - check_surf.get_width() // 2
         check_y = y_offset - int(4 * scale)
         renderer.effect_surface.blit(check_surf, (check_x, check_y))
+
+    if has_currency or you_accepted:
+        y_offset += max(int(20 * scale), font.get_linesize()) + int(6 * scale)
+
+    if trade_chat_message:
+        trade_chat_font, trade_chat_lines = fit_wrapped_text_lines(
+            [small_font],
+            trade_chat_message,
+            max_width=bubble_width - pad * 2,
+            max_lines=2,
+        )
+        chat_line_gap = max(1, int(tile_s * 0.02))
+        line_surfaces = [
+            trade_chat_font.render(line, True, TEXT_CREAM)
+            for line in trade_chat_lines
+        ]
+        chat_text_height = (
+            sum(surface.get_height() for surface in line_surfaces)
+            + max(0, len(trade_chat_lines) - 1) * chat_line_gap
+        )
+        chat_rect = pygame.Rect(
+            bubble_rect.left + pad,
+            y_offset,
+            bubble_rect.width - pad * 2,
+            max(trade_chat_row_height - int(4 * scale), chat_text_height + int(8 * scale)),
+        )
+        pygame.draw.rect(renderer.effect_surface, PARCHMENT_DARK, chat_rect, border_radius=int(5 * scale))
+        pygame.draw.rect(renderer.effect_surface, GOLD_DIM, chat_rect, width=1, border_radius=int(5 * scale))
+        text_y = chat_rect.top + max(int(4 * scale), (chat_rect.height - chat_text_height) // 2)
+        for line_surface in line_surfaces:
+            text_x = chat_rect.left + max(int(5 * scale), (chat_rect.width - line_surface.get_width()) // 2)
+            renderer.effect_surface.blit(line_surface, (text_x, text_y))
+            text_y += line_surface.get_height() + chat_line_gap
 
     # Draw smart pointer - adapts to bubble position
     pointer_width = int(tile_s * 0.15)  # ~10px
@@ -1455,11 +1550,26 @@ def draw_speech_bubbles(
 ) -> None:
     """Draw speech bubbles above entities using rounded rects and tail polygons."""
     speech_bubbles = collect_speech_bubbles(env)
-    if not speech_bubbles:
+    trade_bubbles = collect_trade_bubbles(env)
+    if not speech_bubbles and not trade_bubbles:
         return
 
     # Build entity lookup for getting speech_bubble_scale
-    entity_by_name = {e.name: e for e in getattr(env, "state", None).entities if hasattr(env, "state")}
+    entities = list(getattr(getattr(env, "state", None), "entities", []))
+    entity_by_name = {entity.name: entity for entity in entities}
+
+    for bubble in trade_bubbles:
+        entity_name = bubble.get("entity_name")
+        if not entity_name or entity_name not in entity_positions:
+            continue
+
+        scale = 1.0
+        entity = entity_by_name.get(entity_name)
+        if entity:
+            renderable = entity.get_component(Renderable)
+            if renderable:
+                scale = getattr(renderable, "speech_bubble_scale", 1.0)
+        draw_trade_bubble(renderer, entity_positions[entity_name], bubble["trade_data"], scale)
 
     for bubble in speech_bubbles:
         entity_name = bubble.get("entity_name")
@@ -1474,17 +1584,6 @@ def draw_speech_bubbles(
             r = entity.get_component(Renderable)
             if r:
                 scale = getattr(r, "speech_bubble_scale", 1.0)
-
-            # Check if this is a trade message
-        trade_data = parse_trade_message(text)
-        if trade_data:
-            # Get entity lookup for accessing items
-            entity_lookup = {e.name: e for e in getattr(env, "state", None).entities if hasattr(env, "state")}
-            trade_data["_entity_lookup"] = entity_lookup
-            entity = entity_by_name.get(entity_name)
-            if entity and entity_name in entity_positions:
-                draw_trade_bubble(renderer, entity_positions[entity_name], trade_data, scale)
-                continue
 
         px, py = entity_positions[entity_name]
         anchor_x = px + renderer.tile_size // 2
