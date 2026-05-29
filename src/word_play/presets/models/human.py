@@ -24,15 +24,3 @@ class Human_Model(Model):
             f"{rendered}\n"
             f"HUMAN input: "
         )
-
-    def generate_chat_batch(
-        self,
-        messages_batch: Sequence[Sequence[Chat_Message | Mapping[str, Any]]],
-        generation_config: Mapping[str, Any] | None = None,
-        max_new_tokens: int | None = None,
-        max_workers: int | None = None,
-    ) -> list[str]:
-        return [
-            self.generate_chat(messages, generation_config=generation_config, max_new_tokens=max_new_tokens)
-            for messages in messages_batch
-        ]

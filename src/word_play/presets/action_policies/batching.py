@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Callable
 
 from word_play.core.components import Agent_Policy, Non_Agent_Policy
-from word_play.presets.action_policies.llm_action_and_communication import LLM_Action_And_Communication_Policy
 
 if TYPE_CHECKING:
     from word_play.core import Action_Selection, Environment, Observation
@@ -19,63 +19,53 @@ def build_policy_step_actions(
     max_workers: int | None = None,
     on_selection: Policy_Selection_Callback | None = None,
 ) -> list["Action_Selection"]:
-    """Build one action per agent, batching LLM requests when possible."""
-    selections: list[Action_Selection | None] = [None] * len(env.agents)
-    observations: list[Observation | None] = [None] * len(env.agents)
-    infos: list[dict | None] = [None] * len(env.agents)
-    llm_agent_indices: list[int] = []
-    llm_policies: list[LLM_Action_And_Communication_Policy] = []
-    llm_observations: list[Observation] = []
+    """Build one action per agent.
 
-    for agent_id, agent in enumerate(env.agents):
-        observation = env.observe(agent_id)
-        observations[agent_id] = observation
+    In batched mode, observations are built first, then LLM policies are
+    queried concurrently. The environment is only stepped by the caller after
+    all actions are returned.
+    """
+    observations = [env.observe(agent_id) for agent_id in range(len(env.agents))]
+    jobs = [_build_policy_job(env, agent_id, observation) for agent_id, observation in enumerate(observations)]
 
-        policy = agent.get_component(Agent_Policy)
-        if policy is not None:
-            if batched and isinstance(policy, LLM_Action_And_Communication_Policy):
-                llm_agent_indices.append(agent_id)
-                llm_policies.append(policy)
-                llm_observations.append(observation)
-                continue
+    if batched:
+        worker_count = max_workers or len(jobs)
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            results = list(executor.map(_select_policy_job, jobs))
+    else:
+        results = [_select_policy_job(job) for job in jobs]
 
-            selection, info = policy.select_action(observation)
-            selections[agent_id] = selection
-            infos[agent_id] = dict(info or {})
-            _record_last_selection(policy, selection, infos[agent_id])
-            continue
-
-        non_agent_policy = agent.get_component(Non_Agent_Policy)
-        if non_agent_policy is None:
-            raise ValueError(f"Agent '{agent.name}' is missing an Agent_Policy or Non_Agent_Policy component.")
-
-        selection = non_agent_policy.select_action(possible_actions=env.possible_actions(agent), env=env)
-        selections[agent_id] = selection
-        infos[agent_id] = {}
-
-    if llm_policies:
-        llm_results = LLM_Action_And_Communication_Policy.select_actions_batched(
-            llm_policies,
-            llm_observations,
-            max_workers=max_workers,
-        )
-        for agent_id, (selection, info) in zip(llm_agent_indices, llm_results):
-            selections[agent_id] = selection
-            infos[agent_id] = info
-
-    resolved_selections: list[Action_Selection] = []
-    for agent_id, selection in enumerate(selections):
-        if selection is None:
-            raise RuntimeError(f"No action was selected for agent index {agent_id}.")
-        info = infos[agent_id] or {}
-        observation = observations[agent_id]
-        if observation is None:
-            raise RuntimeError(f"No observation was built for agent index {agent_id}.")
+    selections: list[Action_Selection] = []
+    for agent_id, (selection, info) in enumerate(results):
         if on_selection is not None:
-            on_selection(env, observation, agent_id, selection, info)
-        resolved_selections.append(selection)
+            on_selection(env, observations[agent_id], agent_id, selection, info)
+        selections.append(selection)
 
-    return resolved_selections
+    return selections
+
+
+def _build_policy_job(env: "Environment", agent_id: int, observation: "Observation") -> tuple:
+    agent = env.agents[agent_id]
+    policy = agent.get_component(Agent_Policy)
+    if policy is not None:
+        return policy, observation
+
+    return agent.get_component(Non_Agent_Policy), env.possible_actions(agent), env
+
+
+def _select_policy_job(job: tuple) -> tuple["Action_Selection", dict]:
+    if isinstance(job[0], Agent_Policy):
+        return _select_agent_policy(job[0], job[1])
+
+    selection = job[0].select_action(possible_actions=job[1], env=job[2])
+    return selection, {}
+
+
+def _select_agent_policy(policy: Agent_Policy, observation: "Observation") -> tuple["Action_Selection", dict]:
+    selection, info = policy.select_action(observation)
+    info = dict(info or {})
+    _record_last_selection(policy, selection, info)
+    return selection, info
 
 
 def _record_last_selection(policy: Agent_Policy, selection: "Action_Selection", info: dict) -> None:

@@ -1,5 +1,7 @@
 import argparse
 import pprint
+import threading
+import time
 from typing import Any, Mapping, Sequence
 
 from word_play.core import (
@@ -72,17 +74,9 @@ class Batch_Debug_Model(Model):
         generation_config: Mapping[str, Any] | None = None,
         max_new_tokens: int | None = None,
     ) -> str:
-        raise AssertionError("Batch debug expects the batched model path.")
-
-    def generate_text_batch(
-        self,
-        input_texts: Sequence[str],
-        generation_config: Mapping[str, Any] | None = None,
-        max_new_tokens: int | None = None,
-        max_workers: int | None = None,
-    ) -> list[str]:
-        print(f"BATCH SIZE: {len(input_texts)}")
-        return ['{"action_choice_idx": 1}' for _ in input_texts]
+        print(f"THREADED REQUEST: {threading.current_thread().name}")
+        time.sleep(0.05)
+        return '{"action_choice_idx": 1}'
 
 
 def _agent_policy(batch_debug: bool):
