@@ -4,7 +4,6 @@ from typing import Callable
 
 from word_play.core import Action, Entity, Environment, Action_Validation, Target_Is_Self
 from word_play.presets.action_args import Int_Arg, List_Arg
-from word_play.presets.renderers.renderer import Renderable
 from word_play.presets.systems.communication.core import Communication_Policy
 
 
@@ -23,12 +22,13 @@ def nearby_conversation_partners(actor: Entity, env: Environment) -> list[Entity
 def record_chat_message(speaker: Entity, message: str | None, env: Environment) -> None:
     if message is None:
         return
-    renderable = speaker.get_component(Renderable)
-    if renderable is None:
-        return
     text = str(message)
-    renderable.last_chat_message = text
-    renderable._last_chat_message_step = getattr(env, "cur_step", 0)
+    for component in speaker.components.values():
+        if hasattr(component, "last_chat_message"):
+            component.last_chat_message = text
+            if hasattr(component, "_last_chat_message_step"):
+                component._last_chat_message_step = getattr(env, "cur_step", 0)
+            return
 
 
 # TODO: could add a turn order arg which takes as input an ordering func or a str keyword. Just need to be careful to
@@ -88,9 +88,6 @@ class Nearby_Partner_Indicies(List_Arg):
         potential_partners = nearby_conversation_partners(actor, env)
         partners_text = ", ".join(f"{idx} ({entity.name})" for idx, entity in enumerate(potential_partners))
         return f"list of indices representing the conversation participants: {partners_text}"
-
-    def options(self, actor, target_entity, env):
-        return [(idx, entity.name) for idx, entity in enumerate(nearby_conversation_partners(actor, env))]
 
 
 class Start_Private_Conversation(Action):

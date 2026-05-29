@@ -108,7 +108,6 @@ def run_exp():
                 Human_Communication_Policy(),
                 Renderable(
                     sprite_path="sprite_library/src/characters/humanoids/dwarven/dwarf_ranger.png",
-                    last_message=None,
                 ),
             ],
         },
@@ -137,7 +136,6 @@ def run_exp():
                 Human_Communication_Policy(),
                 Renderable(
                     sprite_path="sprite_library/src/characters/humanoids/dwarven/dwarf_expert.png",
-                    last_message=None,
                 ),
             ],
         },
@@ -169,7 +167,6 @@ def run_exp():
                 TalkingCow(),
                 Renderable(
                     sprite_path="sprite_library/src/characters/monsters/misc/dairy_cow.png",
-                    last_message=None,
                 ),
             ],
         },
@@ -180,7 +177,6 @@ def run_exp():
                 TalkingCow(),
                 Renderable(
                     sprite_path="sprite_library/src/characters/monsters/misc/bull.png",
-                    last_message=None,
                 ),
             ],
         },
@@ -191,7 +187,6 @@ def run_exp():
                 TalkingCow(),
                 Renderable(
                     sprite_path="sprite_library/src/characters/monsters/misc/baby_dairy_cow.png",
-                    last_message=None,
                 ),
             ],
         },

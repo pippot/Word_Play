@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING
 import pygame
 
 if TYPE_CHECKING:
-    from .renderer import Pygame_Renderer, Position_Layout_Adapter
+    from .layout import Position_Layout_Adapter
+    from .renderer import Pygame_Renderer
 
 
 def configure_renderer(
