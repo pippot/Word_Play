@@ -51,14 +51,14 @@ class Goal_Line_Env(Simple_1D_Grid_World):
 def run_exp():
     model_key = "goal_line_openrouter"
     model_name = "openai/gpt-5-mini"
-    api_key_env = "OPENROUTER_API_KEY"
+    api_key_env_var_name = "OPENROUTER_API_KEY"
     openrouter_config = {
         "temperature": -1.0,
         "reasoning": {"effort": "minimal", "exclude": True},
     }
 
-    if not os.getenv(api_key_env):
-        raise EnvironmentError(f"Missing environment variable: {api_key_env}")
+    if not os.getenv(api_key_env_var_name):
+        raise EnvironmentError(f"Missing environment variable: {api_key_env_var_name}")
 
     if model_key not in LLM_MODEL_REGISTRY:
         register_model(
@@ -66,7 +66,7 @@ def run_exp():
             OpenRouter_Model,
             model_name=model_name,
             generation_config=openrouter_config,
-            api_key_env=api_key_env,
+            api_key_env_var_name=api_key_env_var_name,
             base_url="https://openrouter.ai/api/v1",
             app_name="Word Play",
         )
