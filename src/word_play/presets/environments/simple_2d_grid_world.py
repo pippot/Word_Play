@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from typing import Callable
 
-from word_play.core import Entity, Environment, Observation, Action_Selection
-from word_play.presets.environments.simple_env_reset_mixin import Simple_Env_Reset_Mixin
+from word_play.core import Action_Selection, Entity, Environment, Observation
+from word_play.presets.env_mixins.simple_env_reset_mixin import Simple_Env_Reset_Mixin
 from word_play.presets.entity_orderings import entity_definition_order
 from word_play.presets.movement.simple_2d_grid import INFINITE_2D_MOVEMENT_SYSTEM, Position_2D
 from word_play.presets.observation.simple_observation import Simple_Observation
 from word_play.presets.reward_functions import zero_reward_func
 
 
-# TODO: ANDREI: make this a nice preset, e.g., have the reward_func=zero_reward_func be a default not a fixed thing
 class Simple_2D_Grid_World(Simple_Env_Reset_Mixin, Environment):
     def __init__(
         self,
@@ -18,13 +17,14 @@ class Simple_2D_Grid_World(Simple_Env_Reset_Mixin, Environment):
         entities: list[Entity],
         entity_order: Callable[[list[Entity], Environment], list[int]] = entity_definition_order,
         observation_radius: int = 0,
+        reward_func: Callable[[list[Action_Selection], Environment], list[float]] = zero_reward_func,
     ):
         self.observation_radius = observation_radius
         super().__init__(
             description,
             entities,
             movement_system=INFINITE_2D_MOVEMENT_SYSTEM,
-            reward_func=zero_reward_func,
+            reward_func=reward_func,
             entity_order=entity_order,
         )
 

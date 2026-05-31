@@ -1,92 +1,59 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
+from typing import Callable
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from word_play.core import Agent_Policy, Entity  # noqa: E402
-from word_play.presets.action_policies.llm_action_and_communication import (  # noqa: E402
+from word_play.core import Action_Selection, Agent_Policy, Entity, Environment
+from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
 )
-from word_play.presets.environments.simple_1d_grid_world import Simple_1D_Grid_World  # noqa: E402
-from word_play.presets.models import LLM_MODEL_REGISTRY, OpenRouter_Model, register_model  # noqa: E402
-from word_play.presets.movement.simple_1d_grid import Position_1D  # noqa: E402
-from word_play.presets.movement.simple_2d_grid import Move_Left, Move_Right  # noqa: E402
-from word_play.presets.systems.do_nothing import Do_Nothing  # noqa: E402
+from word_play.presets.entity_orderings import entity_definition_order
+from word_play.presets.environments.simple_1d_grid_world import Simple_1D_Grid_World
+from word_play.presets.env_wrappers.time_limit import TimeLimit
+from word_play.presets.models import LLM_MODEL_REGISTRY, OpenRouter_Model, register_model
+from word_play.presets.movement.simple_1d_grid import Position_1D
+from word_play.presets.movement.simple_2d_grid import Move_Left, Move_Right
+from word_play.presets.systems.do_nothing import Do_Nothing
 
 
-def goal_line_reward(explorer: Entity, goal: Entity) -> float:
-    if explorer.position.x == goal.position.x:
-        return 1.0
-    return -0.05
+def goal_line_reward(_: list[Action_Selection], env: Environment) -> list[float]:
+    goal = next(entity for entity in env.state.entities if "goal" in entity.tags)
+    return [1.0 if agent.position.x == goal.position.x else -0.05 for agent in env.agents]
 
 
-def goal_reached(explorer: Entity, goal: Entity) -> bool:
-    return explorer.position.x == goal.position.x
+class Goal_Line_Env(Simple_1D_Grid_World):
+    def __init__(
+        self,
+        description: str,
+        entities: list[Entity],
+        observation_radius: int = 0,
+        entity_order: Callable[[list[Entity], Environment], list[int]] = entity_definition_order,
+    ) -> None:
+        self.goal = next((entity for entity in entities if "goal" in entity.tags), None)
+        if self.goal is None:
+            raise ValueError("Goal_Line_Env requires an entity tagged with 'goal'.")
+        super().__init__(
+            description=description,
+            entities=entities,
+            entity_order=entity_order,
+            observation_radius=observation_radius,
+            reward_func=goal_line_reward,
+        )
 
+    def goal_reached(self) -> bool:
+        return any(agent.position.x == self.goal.position.x for agent in self.agents)
 
-def build_goal_entity(goal_x: int = 3) -> Entity:
-    return Entity(
-        name="Goal",
-        position=Position_1D(goal_x),
-        tags=["goal"],
-    )
-
-
-def mark_episode_terminated(env: Simple_1D_Grid_World) -> None:
-    env.terminations = [True for _ in env.terminations]
-
-
-def mark_episode_truncated(env: Simple_1D_Grid_World) -> None:
-    env.truncations = [True for _ in env.truncations]
-
-
-GOAL_LINE_SYSTEM_PROMPT = (
-    "You control Explorer in a tiny one-dimensional world. "
-    "Select actions that move Explorer toward the entity named Goal. "
-    "Return only the requested JSON action choice."
-)
-
-
-def build_goal_line_agent(
-    *,
-    model_key: str,
-    start_x: int = 0,
-    action_generation_config: dict | None = None,
-) -> Entity:
-    return Entity(
-        name="Explorer",
-        position=Position_1D(start_x),
-        actions=[
-            Do_Nothing(),
-            Move_Left(),
-            Move_Right(),
-        ],
-        components=[
-            LLM_Action_And_Communication_Policy(
-                model_key=model_key,
-                system_prompt=GOAL_LINE_SYSTEM_PROMPT,
-                action_generation_config=action_generation_config,
-                action_max_new_tokens=512,
-            )
-        ],
-    )
+    def environment_end_of_step(self, action_selections: list[Action_Selection]):
+        if self.goal_reached():
+            self.terminations = [True for _ in self.terminations]
 
 
 def run_exp():
     model_key = "goal_line_openrouter"
     model_name = "openai/gpt-5-mini"
     api_key_env = "OPENROUTER_API_KEY"
-    start_x = 0
-    goal_x = 3
-    max_steps = 6
     openrouter_config = {
-        "temperature": 0.0,
+        "temperature": -1.0,
         "reasoning": {"effort": "minimal", "exclude": True},
     }
 
@@ -109,16 +76,31 @@ def run_exp():
         "response_format": {"type": "json_object"},
     }
 
-    explorer = build_goal_line_agent(
-        model_key=model_key,
-        start_x=start_x,
-        action_generation_config=action_generation_config,
+    explorer = Entity(
+        name="Explorer",
+        position=Position_1D(0),
+        actions=[Do_Nothing(), Move_Left(), Move_Right()],
+        components=[
+            LLM_Action_And_Communication_Policy(
+                model_key=model_key,
+                system_prompt=(
+                    "You control Explorer in a tiny one-dimensional world. "
+                    "Select actions that move Explorer toward the entity named Goal. "
+                    "Return only the requested JSON action choice."
+                ),
+                action_generation_config=action_generation_config,
+                action_max_new_tokens=512,
+            )
+        ],
     )
-    goal = build_goal_entity(goal_x=goal_x)
-    env = Simple_1D_Grid_World(
-        description="One-agent action-only LLM policy demo.",
-        entities=[explorer, goal],
-        observation_radius=max(abs(goal_x - start_x), max_steps),
+    goal = Entity(name="Goal", position=Position_1D(3), tags=["goal"])
+    env = TimeLimit(
+        Goal_Line_Env(
+            description="One-agent action-only LLM policy demo.",
+            entities=[explorer, goal],
+            observation_radius=5,
+        ),
+        max_episode_steps=6,
     )
 
     print("LLM_Action_And_Communication_Policy action-only demo")
@@ -131,21 +113,13 @@ def run_exp():
     explorer_id = env.agent_to_idx[explorer]
 
     while not any(env.terminations) and not any(env.truncations):
-        if goal_reached(explorer, goal):
-            mark_episode_terminated(env)
-            break
-        if len(action_history) >= max_steps:
-            mark_episode_truncated(env)
-            break
-
         observation = env.observe(explorer_id)
         action, info = explorer.get_component(Agent_Policy).select_action(observation)
         position_before = explorer.position.x
 
         env.step([action])
 
-        reward = goal_line_reward(explorer, goal)
-        env.last_rewards[explorer_id] = reward
+        reward = env.last_rewards[explorer_id]
         cumulative_reward += reward
         action_history.append(
             {
@@ -157,10 +131,6 @@ def run_exp():
                 "raw_response": info.get("raw_response"),
             }
         )
-        if goal_reached(explorer, goal):
-            mark_episode_terminated(env)
-        elif len(action_history) >= max_steps:
-            mark_episode_truncated(env)
 
     print("Action history:")
     for row in action_history:
@@ -175,7 +145,7 @@ def run_exp():
     print("\nSummary:")
     print(f"  final_position: {explorer.position.x}")
     print(f"  goal_position: {goal.position.x}")
-    print(f"  reached_goal: {goal_reached(explorer, goal)}")
+    print(f"  reached_goal: {env.goal_reached()}")
     print(f"  cumulative_reward: {cumulative_reward:.2f}")
 
 
