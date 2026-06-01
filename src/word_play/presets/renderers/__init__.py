@@ -4,6 +4,7 @@ from word_play.presets.renderers.interactive_env import (
     ExperimentRecorder,
     load_recording_payload,
     newest_experiment_log_path,
+    record_step,
 )
 from word_play.presets.renderers.layout import (
     Grid_Layout_Adapter,
@@ -37,6 +38,7 @@ __all__ = [
     "newest_experiment_log_path",
     "Position_Layout_Adapter",
     "Pygame_Renderer",
+    "record_step",
     "render_step",
     "Renderable",
     "Renderer",

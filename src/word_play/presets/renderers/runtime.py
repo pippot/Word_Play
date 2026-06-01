@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 import pygame
 
 if TYPE_CHECKING:
+    from word_play.core import Environment
+
     from .layout import Position_Layout_Adapter
     from .renderer import Pygame_Renderer
 
@@ -29,9 +31,7 @@ def configure_renderer(
     renderer._last_health_values = {}
     renderer._damage_flash_until = {}
     renderer.camera_focus_entity_name = None
-    renderer.camera_focus_radius_tiles = 6
-    renderer.camera_smoothing = 0.24
-    renderer.camera_center = None
+    renderer.camera_focus_radius_tiles = 1
     renderer.camera_shake_until = 0.0
     renderer.camera_shake_strength = 0.0
     renderer._last_drawn_entity_rects = {}
@@ -40,6 +40,29 @@ def configure_renderer(
     renderer.selection_panel_accent = (128, 203, 255)
     renderer._vignette_cache = {}
     renderer.selected_entity_name = None
+
+
+def focused_radius(env: "Environment", renderer: "Pygame_Renderer") -> int:
+    radius = getattr(env, "observation_radius", None)
+    if radius is None:
+        radius = renderer.camera_focus_radius_tiles
+    return max(0, int(radius))
+
+
+def handle_entity_click(renderer: "Pygame_Renderer", env: "Environment", mouse_pos: tuple[int, int]) -> None:
+    for entity in getattr(getattr(env, "state", None), "entities", []):
+        rect = renderer._last_drawn_entity_rects.get(entity.name)
+        if rect is None or not rect.collidepoint(mouse_pos):
+            continue
+
+        renderer.selected_entity_name = None if entity.is_agent else entity.name
+        renderer.camera_focus_entity_name = entity.name if entity.is_agent else None
+        if renderer.camera_focus_entity_name is not None:
+            renderer.camera_focus_radius_tiles = focused_radius(env, renderer)
+        return
+
+    renderer.selected_entity_name = None
+    renderer.camera_focus_entity_name = None
 
 
 def apply_renderer_metrics(renderer: "Pygame_Renderer", tile_size: int) -> None:

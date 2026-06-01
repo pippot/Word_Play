@@ -11,7 +11,7 @@ from word_play.presets.systems.inventory import Inventory
 
 from .assets import get_or_load_image, get_scaled_image, resolve_wall_sprite
 from .wall_geometry import collect_wall_positions, normalize_background_item, screen_rect_for_tile, wall_neighbor_mask, world_bounds
-from .runtime import apply_renderer_metrics, ensure_screen_size, fitted_tile_size
+from .runtime import apply_renderer_metrics, ensure_screen_size, fitted_tile_size, focused_radius
 
 if TYPE_CHECKING:
     from word_play.core import Environment
@@ -187,7 +187,20 @@ def update_camera_state(
     max_world_y: int,
 ) -> tuple[int, int, int, int]:
     """Choose visible tile bounds from either full-map or focused camera mode."""
-    renderer.camera_center = None
+    focus_name = getattr(renderer, "camera_focus_entity_name", None)
+    if focus_name:
+        focused = next((entity for entity in env.state.entities if entity.name == focus_name), None)
+        if focused is not None:
+            position = entity_world_position(renderer, focused)
+            if position is not None:
+                focus_x, focus_y = position
+                radius = focused_radius(env, renderer)
+                renderer.camera_focus_radius_tiles = radius
+                renderer.camera_shake_strength = (
+                    0.0 if renderer.camera_shake_until <= time.monotonic() else renderer.camera_shake_strength
+                )
+                return focus_x - radius, focus_x + radius, focus_y - radius, focus_y + radius
+
     renderer.camera_shake_strength = 0.0 if renderer.camera_shake_until <= time.monotonic() else renderer.camera_shake_strength
     return min_world_x, max_world_x, min_world_y, max_world_y
 
@@ -195,19 +208,6 @@ def update_camera_state(
 def is_within_visible_bounds(x: int, y: int, min_x: int, max_x: int, min_y: int, max_y: int) -> bool:
     """Report whether a tile lies inside the active camera window."""
     return min_x <= x <= max_x and min_y <= y <= max_y
-
-
-def visible_tile_set(env: "Environment", renderer: "Pygame_Renderer") -> set[tuple[int, int]] | None:
-    """Return environment-level line-of-sight tiles when a focused agent is being inspected."""
-    if not getattr(renderer, "camera_focus_entity_name", None):
-        return None
-    visible_tiles_for = getattr(env, "visible_tiles_for", None)
-    if callable(visible_tiles_for):
-        return {tuple(tile) for tile in visible_tiles_for(renderer.camera_focus_entity_name)}
-    visible_tiles = getattr(env, "visible_tiles", None)
-    if not callable(visible_tiles):
-        return None
-    return {tuple(tile) for tile in visible_tiles()}
 
 
 def flash_tinted_surface(image: Any, *, tint: tuple[int, int, int], alpha: int) -> Any:
@@ -638,38 +638,6 @@ def draw_background_tile(
     # Draw the image
     renderer.floor_surface.blit(image, (px, py))
 
-def draw_visibility_mask(
-    renderer: "Pygame_Renderer",
-    visible_tiles: set[tuple[int, int]] | None,
-    min_x: int,
-    max_y: int,
-) -> None:
-    """Darken tiles outside the active sight radius to visualize limited perception."""
-    if not visible_tiles:
-        return
-    fog_tile = get_scaled_image(renderer, "effects/fog.png", renderer.tile_size, renderer.tile_size)
-    world_width = renderer.floor_surface.get_width()
-    world_height = renderer.floor_surface.get_height()
-    tiles_x = max(0, (world_width - renderer.viewport_pad_w - renderer.viewport_pad_e) // renderer.tile_size)
-    tiles_y = max(0, (world_height - renderer.viewport_pad_n - renderer.viewport_pad_s) // renderer.tile_size)
-    for row in range(tiles_y):
-        for col in range(tiles_x):
-            world_x = min_x + col
-            world_y = max_y - row
-            rect = pygame.Rect(
-                renderer.viewport_pad_w + col * renderer.tile_size,
-                renderer.viewport_pad_n + row * renderer.tile_size,
-                renderer.tile_size,
-                renderer.tile_size,
-            )
-            if (world_x, world_y) not in visible_tiles:
-                if fog_tile is not None:
-                    renderer.effect_surface.blit(fog_tile, rect.topleft)
-                veil = pygame.Surface((renderer.tile_size, renderer.tile_size), pygame.SRCALPHA)
-                veil.fill((8, 10, 14, 152))
-                renderer.effect_surface.blit(veil, rect.topleft)
-
-
 def draw_hud_panel(renderer: "Pygame_Renderer", env: "Environment", x_offset: int, width: int, height: int) -> None:
     """Render the bottom HUD panel with step counter, mode, and controls."""
     if getattr(env, "hide_bottom_hud", False):
@@ -1012,7 +980,6 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
         renderer.selected_entity_name = None
     if renderer.camera_focus_entity_name and not any(entity.name == renderer.camera_focus_entity_name for entity in env.state.entities):
         renderer.camera_focus_entity_name = None
-        renderer.camera_center = None
     min_world_x, max_world_x, min_world_y, max_world_y = world_bounds(renderer, background, renderables)
     min_x, max_x, min_y, max_y = update_camera_state(
         renderer,
@@ -1065,7 +1032,6 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
         item for item in background
         if is_within_visible_bounds(int(item["x"]), int(item["y"]), min_x, max_x, min_y, max_y)
     ]
-    los_tiles = visible_tile_set(env, renderer)
     wall_positions = collect_wall_positions(visible_background)
 
     for item in visible_background:
@@ -1099,7 +1065,6 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
 
     draw_hit_effects(renderer, env, positions)
     draw_speech_bubbles(renderer, env, positions)
-    draw_visibility_mask(renderer, los_tiles, min_x, max_y)
     draw_selected_entity_card(renderer, env, positions)
 
     world_x = 0

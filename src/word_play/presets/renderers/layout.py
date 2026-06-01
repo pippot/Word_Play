@@ -64,6 +64,21 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
                 for y in range(height)
             ]
 
+        xs = []
+        ys = []
+        for entity in getattr(getattr(env, "state", None), "entities", []):
+            x = getattr(getattr(entity, "position", None), "x", None)
+            y = getattr(getattr(entity, "position", None), "y", None)
+            if x is not None and y is not None:
+                xs.append(int(x))
+                ys.append(int(y))
+        if xs and ys:
+            return [
+                {"x": x, "y": y, "kind": "floor", "sprite": floor_sprite}
+                for x in range(min(xs), max(xs) + 1)
+                for y in range(min(ys), max(ys) + 1)
+            ]
+
         renderer = getattr(env, "renderer_impl", None)
         if renderer is not None and hasattr(renderer, "background_tiles"):
             return renderer.background_tiles()

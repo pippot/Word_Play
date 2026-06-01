@@ -33,7 +33,7 @@ def entity_state_to_str_with_complete_info(entity: Entity) -> str:
             "components": [
                 {"component type": ctype.__name__} | component_data_attributes(comp)
                 for ctype, comp in entity.components.items()
-                if component_data_attributes(comp)
+                if ctype.__name__ != "Renderable" and component_data_attributes(comp)
             ],
         },
         sort_dicts=False,
@@ -51,6 +51,8 @@ def entity_state_to_str(entity: Entity) -> str:
 
     for ctype, comp in entity.components.items():
         component_name = ctype.__name__
+        if component_name == "Renderable":
+            continue
         component_data = component_data_attributes(comp)
         if not component_data:
             continue

@@ -10,7 +10,7 @@ from word_play.core import Component
 
 from .draw import render_environment
 from .layout import Grid_Layout_Adapter
-from .runtime import configure_renderer, init_pygame_if_needed
+from .runtime import configure_renderer, handle_entity_click, init_pygame_if_needed
 
 if TYPE_CHECKING:
     from word_play.core import Environment
@@ -124,6 +124,8 @@ def render_step(
             return False
         if event.type == pygame.KEYDOWN and event.key == pygame.K_r and hasattr(env, "reset"):
             env.reset()
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            handle_entity_click(rend, env, event.pos)
 
     if step_delay > 0:
         time.sleep(step_delay)

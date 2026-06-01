@@ -122,6 +122,21 @@ def capture_environment_frame(
                 for x in range(width)
                 for y in range(height)
             ]
+        else:
+            xs = []
+            ys = []
+            for entity in getattr(getattr(env, "state", None), "entities", []):
+                x = getattr(getattr(entity, "position", None), "x", None)
+                y = getattr(getattr(entity, "position", None), "y", None)
+                if x is not None and y is not None:
+                    xs.append(int(x))
+                    ys.append(int(y))
+            if xs and ys:
+                background_tiles = [
+                    {"x": x, "y": y, "kind": "floor", "sprite": floor_sprite}
+                    for x in range(min(xs), max(xs) + 1)
+                    for y in range(min(ys), max(ys) + 1)
+                ]
 
     entities = []
     for entity in env.state.entities:
@@ -166,11 +181,6 @@ def capture_environment_frame(
             }
         )
 
-    visible_tiles = None
-    env_visible_tiles = getattr(env, "visible_tiles", None)
-    if callable(env_visible_tiles):
-        visible_tiles = [list(tile) for tile in env_visible_tiles()]
-
     return {
         "tick": getattr(env, "tick", 0),
         "score": getattr(env, "score", None),
@@ -181,10 +191,9 @@ def capture_environment_frame(
         "hud_sidebar_width": getattr(env, "hud_sidebar_width", None),
         "current_phase": getattr(env, "current_phase", None),
         "hide_bottom_hud": bool(getattr(env, "hide_bottom_hud", False)),
-        "sight_radius": getattr(env, "sight_radius", None),
+        "observation_radius": getattr(env, "observation_radius", None),
         "speech_bubbles": _json_safe(list(getattr(env, "speech_bubbles", []))),
         "hit_effects": _json_safe(list(getattr(env, "hit_effects", []))),
-        "visible_tiles": visible_tiles,
         "selected_actions": []
         if selected_actions is None
         else [serialize_action_selection(action_selection) for action_selection in selected_actions],
@@ -230,6 +239,33 @@ class ExperimentRecorder:
         payload_bytes = pickle.dumps(self.payload())
         self.output_path.write_bytes(payload_bytes)
         self.newest_output_path.write_bytes(payload_bytes)
+
+
+_default_recorder: ExperimentRecorder | None = None
+
+
+def record_step(
+    env: Environment,
+    *,
+    recorder: ExperimentRecorder | None = None,
+    output_path: str | Path | None = None,
+    title: str = "wordplay_experiment",
+    metadata: dict[str, Any] | None = None,
+    selected_actions: list[Action_Selection] | None = None,
+) -> dict[str, Any]:
+    """Record one replay frame, mirroring the one-call style of render_step."""
+    global _default_recorder
+
+    active_recorder = recorder or _default_recorder
+    if active_recorder is None:
+        active_recorder = ExperimentRecorder(
+            output_path or default_experiment_log_path(title),
+            title,
+            metadata=metadata,
+        )
+        _default_recorder = active_recorder
+
+    return active_recorder.record(env, selected_actions=selected_actions)
 
 
 def load_recording_payload(log_path: str | Path) -> dict[str, Any]:

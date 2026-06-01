@@ -23,6 +23,13 @@ from word_play.presets.movement.simple_2d_grid import (
     Move_Right,
     Position_2D,
 )
+from word_play.presets.renderers import (
+    ExperimentRecorder,
+    Renderable,
+    default_experiment_log_path,
+    record_step,
+    render_step,
+)
 from word_play.presets.systems.combat import Attack
 from word_play.presets.systems.communication import (
     Human_Communication_Policy,
@@ -60,9 +67,7 @@ class Test_Action(Action):
         return "Test Action."
 
 
-def run_exp():
-    exp_steps = 1000
-
+def run_exp(exp_steps: int = 1000, *, render: bool = True, step_delay: float = 0.1):
     entity_tilemap = """
     WWWWWWWW...
     Wb.h...W...
@@ -74,7 +79,13 @@ def run_exp():
         "W": {
             "name": "Wall",
             "tags": ["wall"],
-            "components": [Collidable()],
+            "components": [
+                Collidable(),
+                Renderable(
+                    sprite_path="sprite_library/src/world_tiles/indoors/wall_sets/dim_brick_wall/dim_brick_wall_center.png",
+                    wall_set="sprite_library/src/world_tiles/indoors/wall_sets/dim_brick_wall",
+                ),
+            ],
         },
         "I": {
             "name": "Iskandar",
@@ -94,11 +105,24 @@ def run_exp():
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
-                    starting_inventory=[Entity(name="Strawberry", position=Position_2D(100, 100), tags=["item"])],
+                    starting_inventory=[
+                        Entity(
+                            name="Strawberry",
+                            position=Position_2D(100, 100),
+                            tags=["item"],
+                            components=[
+                                Renderable(
+                                    sprite_path="sprite_library/src/items/consumables/fruit/strawberry_2.png",
+                                    z_index=2,
+                                )
+                            ],
+                        )
+                    ],
                 ),
                 Health(max_health=5, starting_health=3),
                 Collidable(collidable_tags=["wall"]),
                 Human_Communication_Policy(),
+                Renderable(sprite_path="sprite_library/src/characters/humanoids/human/mage.png", z_index=10),
             ],
         },
         "A": {
@@ -119,21 +143,38 @@ def run_exp():
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
-                    starting_inventory=[Entity(name="Strawberry", position=Position_2D(100, 100), tags=["item"])],
+                    starting_inventory=[
+                        Entity(
+                            name="Strawberry",
+                            position=Position_2D(100, 100),
+                            tags=["item"],
+                            components=[
+                                Renderable(
+                                    sprite_path="sprite_library/src/items/consumables/fruit/strawberry_2.png",
+                                    z_index=2,
+                                )
+                            ],
+                        )
+                    ],
                 ),
                 Health(max_health=5, starting_health=3),
                 Collidable(collidable_tags=["wall"]),
                 Human_Communication_Policy(),
+                Renderable(sprite_path="sprite_library/src/characters/humanoids/human/warrior_n.png", z_index=10),
             ],
         },
         "f": {
             "name": "Blue Flower",
             "tags": ["item"],
+            "components": [Renderable(sprite_path="sprite_library/src/items/materials/misc/blue_flowers.png", z_index=2)],
         },
         "b": {
             "name": "Barrel",
             "tags": ["item"],
-            "components": [Health(max_health=1, starting_health=1)],
+            "components": [
+                Health(max_health=1, starting_health=1),
+                Renderable(sprite_path="sprite_library/src/items/materials/misc/closed_barrel.png", z_index=2),
+            ],
         },
         "c": {
             "name": "Cow",
@@ -142,6 +183,7 @@ def run_exp():
                 Health(max_health=5, starting_health=5),
                 Follow_Action_Sequence([(Move_Up, None), (Move_Down, None)]),
                 TalkingCow(),
+                Renderable(sprite_path="sprite_library/src/characters/monsters/misc/dairy_cow.png", z_index=8),
             ],
         },
         "h": {
@@ -149,6 +191,7 @@ def run_exp():
             "components": [
                 Health(max_health=10, starting_health=10),
                 TalkingCow(),
+                Renderable(sprite_path="sprite_library/src/characters/monsters/misc/dairy_cow.png", z_index=8),
             ],
         },
         "t": {
@@ -156,13 +199,17 @@ def run_exp():
             "components": [
                 Health(max_health=1, starting_health=1),
                 TalkingCow(),
+                Renderable(sprite_path="sprite_library/src/characters/monsters/misc/dairy_cow.png", z_index=8),
             ],
         },
         "s": {
             "name": "Spike",
             "actions": [Attack(name="Poke", damage_amount=1)],
             "tags": ["item"],
-            "components": [Follow_Action_Sequence([(Attack, None)])],
+            "components": [
+                Follow_Action_Sequence([(Attack, None)]),
+                Renderable(sprite_path="sprite_library/src/characters/monsters/misc/tiny_spikes.png", z_index=2),
+            ],
         },
     }
 
@@ -172,8 +219,15 @@ def run_exp():
         entity_order=randomize_agent_order,
         observation_radius=1,
     )
+    env.floor_sprite = "sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png"
+
+    recorder = ExperimentRecorder(default_experiment_log_path("simple_env_1"), "simple_env_1")
+    record_step(env, recorder=recorder)
 
     for step in range(exp_steps):
+        if render and not render_step(env, step_delay=step_delay):
+            break
+
         cur_step_actions = []
         for agent_id, agent in enumerate(env.agents):
             observation = env.observe(agent_id)
@@ -182,6 +236,11 @@ def run_exp():
             cur_step_actions.append(action)
 
         env.step(cur_step_actions)
+        record_step(env, recorder=recorder, selected_actions=cur_step_actions)
+
+    print(f"Replay log: {recorder.output_path}")
+    print(f"Newest replay log: {recorder.newest_output_path}")
+    return recorder.output_path
 
 
 if __name__ == "__main__":
