@@ -53,7 +53,7 @@ def run_exp():
     model_name = "openai/gpt-5-mini"
     api_key_env_var_name = "OPENROUTER_API_KEY"
     openrouter_config = {
-        "temperature": -1.0,
+        "temperature": 0.0,
         "reasoning": {"effort": "minimal", "exclude": True},
     }
 
