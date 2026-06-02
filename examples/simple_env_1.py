@@ -24,10 +24,7 @@ from word_play.presets.movement.simple_2d_grid import (
     Position_2D,
 )
 from word_play.presets.renderers import (
-    ExperimentRecorder,
     Renderable,
-    default_experiment_log_path,
-    record_step,
     render_step,
 )
 from word_play.presets.systems.combat import Attack
@@ -261,9 +258,6 @@ def run_exp(exp_steps: int = 1000, *, render: bool = True, step_delay: float = 0
     )
     env.floor_sprite = "sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png"
 
-    recorder = ExperimentRecorder(default_experiment_log_path("simple_env_1"), "simple_env_1")
-    record_step(env, recorder=recorder)
-
     for step in range(exp_steps):
         if render and not render_step(env, step_delay=step_delay):
             break
@@ -276,11 +270,6 @@ def run_exp(exp_steps: int = 1000, *, render: bool = True, step_delay: float = 0
             cur_step_actions.append(action)
 
         env.step(cur_step_actions)
-        record_step(env, recorder=recorder, selected_actions=cur_step_actions)
-
-    print(f"Replay log: {recorder.output_path}")
-    print(f"Newest replay log: {recorder.newest_output_path}")
-    return recorder.output_path
 
 
 if __name__ == "__main__":
