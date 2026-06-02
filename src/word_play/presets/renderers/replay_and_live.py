@@ -12,6 +12,7 @@ import pygame
 from word_play.core import Entity
 from word_play.core.components import Component
 from word_play.presets.movement.simple_2d_grid import Position_2D
+from word_play.presets.systems.inventory import Inventory
 
 from .draw import render_environment
 from .layout import Grid_Layout_Adapter
@@ -77,28 +78,14 @@ class ReplayFrameEnvironment:
 
             components: list[Any] = []
             renderable_info = entity_data.get("renderable") or {}
-            sprite_path = renderable_info.get("sprite_path")
-            if sprite_path:
-                components.append(
-                    Renderable(
-                        sprite_path=sprite_path,
-                        z_index=renderable_info.get("z_index", 0),
-                        visible=renderable_info.get("visible", True),
-                        overlay_sprite=renderable_info.get("overlay_sprite"),
-                        overlay_mode=renderable_info.get("overlay_mode", "badge"),
-                        overlay_scale=renderable_info.get("overlay_scale"),
-                        last_message=renderable_info.get("last_message"),
-                        wall_set=renderable_info.get("wall_set"),
-                    )
-                )
+            renderable = self._build_renderable(renderable_info)
+            if renderable is not None:
+                components.append(renderable)
 
             for component_name, component_payload in (entity_data.get("components") or {}).items():
                 if component_name == "Renderable" or not isinstance(component_payload, dict):
                     continue
-                component_type = type(str(component_name), (Component,), {})
-                component = component_type()
-                for field_name, field_value in component_payload.items():
-                    setattr(component, field_name, field_value)
+                component = self._build_component(str(component_name), component_payload)
                 components.append(component)
 
             entity = Entity(
@@ -111,6 +98,71 @@ class ReplayFrameEnvironment:
             built.append(entity)
 
         return built
+
+    def _build_renderable(self, renderable_info: dict[str, Any]) -> Renderable | None:
+        sprite_path = renderable_info.get("sprite_path")
+        if not sprite_path:
+            return None
+
+        return Renderable(
+            sprite_path=sprite_path,
+            z_index=renderable_info.get("z_index", 0),
+            visible=renderable_info.get("visible", True),
+            overlay_sprite=renderable_info.get("overlay_sprite"),
+            overlay_mode=renderable_info.get("overlay_mode", "badge"),
+            overlay_scale=renderable_info.get("overlay_scale"),
+            last_message=renderable_info.get("last_message"),
+            wall_set=renderable_info.get("wall_set"),
+        )
+
+    def _build_component(self, component_name: str, component_payload: dict[str, Any]) -> Component:
+        if component_name == "Inventory":
+            return self._build_inventory(component_payload)
+
+        component_type = type(component_name, (Component,), {})
+        component = component_type()
+        for field_name, field_value in component_payload.items():
+            setattr(component, field_name, field_value)
+        return component
+
+    def _build_inventory(self, component_payload: dict[str, Any]) -> Inventory:
+        inventory_size = component_payload.get("inventory_size", -1)
+        if inventory_size is None:
+            inventory_size = -1
+        inventory = Inventory(
+            collectable_tags=[],
+            inventory_size=int(inventory_size),
+            starting_inventory=[],
+        )
+        inventory.inventory = [
+            self._build_inventory_item(item_payload)
+            for item_payload in component_payload.get("inventory", [])
+            if isinstance(item_payload, dict)
+        ]
+        return inventory
+
+    def _build_inventory_item(self, entity_data: dict[str, Any]) -> Entity:
+        position_payload = entity_data.get("position") or {}
+        components = []
+        renderable = self._build_renderable(self._inventory_item_renderable_info(entity_data))
+        if renderable is not None:
+            components.append(renderable)
+        return Entity(
+            name=str(entity_data.get("name", "Inventory Item")),
+            position=Position_2D(int(position_payload.get("x", 0)), int(position_payload.get("y", 0))),
+            tags=list(entity_data.get("tags", [])),
+            components=components,
+        )
+
+    def _inventory_item_renderable_info(self, entity_data: dict[str, Any]) -> dict[str, Any]:
+        renderable_info = entity_data.get("renderable")
+        if isinstance(renderable_info, dict):
+            return renderable_info
+
+        for component_name, component_payload in (entity_data.get("components") or {}).items():
+            if "Renderable" in str(component_name) and isinstance(component_payload, dict):
+                return component_payload
+        return {}
 
     @property
     def background_tiles(self) -> list[dict[str, Any]]:
