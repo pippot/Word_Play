@@ -64,7 +64,8 @@ class Test_Action(Action):
         return "Test Action."
 
 
-def run_exp(exp_steps: int = 1000, *, render: bool = True, step_delay: float = 0.1):
+def run_exp():
+    exp_steps = 1000
     entity_tilemap = """
     WWWWWWWW...
     Wb.h...W...
@@ -212,54 +213,14 @@ def run_exp(exp_steps: int = 1000, *, render: bool = True, step_delay: float = 0
 
     env = Simple_2D_Grid_World(
         description="The forbidden forest.",
-        entities=tilemap_to_entities(entity_tilemap, entity_tileset) + [Entity(
-                name="Fat Cow",
-                position=Position_2D(1, 0),
-                components=[
-                    Health(max_health=10, starting_health=10),
-                    TalkingCow(),
-                ],
-            ),
-            Entity(
-                name="Fat Cow",
-                position=Position_2D(1, 0),
-                components=[
-                    Health(max_health=10, starting_health=10),
-                    TalkingCow(),
-                ],
-            ),
-            Entity(
-                name="Fat Cow",
-                position=Position_2D(1, 0),
-                components=[
-                    Health(max_health=10, starting_health=10),
-                    TalkingCow(),
-                ],
-            ),
-            Entity(
-                name="Fat Cow",
-                position=Position_2D(1, 0),
-                components=[
-                    Health(max_health=10, starting_health=10),
-                    TalkingCow(),
-                ],
-            ),
-            Entity(
-                name="Fat Cow",
-                position=Position_2D(1, 0),
-                components=[
-                    Health(max_health=10, starting_health=10),
-                    TalkingCow(),
-                ],
-            ),
-            ],
+        entities=tilemap_to_entities(entity_tilemap, entity_tileset),
         entity_order=randomize_agent_order,
         observation_radius=1,
     )
     env.floor_sprite = "sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png"
 
     for step in range(exp_steps):
-        if render and not render_step(env, step_delay=step_delay):
+        if not render_step(env):
             break
 
         cur_step_actions = []

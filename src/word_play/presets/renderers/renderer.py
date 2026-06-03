@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import os
 import time
 from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
-
-# TODO: remove this. Bad practice
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
