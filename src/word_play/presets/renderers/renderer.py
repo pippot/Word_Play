@@ -6,6 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
 
+# TODO: remove this. Bad practice
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
@@ -16,6 +17,8 @@ from .draw import render_environment
 from .layout import Grid_Layout_Adapter
 from .runtime import configure_renderer, handle_entity_click, init_pygame_if_needed
 
+from .replay_and_live import replay, replay_log_path
+
 if TYPE_CHECKING:
     from word_play.core import Environment
 
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
 
 class Renderable(Component):
     """Store sprite and overlay metadata for an entity."""
+
     def __init__(
         self,
         sprite_path: str,
@@ -55,6 +59,7 @@ class Renderer(ABC):
 
 class Pygame_Renderer(Renderer):
     """Concrete renderer that delegates drawing to pygame helpers."""
+
     def __init__(
         self,
         layout: "Position_Layout_Adapter",
@@ -82,12 +87,14 @@ class Pygame_Renderer(Renderer):
         tiles = []
         for x in range(self.width):
             for y in range(self.height):
-                tiles.append({
-                    "x": x,
-                    "y": y,
-                    "z": 0,
-                    "sprite": self.default_floor_sprite,
-                })
+                tiles.append(
+                    {
+                        "x": x,
+                        "y": y,
+                        "z": 0,
+                        "sprite": self.default_floor_sprite,
+                    }
+                )
         return tiles
 
     def render(self, env: "Environment") -> None:
@@ -182,16 +189,6 @@ def record_render_message(
         _record_transient_frame(env)
     if env is not None and render_frame:
         _render_transient_frame(env)
-
-
-from .replay_and_live import (
-    default_replay_renderer,
-    newest_replay_log_path,
-    replay,
-    ReplayFrameEnvironment,
-    replay_frames,
-    replay_log_path,
-)
 
 
 def main(argv: list[str] | None = None) -> None:
