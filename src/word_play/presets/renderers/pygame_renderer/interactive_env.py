@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 import re
-from dataclasses import asdict, is_dataclass
+from dataclasses import fields, is_dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -74,7 +74,10 @@ def _json_safe(
 
     try:
         if is_dataclass(value):
-            return {key: _json_safe(item, entity_to_index, _seen) for key, item in asdict(value).items()}
+            return {
+                field.name: _json_safe(getattr(value, field.name), entity_to_index, _seen)
+                for field in fields(value)
+            }
         if isinstance(value, dict):
             return {str(key): _json_safe(item, entity_to_index, _seen) for key, item in value.items()}
         if isinstance(value, (list, tuple, set)):
@@ -125,7 +128,6 @@ def capture_environment_frame(
     env: Environment,
     selected_actions: list[Action_Selection] | None = None,
 ) -> dict[str, Any]:
-    env.sync_renderer_state()
     entity_to_index = {entity: index for index, entity in enumerate(env.state.entities)}
     entities = []
     for entity_index, entity in enumerate(env.state.entities):
@@ -172,7 +174,7 @@ def capture_environment_frame(
         )
 
     cur_step = getattr(env, "cur_step", 0)
-    renderer_state = env.renderer_state()
+    renderer_state = env.render_state
 
     return {
         "cur_step": cur_step,
@@ -180,8 +182,8 @@ def capture_environment_frame(
         "selected_actions": []
         if selected_actions is None
         else [serialize_action_selection(action_selection) for action_selection in selected_actions],
-        "renderer_state_values": _json_safe(dict(renderer_state.values), entity_to_index),
-        "renderer_state_lists": _json_safe(dict(renderer_state.lists), entity_to_index),
+        "render_state_frame": _json_safe(dict(renderer_state.frame), entity_to_index),
+        "render_state_events": _json_safe(list(renderer_state.events), entity_to_index),
         "entities": entities,
         "agent_observations": agent_observations,
     }
@@ -213,7 +215,7 @@ class ExperimentRecorder:
 
     def payload(self) -> dict[str, Any]:
         return {
-            "version": 3,
+            "version": 4,
             "title": self.title,
             "metadata": self.metadata,
             "frame_count": len(self.frames),

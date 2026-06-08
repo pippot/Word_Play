@@ -38,8 +38,7 @@ class DummyRenderer(Renderer):
 
     def create_renderer_state(self) -> Renderer_State:
         return Renderer_State(
-            values={"renderer.default": "dummy"},
-            private={"secret": "private"},
+            frame={"renderer.default": "dummy"},
         )
 
     def render(self, env: Environment) -> Render_Result:
@@ -112,10 +111,12 @@ class RenderingRefactorTests(unittest.TestCase):
 
         renderer = DummyRenderer()
         env = DummyEnv([self._make_agent()], renderer=renderer)
+        env.render_state.emit("speech", entity=env.state.entities[0], text="Hi", step=0)
         result = env.render()
         self.assertTrue(result.reset_requested)
         self.assertEqual(renderer.render_calls, 1)
         self.assertIs(env.renderer, renderer)
+        self.assertEqual(env.render_state.events, [])
         self.assertFalse(hasattr(env, "renderer_impl"))
         self.assertFalse(hasattr(env, "renderer_recorder"))
 
@@ -123,34 +124,29 @@ class RenderingRefactorTests(unittest.TestCase):
         renderer = DummyRenderer()
         env = DummyEnv([self._make_agent()], renderer=renderer)
         first_state = env.state.renderer_state
-        env.state.renderer_state.values["custom.namespace"] = ["value"]
-        env.state.renderer_state.private["runtime"] = "ephemeral"
+        env.render_state.frame["custom.namespace"] = ["value"]
+        env.render_state.emit("speech", entity=env.state.entities[0], text="Hi", step=0)
 
         env.reset()
 
         self.assertIsNot(env.state.renderer_state, first_state)
-        self.assertEqual(
-            env.state.renderer_state.values,
-            {"renderer.default": "dummy", "simulation.step": 0},
-        )
-        self.assertEqual(env.state.renderer_state.private, {"secret": "private"})
+        self.assertEqual(env.render_state.frame, {"renderer.default": "dummy"})
+        self.assertEqual(env.render_state.events, [])
 
-    def test_capture_environment_frame_serializes_public_renderer_state_only(self):
+    def test_capture_environment_frame_serializes_frame_and_events(self):
         renderer = DummyRenderer()
         env = DummyEnv([self._make_agent()], renderer=renderer)
-        env.set_render_value("world.floor_sprite", "grass.png")
-        env.set_render_list("ui.speech_bubbles", [{"entity": env.state.entities[0], "text": "Hi", "step": 0}])
-        env.state.renderer_state.private["dont_serialize"] = "hidden"
+        env.render_state.frame["world.floor_sprite"] = "grass.png"
+        env.render_state.emit("speech", entity=env.state.entities[0], text="Hi", step=0)
 
         frame = capture_environment_frame(env)
 
-        self.assertEqual(frame["renderer_state_values"]["world.floor_sprite"], "grass.png")
+        self.assertEqual(frame["render_state_frame"]["world.floor_sprite"], "grass.png")
         self.assertEqual(
-            frame["renderer_state_lists"]["ui.speech_bubbles"][0]["entity"],
+            frame["render_state_events"][0]["payload"]["entity"],
             {"__entity_ref__": 0},
         )
-        self.assertNotIn("private", frame)
-        self.assertNotIn("dont_serialize", str(frame))
+        self.assertEqual(frame["render_state_events"][0]["kind"], "speech")
 
     def test_human_policy_uses_observation_text_and_existing_kwarg_parser(self):
         env = DummyEnv([self._make_agent()])
@@ -182,7 +178,7 @@ class RenderingRefactorTests(unittest.TestCase):
 
         self.assertEqual(message, "hello")
 
-    def test_conversation_messages_publish_into_renderer_state_lists(self):
+    def test_conversation_messages_publish_into_renderer_state_events(self):
         first = Entity(
             name="Cow One",
             position=Position_2D(0, 0),
@@ -197,7 +193,7 @@ class RenderingRefactorTests(unittest.TestCase):
 
         sim_simple_conversation([first, second], env, conversation_duration=1)
 
-        messages = env.get_render_list("ui.speech_bubbles")
+        messages = [event.payload for event in env.render_state.events if event.kind == "speech"]
         self.assertEqual(len(messages), 2)
         self.assertIs(messages[0]["entity"], first)
         self.assertEqual(messages[0]["step"], env.cur_step + 1)
@@ -205,27 +201,27 @@ class RenderingRefactorTests(unittest.TestCase):
     def test_replay_frame_environment_restores_renderer_entity_refs(self):
         renderer = DummyRenderer()
         env = DummyEnv([self._make_agent()], renderer=renderer)
-        env.set_render_list("ui.speech_bubbles", [{"entity": env.state.entities[0], "text": "Hi", "step": 0}])
+        env.render_state.emit("speech", entity=env.state.entities[0], text="Hi", step=0)
         frame = capture_environment_frame(env)
 
         replay_env = ReplayFrameEnvironment(frame)
-        speech_bubbles = replay_env.get_render_list("ui.speech_bubbles")
+        speech_bubbles = [event.payload for event in replay_env.render_state.events if event.kind == "speech"]
 
         self.assertIs(speech_bubbles[0]["entity"], replay_env.state.entities[0])
         self.assertEqual(speech_bubbles[0]["text"], "Hi")
 
     def test_load_recording_payload_preserves_current_renderer_state(self):
         payload = {
-            "version": 3,
+            "version": 4,
             "frames": [
                 {
                     "cur_step": 3,
-                    "renderer_state_values": {
+                    "render_state_frame": {
                         "world.floor_sprite": "tile.png",
                     },
-                    "renderer_state_lists": {
-                        "ui.speech_bubbles": [{"entity": {"__entity_ref__": 0}, "text": "Hi", "step": 3}],
-                    },
+                    "render_state_events": [
+                        {"kind": "speech", "payload": {"entity": {"__entity_ref__": 0}, "text": "Hi", "step": 3}}
+                    ],
                     "entities": [],
                 }
             ],
@@ -237,8 +233,8 @@ class RenderingRefactorTests(unittest.TestCase):
             loaded = load_recording_payload(payload_path)
 
         frame = loaded["frames"][0]
-        self.assertEqual(frame["renderer_state_values"], payload["frames"][0]["renderer_state_values"])
-        self.assertEqual(frame["renderer_state_lists"], payload["frames"][0]["renderer_state_lists"])
+        self.assertEqual(frame["render_state_frame"], payload["frames"][0]["render_state_frame"])
+        self.assertEqual(frame["render_state_events"], payload["frames"][0]["render_state_events"])
 
 
 if __name__ == "__main__":

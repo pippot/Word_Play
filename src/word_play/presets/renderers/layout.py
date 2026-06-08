@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 _DEFAULT_FLOOR = "src/world_tiles/indoors/floors/day_brick_floor_c.png"
 
 
+def _render_frame(env: "Environment" | None) -> dict[str, Any]:
+    if env is None:
+        return {}
+    render_state = getattr(env, "render_state", None)
+    if render_state is None:
+        return {}
+    return getattr(render_state, "frame", {})
+
+
 def _entity_grid_position(entity: Any) -> tuple[int, int] | None:
     position = getattr(entity, "position", None)
     x = getattr(position, "x", None)
@@ -86,12 +95,13 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
         positioned_entities: list[tuple[Any, float, float]],
     ) -> list[dict[str, Any]]:
         """Fetch background tiles from renderer data or auto-generate a floor."""
-        env_tiles = env.get_render_value("world.background_tiles")
+        render_frame = _render_frame(env)
+        env_tiles = render_frame.get("world.background_tiles")
         if env_tiles:
             return list(env_tiles)
 
-        floor_sprite = str(env.get_render_value("world.floor_sprite", _DEFAULT_FLOOR))
-        bounds_tiles = _floor_tiles_from_bounds(env.get_render_value("world.bounds"), floor_sprite)
+        floor_sprite = str(render_frame.get("world.floor_sprite", _DEFAULT_FLOOR))
+        bounds_tiles = _floor_tiles_from_bounds(render_frame.get("world.bounds"), floor_sprite)
         if bounds_tiles:
             return bounds_tiles
 
@@ -99,7 +109,7 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
         if inferred_tiles:
             return inferred_tiles
 
-        world_size = env.get_render_value("world.size")
+        world_size = render_frame.get("world.size")
         if isinstance(world_size, dict):
             width = int(world_size.get("width", 0))
             height = int(world_size.get("height", 0))
@@ -231,9 +241,7 @@ class SinglePointLayout(Position_Layout_Adapter):
         self.include_room = include_room
         self.only_agents = only_agents
         self._cached_background: list[dict[str, Any]] | None = None
-
-    def _offset_store_key(self) -> str:
-        return f"{self.__class__.__name__}:{id(self)}:offsets"
+        self._offsets_by_entity: dict[Any, tuple[float, float]] = {}
 
     def _calculate_room_size(self, n_agents: int) -> tuple[int, int]:
         """Calculate room size based on agent count."""
@@ -268,8 +276,7 @@ class SinglePointLayout(Position_Layout_Adapter):
             ]
 
         n = len(positioned_entities)
-        offsets_by_entity = env.renderer_state().private.setdefault(self._offset_store_key(), {})
-        offsets_by_entity.clear()
+        self._offsets_by_entity.clear()
         if n == 0:
             return
 
@@ -298,7 +305,7 @@ class SinglePointLayout(Position_Layout_Adapter):
 
         # Cache transient layout offsets in renderer-private state.
         for entity, (offset_x, offset_y) in zip(positioned_entities, offsets):
-            offsets_by_entity[entity] = (offset_x, offset_y)
+            self._offsets_by_entity[entity] = (offset_x, offset_y)
 
     def background(
         self,
@@ -375,8 +382,7 @@ class SinglePointLayout(Position_Layout_Adapter):
         """Convert position to screen coordinates."""
         position = getattr(entity, "position", entity)
         if isinstance(position, Single_Point_Position):
-            offsets = env.renderer_state().private.get(self._offset_store_key(), {})
-            offset_x, offset_y = offsets.get(entity, (0.0, 0.0))
+            offset_x, offset_y = self._offsets_by_entity.get(entity, (0.0, 0.0))
             return (self.base_x + offset_x, self.base_y + offset_y)
 
         # Fallback: try to get x/y attributes, default to center

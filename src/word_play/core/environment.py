@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable
+from typing import Callable
 
 from .actions import Action_Selection, Target_Is_Nearby, Target_Is_Self, Target_Not_Self
 from .components import Non_Agent_Policy
@@ -80,33 +80,9 @@ class Environment(ABC):
             return Renderer_State()
         return self.renderer.create_renderer_state()
 
-    def renderer_state(self) -> Renderer_State:
+    @property
+    def render_state(self) -> Renderer_State:
         return self.state.renderer_state
-
-    def sync_renderer_state(self) -> None:
-        """Publish core simulation data into the renderer-facing state."""
-        self.set_render_value("simulation.step", self.cur_step)
-
-    def set_render_value(self, key: str, value: Any) -> None:
-        self.renderer_state().set_value(key, value)
-
-    def get_render_value(self, key: str, default: Any = None) -> Any:
-        return self.renderer_state().get_value(key, default)
-
-    def set_render_list(self, key: str, items: Iterable[Any]) -> None:
-        self.renderer_state().set_list(key, items)
-
-    def get_render_list(self, key: str) -> list[Any]:
-        return self.renderer_state().get_list(key)
-
-    def append_render_item(self, key: str, item: Any) -> None:
-        self.renderer_state().append_to_list(key, item)
-
-    def extend_render_list(self, key: str, items: Iterable[Any]) -> None:
-        self.renderer_state().extend_list(key, items)
-
-    def clear_render_list(self, key: str) -> None:
-        self.renderer_state().clear_list(key)
 
     def post_init(self) -> None:
         """This method is called at the end of the __init__ method. It can be overwritten to provide more complex logic."""
@@ -149,15 +125,15 @@ class Environment(ABC):
         """Render via the environment's optional active renderer."""
         if self.renderer is None:
             raise NotImplementedError("This environment does not support rendering.")
-        self.sync_renderer_state()
-        return self.renderer.render(self)
+        result = self.renderer.render(self)
+        self.render_state.clear_events()
+        return result
 
     def reset(self, seed=None) -> None:
         self.cur_episode_seed = seed
         self._reset(seed=seed)
         self.state.renderer_state = self._create_renderer_state()
         self.cur_step = 0
-        self.sync_renderer_state()
         self._init_agent_list()
         self._init_agent_idx_dict()
         self.last_rewards = [None] * len(self.agents)

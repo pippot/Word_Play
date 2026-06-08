@@ -48,10 +48,6 @@ class Simple_2D_Grid_World(Simple_Env_Reset_Mixin, Environment):
             observation_radius=self.observation_radius,
         )
 
-    def sync_renderer_state(self) -> None:
-        super().sync_renderer_state()
-        self.set_render_value("camera.focus_radius", self.observation_radius)
-
     def environment_start_of_step(self, action_selections: list[Action_Selection]):
         pass
 

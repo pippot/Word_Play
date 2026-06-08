@@ -14,6 +14,10 @@ _EXPORT_MODULES = {
     "Grid_Layout_Adapter": ".layout",
     "Position_Layout_Adapter": ".layout",
     "SinglePointLayout": ".layout",
+    "Render_Context": "word_play.core",
+    "Render_Event": "word_play.core",
+    "Render_Extractor": "word_play.core",
+    "Render_Scene": "word_play.core",
     "default_replay_renderer": ".pygame_renderer.replay_and_live",
     "newest_replay_log_path": ".pygame_renderer.replay_and_live",
     "Pygame_Renderer": ".pygame_renderer.renderer",
@@ -23,6 +27,7 @@ _EXPORT_MODULES = {
     "replay_log_path": ".pygame_renderer.replay_and_live",
     "Renderable": ".pygame_renderer.renderable",
     "Renderer": "word_play.core",
+    "Renderer_State": "word_play.core",
     "render_environment": ".pygame_renderer.draw",
     "init_pygame_if_needed": ".pygame_renderer.runtime",
 }

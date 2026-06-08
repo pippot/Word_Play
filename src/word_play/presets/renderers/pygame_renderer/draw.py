@@ -10,7 +10,7 @@ from word_play.core import Entity
 from word_play.presets.systems.inventory import Inventory
 
 from .assets import get_or_load_image, get_scaled_image, resolve_wall_sprite
-from .wall_geometry import collect_wall_positions, normalize_background_item, screen_rect_for_tile, wall_neighbor_mask, world_bounds
+from .wall_geometry import collect_wall_positions, screen_rect_for_tile, wall_neighbor_mask, world_bounds
 from .renderable import Renderable
 from .runtime import apply_renderer_metrics, ensure_screen_size, fitted_tile_size, focused_radius
 
@@ -27,50 +27,19 @@ def renderable_component(entity: Any) -> Renderable | None:
     return None
 
 
-def is_in_any_inventory(item: Any, env: "Environment") -> bool:
-    """Check if an item is currently held by any entity."""
-    if "in_inventory" in getattr(item, "tags", []):
-        return True
-    for entity in env.state.entities:
-        inventory = entity.get_component(Inventory)
-        if inventory and item in inventory.inventory:
-            return True
-    return False
+def scene_metadata(scene: Any, key: str, default: Any = None) -> Any:
+    return scene.metadata.get(key, default)
 
 
-def visible_renderables(env: "Environment") -> list[tuple[int, Entity, Renderable]]:
-    """Collect visible renderable entities sorted by their draw order."""
-    renderables: list[tuple[int, Entity, Renderable]] = []
-    for entity in env.state.entities:
-        renderable = renderable_component(entity)
-        if renderable is not None and renderable.visible and not is_in_any_inventory(entity, env):
-            renderables.append((renderable.z_index, entity, renderable))
-    renderables.sort(key=lambda item: item[0])
-    return renderables
-
-
-def background_items(
-    env: "Environment",
-    renderer: "Pygame_Renderer",
-    renderables: list[tuple[int, Entity, Renderable]],
-) -> list[dict[str, Any]]:
-    """Fetch and normalize background tiles from the active layout adapter."""
-    positioned_entities: list[tuple[Any, float, float]] = []
-    for _, entity, _ in renderables:
-        x, y = renderer.layout.screen_position(entity, env)
-        positioned_entities.append((entity, x, y))
-    return [normalize_background_item(item) for item in renderer.layout.background(env, positioned_entities)]
-
-
-def sidebar_state(env: "Environment") -> dict[str, Any]:
-    value = env.get_render_value("ui.sidebar", {})
+def sidebar_state(scene: Any) -> dict[str, Any]:
+    value = scene_metadata(scene, "ui.sidebar", {})
     if isinstance(value, dict):
         return value
     return {}
 
 
-def renderer_list_data(env: "Environment", namespace: str) -> list[Any]:
-    return env.get_render_list(namespace)
+def scene_layer_data(scene: Any, namespace: str) -> list[Any]:
+    return scene.get_layer(namespace)
 
 
 def entity_health_value(entity: Entity) -> float | None:
@@ -168,7 +137,7 @@ def selected_entity(env: "Environment", renderer: "Pygame_Renderer") -> Entity |
     return selected if selected in env.state.entities else None
 
 
-def update_damage_flash_state(renderer: "Pygame_Renderer", env: "Environment") -> None:
+def update_damage_flash_state(renderer: "Pygame_Renderer", env: "Environment", scene: Any) -> None:
     """Track recent health drops so damaged entities can flash briefly."""
     now = time.monotonic()
     active_entities = set(env.state.entities)
@@ -177,8 +146,8 @@ def update_damage_flash_state(renderer: "Pygame_Renderer", env: "Environment") -
         for entity, until in renderer._damage_flash_until.items()
         if entity in active_entities and until > now
     }
-    current_step = int(env.get_render_value("simulation.step", getattr(env, "cur_step", 0)))
-    for hit_payload in renderer_list_data(env, "effects.entity_hits"):
+    current_step = int(scene_metadata(scene, "simulation.step", getattr(env, "cur_step", 0)))
+    for hit_payload in scene_layer_data(scene, "effects.entity_hits"):
         entity = hit_payload.get("entity") if isinstance(hit_payload, dict) else hit_payload
         visible_step = hit_payload.get("step") if isinstance(hit_payload, dict) else None
         if entity not in active_entities:
@@ -705,15 +674,15 @@ def draw_entity(
 
 def draw_hit_effects(
     renderer: "Pygame_Renderer",
-    env: "Environment",
+    scene: Any,
     entity_positions: dict[Entity, tuple[int, int]],
 ) -> None:
     """Draw transient hit-effect sprites centered on affected entities."""
-    hit_effects = renderer_list_data(env, "effects.entity_hits")
+    hit_effects = scene_layer_data(scene, "effects.entity_hits")
     if not hit_effects:
         return
 
-    current_step = int(env.get_render_value("simulation.step", getattr(env, "cur_step", 0)))
+    current_step = int(scene_metadata(scene, "simulation.step", 0))
     for effect in hit_effects:
         if not isinstance(effect, dict):
             continue
@@ -789,9 +758,9 @@ def draw_background_tile(
     # Draw the image
     renderer.floor_surface.blit(image, (px, py))
 
-def draw_hud_panel(renderer: "Pygame_Renderer", env: "Environment", x_offset: int, width: int, height: int) -> None:
+def draw_hud_panel(renderer: "Pygame_Renderer", scene: Any, x_offset: int, width: int, height: int) -> None:
     """Render the bottom HUD panel with step counter, mode, and controls."""
-    if not bool(env.get_render_value("ui.hud_visible", True)):
+    if not bool(scene_metadata(scene, "ui.hud_visible", True)):
         return
 
     hud_top = height - renderer.hud_height
@@ -800,11 +769,11 @@ def draw_hud_panel(renderer: "Pygame_Renderer", env: "Environment", x_offset: in
     pygame.draw.line(renderer.screen, (52, 63, 79), (x_offset, hud_top), (x_offset + width, hud_top), 2)
 
     # Step counter and mode
-    step = env.get_render_value("simulation.step", getattr(env, "cur_step", getattr(env, "tick", 0)))
-    episode_length = env.get_render_value("simulation.episode_length")
-    current_phase = env.get_render_value("hud.mode")
-    score = env.get_render_value("hud.score")
-    is_replay = bool(env.get_render_value("simulation.is_replay", False))
+    step = scene_metadata(scene, "simulation.step", 0)
+    episode_length = scene_metadata(scene, "simulation.episode_length")
+    current_phase = scene_metadata(scene, "hud.mode")
+    score = scene_metadata(scene, "hud.score")
+    is_replay = bool(scene_metadata(scene, "simulation.is_replay", False))
 
     header_text = f"Step: {step}"
     if episode_length:
@@ -822,7 +791,7 @@ def draw_hud_panel(renderer: "Pygame_Renderer", env: "Environment", x_offset: in
     # Controls hint - minimal
     if is_replay:
         controls_text = "Space: play/pause | Left/Right: step | Home/End: jump | R: restart | ESC: exit"
-    elif sidebar_state(env):
+    elif sidebar_state(scene):
         controls_text = "Left click agent: inspect | Right click agent: follow | ESC: exit"
     else:
         controls_text = "Left click agent: inspect | Right click agent: follow | R: reset | ESC: exit"
@@ -830,7 +799,7 @@ def draw_hud_panel(renderer: "Pygame_Renderer", env: "Environment", x_offset: in
         controls = renderer.small_font.render(line, True, (150, 160, 180))
         renderer.screen.blit(controls, (x_offset + renderer.margin, hud_top + 48 + line_index * renderer.small_font.get_linesize()))
 
-def draw_sidebar_panel(renderer: "Pygame_Renderer", env: "Environment", world_width: int, height: int, sidebar_width: int) -> None:
+def draw_sidebar_panel(renderer: "Pygame_Renderer", scene: Any, world_width: int, height: int, sidebar_width: int) -> None:
     """Render an optional right-hand sidebar with agent observations and options."""
     if sidebar_width <= 0:
         return
@@ -841,7 +810,7 @@ def draw_sidebar_panel(renderer: "Pygame_Renderer", env: "Environment", world_wi
 
     observation_font = getattr(renderer, "sidebar_font", renderer.small_font)
 
-    sidebar = sidebar_state(env)
+    sidebar = sidebar_state(scene)
     header_text = sidebar.get("header") or "Agent View"
     header = renderer.hud_font.render(str(header_text), True, (240, 242, 245))
     renderer.screen.blit(header, (world_width + 16, 14))
@@ -911,9 +880,9 @@ def draw_sidebar_panel(renderer: "Pygame_Renderer", env: "Environment", world_wi
     y = max(column_bottoms)
 
 
-def draw_end_overlay(renderer: "Pygame_Renderer", env: "Environment", world_x: int, world_width: int, world_height: int) -> None:
+def draw_end_overlay(renderer: "Pygame_Renderer", scene: Any, world_x: int, world_width: int, world_height: int) -> None:
     """Draw a centered overlay when the environment reaches a terminal state."""
-    overlay_state = env.get_render_value("ui.completion_overlay", {})
+    overlay_state = scene_metadata(scene, "ui.completion_overlay", {})
     if not isinstance(overlay_state, dict) or not bool(overlay_state.get("visible", False)):
         return
 
@@ -1021,11 +990,11 @@ def fit_wrapped_text_lines(
     return fallback_font, lines
 
 
-def collect_speech_bubbles(env: "Environment") -> list[dict[str, Any]]:
+def collect_speech_bubbles(scene: Any) -> list[dict[str, Any]]:
     """Collect speech bubble payloads published into the renderer state."""
-    current_step = int(env.get_render_value("simulation.step", getattr(env, "cur_step", 0)))
+    current_step = int(scene_metadata(scene, "simulation.step", 0))
     bubbles = []
-    for bubble in renderer_list_data(env, "ui.speech_bubbles"):
+    for bubble in scene_layer_data(scene, "ui.speech_bubbles"):
         if not isinstance(bubble, dict):
             continue
         visible_step = bubble.get("step", bubble.get("_step"))
@@ -1048,11 +1017,11 @@ def collect_speech_bubbles(env: "Environment") -> list[dict[str, Any]]:
 
 def draw_speech_bubbles(
     renderer: "Pygame_Renderer",
-    env: "Environment",
+    scene: Any,
     entity_positions: dict[Entity, tuple[int, int]],
 ) -> None:
     """Draw speech bubbles above entities using rounded rects and tail polygons."""
-    speech_bubbles = collect_speech_bubbles(env)
+    speech_bubbles = collect_speech_bubbles(scene)
     if not speech_bubbles:
         return
 
@@ -1190,12 +1159,13 @@ def auto_tiled_wall_sprites(
 
 
 
-def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
+def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: Any | None = None) -> None:
     """Render a full frame including background, entities, effects, and HUD."""
-    renderer.layout.prepare_env(env)
-    update_damage_flash_state(renderer, env)
-    renderables = visible_renderables(env)
-    background = background_items(env, renderer, renderables)
+    if scene is None:
+        scene = renderer.extract_scene(env)
+    update_damage_flash_state(renderer, env, scene)
+    renderables = scene_layer_data(scene, "world.renderables")
+    background = scene_layer_data(scene, "world.background_tiles")
     if renderer.selected_entity is not None and selected_entity(env, renderer) is None:
         renderer.selected_entity = None
     if renderer.camera_focus_entity is not None and renderer.camera_focus_entity not in env.state.entities:
@@ -1216,14 +1186,14 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
     view_grid_height = max(1, max_y - min_y + 1)
     grid_width = full_grid_width
     grid_height = full_grid_height
-    sidebar = sidebar_state(env)
+    sidebar = sidebar_state(scene)
     sidebar_lines = list(sidebar.get("lines", []))
     selected_action_lines = list(sidebar.get("selected_action", []))
     action_lines = list(sidebar.get("actions", []))
     needs_sidebar = bool(sidebar_lines or selected_action_lines or action_lines)
     sidebar_width_value = sidebar.get("width")
     requested_sidebar_width = int(sidebar_width_value or 380) if needs_sidebar else 0
-    hud_visible = bool(env.get_render_value("ui.hud_visible", True))
+    hud_visible = bool(scene_metadata(scene, "ui.hud_visible", True))
     resolved_tile_size = fitted_tile_size(
         renderer,
         grid_width=grid_width,
@@ -1335,8 +1305,8 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
                 sprite_name_override=wall_sprite_overrides.get(entity),
             )
 
-        draw_hit_effects(renderer, env, positions)
-        draw_speech_bubbles(renderer, env, positions)
+        draw_hit_effects(renderer, scene, positions)
+        draw_speech_bubbles(renderer, scene, positions)
         draw_selected_entity_card(renderer, env, positions)
     finally:
         renderer.tile_size = layout_tile_size
@@ -1348,7 +1318,7 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment") -> None:
     renderer.screen.blit(renderer.effect_surface, (world_x, 0))
     draw_world_vignette(renderer, world_x, world_width, world_height)
 
-    draw_hud_panel(renderer, env, world_x, world_width, height)
-    draw_sidebar_panel(renderer, env, world_x + world_width, height, sidebar_width)
-    draw_end_overlay(renderer, env, world_x, world_width, height - hud_height)
+    draw_hud_panel(renderer, scene, world_x, world_width, height)
+    draw_sidebar_panel(renderer, scene, world_x + world_width, height, sidebar_width)
+    draw_end_overlay(renderer, scene, world_x, world_width, height - hud_height)
     pygame.display.flip()

@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from word_play.core import Entity, Renderer_State
+from word_play.core import Entity, Render_Event, Renderer_State
 from word_play.core.components import Component
 from word_play.presets.movement.simple_2d_grid import Position_2D
 from word_play.presets.systems.inventory import Inventory
@@ -32,6 +32,36 @@ def _decode_render_payload(value: Any, entities: list[Entity]) -> Any:
     return value
 
 
+def _decode_render_events(events: list[Any], entities: list[Entity]) -> list[Render_Event]:
+    decoded: list[Render_Event] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("kind")
+        payload = event.get("payload")
+        if not isinstance(kind, str) or not isinstance(payload, dict):
+            continue
+        decoded.append(
+            Render_Event(
+                kind=kind,
+                payload=_decode_render_payload(payload, entities),
+            )
+        )
+    return decoded
+
+
+def _legacy_render_events(frame: dict[str, Any], entities: list[Entity]) -> list[Render_Event]:
+    renderer_lists = _decode_render_payload(dict(frame.get("renderer_state_lists") or {}), entities)
+    legacy_events: list[Render_Event] = []
+    for bubble in renderer_lists.get("ui.speech_bubbles", []):
+        if isinstance(bubble, dict):
+            legacy_events.append(Render_Event(kind="speech", payload=dict(bubble)))
+    for hit in renderer_lists.get("effects.entity_hits", []):
+        if isinstance(hit, dict):
+            legacy_events.append(Render_Event(kind="hit", payload=dict(hit)))
+    return legacy_events
+
+
 class ReplayFrameEnvironment:
     """Minimal environment wrapper around one serialized replay frame."""
 
@@ -41,9 +71,16 @@ class ReplayFrameEnvironment:
             self.cur_step = frame.get("frame_index", frame.get("tick", 0))
         self.tick = self.cur_step
         entities = self._build_entities(frame.get("entities", []))
+        render_frame = _decode_render_payload(
+            dict(frame.get("render_state_frame") or frame.get("renderer_state_values") or {}),
+            entities,
+        )
+        render_events = _decode_render_events(list(frame.get("render_state_events") or []), entities)
+        if not render_events:
+            render_events = _legacy_render_events(frame, entities)
         renderer_state = Renderer_State(
-            values=_decode_render_payload(dict(frame.get("renderer_state_values") or {}), entities),
-            lists=_decode_render_payload(dict(frame.get("renderer_state_lists") or {}), entities),
+            frame=render_frame,
+            events=render_events,
         )
         self.state = SimpleNamespace(
             entities=entities,
@@ -51,30 +88,16 @@ class ReplayFrameEnvironment:
         )
         self.agents = [entity for entity in self.state.entities if getattr(entity, "is_agent", False)]
         self.player = self.agents[0] if self.agents else None
-        self.sync_renderer_state()
+        self.render_state.frame.setdefault("simulation.step", self.cur_step)
+        self.render_state.frame["simulation.is_replay"] = True
         self._fill_sidebar_from_frame(frame)
 
-    def renderer_state(self) -> Renderer_State:
+    @property
+    def render_state(self) -> Renderer_State:
         return self.state.renderer_state
 
-    def sync_renderer_state(self) -> None:
-        self.set_render_value("simulation.step", self.cur_step)
-        self.set_render_value("simulation.is_replay", True)
-
-    def set_render_value(self, key: str, value: Any) -> None:
-        self.renderer_state().set_value(key, value)
-
-    def get_render_value(self, key: str, default: Any = None) -> Any:
-        return self.renderer_state().get_value(key, default)
-
-    def set_render_list(self, key: str, items: list[Any]) -> None:
-        self.renderer_state().set_list(key, items)
-
-    def get_render_list(self, key: str) -> list[Any]:
-        return self.renderer_state().get_list(key)
-
     def _fill_sidebar_from_frame(self, frame: dict[str, Any]) -> None:
-        if self.get_render_value("ui.sidebar"):
+        if self.render_state.frame.get("ui.sidebar"):
             return
 
         selected_actions = list(frame.get("selected_actions", []))
@@ -89,14 +112,11 @@ class ReplayFrameEnvironment:
         if len(action_lines) == 1:
             action_lines.append("(no actions available)")
 
-        self.set_render_value(
-            "ui.sidebar",
-            {
-                "header": "Agent View",
-                "selected_action": ["Chosen Action:", label],
-                "actions": action_lines,
-            },
-        )
+        self.render_state.frame["ui.sidebar"] = {
+            "header": "Agent View",
+            "selected_action": ["Chosen Action:", label],
+            "actions": action_lines,
+        }
 
     def _build_entities(self, entities: list[dict[str, Any]]) -> list[Entity]:
         built: list[Entity] = []

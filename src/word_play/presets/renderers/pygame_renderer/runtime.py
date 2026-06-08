@@ -42,7 +42,10 @@ def configure_renderer(
 
 
 def focused_radius(env: "Environment", renderer: "Pygame_Renderer") -> int:
-    radius = env.get_render_value("camera.focus_radius", renderer.camera_focus_radius_tiles)
+    radius = getattr(env, "observation_radius", renderer.camera_focus_radius_tiles)
+    render_state = getattr(env, "render_state", None)
+    if render_state is not None:
+        radius = render_state.frame.get("camera.focus_radius", radius)
     return max(0, int(radius))
 
 

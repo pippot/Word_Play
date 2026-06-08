@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import pygame
 
-from word_play.core import Render_Result, Renderer, Renderer_State
+from word_play.core import Render_Context, Render_Extractor, Render_Result, Render_Scene, Renderer, Renderer_State
 
 from .draw import render_environment
+from .extractors import default_pygame_extractors
 from .runtime import configure_renderer, handle_entity_click, init_pygame_if_needed
 
 if TYPE_CHECKING:
@@ -23,6 +24,7 @@ class Pygame_Renderer(Renderer):
         layout: "Position_Layout_Adapter",
         tile_size: int = 32,
         default_floor_sprite: str = "sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png",
+        extractors: Sequence[Render_Extractor] | None = None,
     ):
         configure_renderer(
             self,
@@ -30,16 +32,24 @@ class Pygame_Renderer(Renderer):
             tile_size=tile_size,
         )
         self.default_floor_sprite = default_floor_sprite
+        self.render_context: Render_Context = self.create_render_context()
+        self.extractors: list[Render_Extractor] = list(extractors or default_pygame_extractors(layout))
 
     def create_renderer_state(self) -> Renderer_State:
         state = Renderer_State()
-        state.set_value("world.floor_sprite", self.default_floor_sprite)
-        state.set_value("ui.hud_visible", True)
+        state.frame["world.floor_sprite"] = self.default_floor_sprite
+        state.frame["ui.hud_visible"] = True
         return state
+
+    def extract_scene(self, env: "Environment") -> Render_Scene:
+        scene = Render_Scene()
+        for extractor in self.extractors:
+            extractor.extract(env, env.render_state, scene, self.render_context)
+        return scene
 
     def render(self, env: "Environment") -> Render_Result:
         init_pygame_if_needed(self)
-        render_environment(self, env)
+        render_environment(self, env, self.extract_scene(env))
 
         result = Render_Result()
         for event in pygame.event.get():
