@@ -103,12 +103,12 @@ def run_exp():
                 Move_Left(),
                 Move_Right(),
                 Attack(name="Zap", damage_amount=1),
-                # Start_Public_Conversation(),
-                # Start_Private_Conversation(),
+                Start_Public_Conversation(),
+                Start_Private_Conversation(),
             ],
             "components": [
-                # Human_Takes_Action(),
-                Random_Action_Policy(),
+                Human_Takes_Action(),
+                # Random_Action_Policy(),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,

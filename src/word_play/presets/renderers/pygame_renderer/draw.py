@@ -799,34 +799,42 @@ def draw_hud_panel(renderer: "Pygame_Renderer", scene: Any, x_offset: int, width
         controls = renderer.small_font.render(line, True, (150, 160, 180))
         renderer.screen.blit(controls, (x_offset + renderer.margin, hud_top + 48 + line_index * renderer.small_font.get_linesize()))
 
-def draw_sidebar_panel(renderer: "Pygame_Renderer", scene: Any, world_width: int, height: int, sidebar_width: int) -> None:
+def draw_sidebar_panel(
+    renderer: "Pygame_Renderer",
+    scene: Any,
+    x_offset: int,
+    y_offset: int,
+    width: int,
+    height: int,
+) -> None:
     """Render an optional right-hand sidebar with agent observations and options."""
-    if sidebar_width <= 0:
+    if width <= 0 or height <= 0:
         return
 
-    panel_rect = pygame.Rect(world_width, 0, sidebar_width, height)
+    panel_rect = pygame.Rect(x_offset, y_offset, width, height)
     pygame.draw.rect(renderer.screen, (12, 15, 21), panel_rect)
-    pygame.draw.line(renderer.screen, (52, 63, 79), (world_width, 0), (world_width, height), 2)
+    pygame.draw.line(renderer.screen, (52, 63, 79), (x_offset, y_offset), (x_offset, y_offset + height), 2)
+    pygame.draw.line(renderer.screen, (52, 63, 79), (x_offset, y_offset), (x_offset + width, y_offset), 2)
 
     observation_font = getattr(renderer, "sidebar_font", renderer.small_font)
 
     sidebar = sidebar_state(scene)
     header_text = sidebar.get("header") or "Agent View"
     header = renderer.hud_font.render(str(header_text), True, (240, 242, 245))
-    renderer.screen.blit(header, (world_width + 16, 14))
+    renderer.screen.blit(header, (x_offset + 16, y_offset + 14))
 
     sidebar_lines = list(sidebar.get("lines", []))
     selected_action_lines = list(sidebar.get("selected_action", []))
     action_lines = list(sidebar.get("actions", []))
     compact_observation = bool(sidebar.get("compact_observation", False))
-    y = 48
+    y = y_offset + 48
     observation_line_height = observation_font.get_linesize() + 3
     action_line_height = renderer.small_font.get_linesize() + 4
-    max_width = sidebar_width - 32
-    top_limit = max(y, height - 26)
+    max_width = width - 32
+    top_limit = max(y, y_offset + height - 26)
 
     if not compact_observation:
-        column_x = world_width + 16
+        column_x = x_offset + 16
         column_y = y
         column_lines = [
             *action_lines,
@@ -857,7 +865,7 @@ def draw_sidebar_panel(renderer: "Pygame_Renderer", scene: Any, world_width: int
     column_bottoms = [y]
 
     for column_index, column_lines in enumerate(sidebar_columns):
-        column_x = world_width + 16 + column_index * (column_width + column_gap)
+        column_x = x_offset + 16 + column_index * (column_width + column_gap)
         column_y = y
         for message in column_lines:
             is_action_line = column_index == 0 and message in action_lines + selected_action_lines
@@ -962,19 +970,17 @@ def draw_text_terminal_panel(
     *,
     x_offset: int,
     width: int,
-    world_height: int,
-    total_height: int,
-    hud_height: int,
+    y_offset: int,
+    height: int,
 ) -> None:
-    """Draw a persistent terminal-style panel below the main rendering area."""
+    """Draw a persistent terminal-style panel to the right of the world view."""
     prompt = pygame_runtime(renderer).prompt
-    panel_top = world_height
-    panel_height = max(80, total_height - world_height - hud_height)
-    panel_rect = pygame.Rect(x_offset, panel_top, width, panel_height)
+    panel_rect = pygame.Rect(x_offset, y_offset, width, height)
     prompt.panel_rect = panel_rect
 
     pygame.draw.rect(renderer.screen, (10, 13, 18), panel_rect)
-    pygame.draw.line(renderer.screen, (44, 56, 74), (x_offset, panel_top), (x_offset + width, panel_top), 2)
+    pygame.draw.line(renderer.screen, (52, 63, 79), (x_offset, y_offset), (x_offset, y_offset + height), 2)
+    pygame.draw.line(renderer.screen, (44, 56, 74), (x_offset, y_offset), (x_offset + width, y_offset), 2)
 
     pad_x = 18
     pad_y = 14
@@ -1364,13 +1370,14 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
         )
     world_width = renderer.viewport_pad_w + renderer.viewport_pad_e + grid_width * renderer.tile_size
     hud_height = 0 if not hud_visible else renderer.hud_height
-    terminal_height = renderer.terminal_height
-    width = world_width + sidebar_width
-    height = renderer.viewport_pad_n + renderer.viewport_pad_s + grid_height * renderer.tile_size + terminal_height + hud_height
+    world_height = renderer.viewport_pad_n + renderer.viewport_pad_s + grid_height * renderer.tile_size
+    right_panel_width = max(renderer.terminal_width, sidebar_width)
+    content_height = max(world_height, renderer.terminal_height)
+    width = world_width + right_panel_width
+    height = content_height + hud_height
     ensure_screen_size(renderer, width, height)
 
     renderer.screen.fill((8, 11, 16))
-    world_height = renderer.viewport_pad_n + renderer.viewport_pad_s + grid_height * renderer.tile_size
     renderer.floor_surface = pygame.Surface((world_width, world_height), pygame.SRCALPHA)
     renderer.shadow_surface = pygame.Surface((world_width, world_height), pygame.SRCALPHA)
     renderer.entity_surface = pygame.Surface((world_width, world_height), pygame.SRCALPHA)
@@ -1452,6 +1459,7 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
         renderer.tile_size = layout_tile_size
 
     world_x = 0
+    right_panel_x = world_x + world_width
     renderer.screen.blit(renderer.floor_surface, (world_x, 0))
     renderer.screen.blit(renderer.shadow_surface, (world_x, 0))
     renderer.screen.blit(renderer.entity_surface, (world_x, 0))
@@ -1460,13 +1468,11 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
 
     draw_text_terminal_panel(
         renderer,
-        x_offset=world_x,
-        width=world_width,
-        world_height=world_height,
-        total_height=height,
-        hud_height=hud_height,
+        x_offset=right_panel_x,
+        y_offset=0,
+        width=right_panel_width,
+        height=height,
     )
     draw_hud_panel(renderer, scene, world_x, world_width, height)
-    draw_sidebar_panel(renderer, scene, world_x + world_width, height, sidebar_width)
     draw_end_overlay(renderer, scene, world_x, world_width, world_height)
     pygame.display.flip()

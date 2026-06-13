@@ -75,7 +75,7 @@ class Pygame_Overlay_Human_IO(Human_IO):
         self._append_history(renderer, f"[{title}]")
         if body:
             self._append_history(renderer, body)
-        set_prompt_scroll_home(renderer)
+        set_prompt_scroll_end(renderer)
 
         clock = pygame.time.Clock()
         renderer.present(env)

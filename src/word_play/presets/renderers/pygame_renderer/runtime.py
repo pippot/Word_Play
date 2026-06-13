@@ -128,7 +128,8 @@ def apply_renderer_metrics(renderer: "Pygame_Renderer", tile_size: int) -> None:
     """Apply tile-size-derived layout metrics and rebuild dependent font state."""
     renderer.tile_size = tile_size
     renderer.hud_height = max(100, min(180, tile_size * 3 + 24))
-    renderer.terminal_height = max(170, min(300, tile_size * 4 + 42))
+    renderer.terminal_height = max(240, min(420, tile_size * 5 + 60))
+    renderer.terminal_width = max(460, min(760, tile_size * 11 + 180))
     renderer.margin = max(12, tile_size // 2)
     renderer.viewport_pad_w = renderer.margin
     renderer.viewport_pad_e = renderer.margin
@@ -191,12 +192,16 @@ def fitted_tile_size(
         viewport_pad_w = margin
         viewport_pad_e = margin
         hud_height = max(156, tile_size * 4) if hud_visible else 0
-        terminal_height = max(170, min(300, tile_size * 4 + 42))
+        terminal_height = max(240, min(420, tile_size * 5 + 60))
+        terminal_width = max(460, min(760, tile_size * 11 + 180))
         scaled_sidebar = 0
         if sidebar_width > 0:
             scaled_sidebar = max(280, int(round(sidebar_width * (tile_size / max(1, base_tile)))))
-        width = viewport_pad_w + viewport_pad_e + grid_width * tile_size + scaled_sidebar
-        height = viewport_pad_n + viewport_pad_s + grid_height * tile_size + terminal_height + hud_height
+        right_panel_width = max(terminal_width, scaled_sidebar)
+        world_height = viewport_pad_n + viewport_pad_s + grid_height * tile_size
+        content_height = max(world_height, terminal_height)
+        width = viewport_pad_w + viewport_pad_e + grid_width * tile_size + right_panel_width
+        height = content_height + hud_height
         if width <= max_width and height <= max_height:
             fitting_tiles.append(tile_size)
         if min_halfscreen_tile is None and (width >= min_width or height >= min_height):
