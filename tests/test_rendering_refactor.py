@@ -22,7 +22,7 @@ from word_play.core import (
 )
 from word_play.presets.action_args import Int_Arg
 from word_play.presets.action_policies.human import Human_Takes_Action
-from word_play.presets.human_io import Human_IO
+from word_play.presets.human_io import Human_IO, Human_Text_Request
 from word_play.presets.movement.simple_2d_grid import INFINITE_2D_MOVEMENT_SYSTEM, Position_2D
 from word_play.presets.renderers import (
     Renderable,
@@ -101,24 +101,15 @@ class RecordingHumanIO(Human_IO):
     def __init__(self, responses: list[str]):
         self.responses = list(responses)
         self.notifications: list[str] = []
-        self.requests: list[tuple[str, str, str]] = []
+        self.requests: list[Human_Text_Request] = []
 
     def notify(self, text: str, *, env: Environment | None = None) -> None:
         del env
         self.notifications.append(text)
 
-    def read_line(
-        self,
-        title: str,
-        /,
-        *,
-        body: str = "",
-        prompt: str = "> ",
-        env: Environment | None = None,
-        initial_text: str = "",
-    ) -> str:
-        del env, initial_text
-        self.requests.append((title, body, prompt))
+    def request_text(self, request: Human_Text_Request, *, env: Environment | None = None) -> str:
+        del env
+        self.requests.append(request)
         return self.responses.pop(0)
 
 
@@ -231,9 +222,10 @@ class RenderingRefactorTests(unittest.TestCase):
         action_selection, _ = env.agents[0].get_component(Human_Takes_Action).select_action(env.observe(0))
 
         self.assertEqual(action_selection.action_kwargs, {"count": 7})
-        self.assertEqual(io_backend.requests[0][0], "Action Selection")
-        self.assertIn("OBSERVATION TEXT", io_backend.requests[0][1])
-        self.assertEqual(io_backend.requests[1][0], "Action Arguments")
+        self.assertEqual(io_backend.requests[0].title, "Human Input")
+        self.assertIn("Select exactly one action", io_backend.requests[0].instruction)
+        self.assertIn("OBSERVATION TEXT", io_backend.requests[0].context)
+        self.assertIn("Provide the required arguments", io_backend.requests[1].instruction)
 
     def test_human_communication_policy_accepts_custom_human_io(self):
         io_backend = RecordingHumanIO(["hello"])
@@ -253,8 +245,9 @@ class RenderingRefactorTests(unittest.TestCase):
         message = policy.send_message([recipient], env)
 
         self.assertEqual(message, "hello")
-        self.assertEqual(io_backend.requests[0][0], "Speaker message")
-        self.assertIn("Recipients: Recipient", io_backend.requests[0][1])
+        self.assertEqual(io_backend.requests[0].title, "Human Input")
+        self.assertIn("Write the next message for Speaker.", io_backend.requests[0].instruction)
+        self.assertIn("Recipients: Recipient", io_backend.requests[0].context)
 
     def test_conversation_messages_publish_into_renderer_state_events(self):
         first = Entity(

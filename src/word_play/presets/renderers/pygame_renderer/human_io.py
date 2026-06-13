@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pygame
 
-from word_play.presets.human_io import Human_IO, Terminal_Human_IO
+from word_play.presets.human_io import Human_IO, Human_Text_Request, Terminal_Human_IO
 
 from .runtime import (
     pygame_runtime,
@@ -45,36 +45,29 @@ class Pygame_Overlay_Human_IO(Human_IO):
         self._append_history(renderer, text)
         set_prompt_scroll_end(renderer)
 
-    def read_line(
+    def request_text(
         self,
-        title: str,
-        /,
+        request: Human_Text_Request,
         *,
-        body: str = "",
-        prompt: str = "> ",
         env=None,
-        initial_text: str = "",
     ) -> str:
         renderer = self._renderer_for_env(env)
         if renderer is None:
-            return self.fallback.read_line(
-                title,
-                body=body,
-                prompt=prompt,
+            return self.fallback.request_text(
+                request,
                 env=env,
-                initial_text=initial_text,
             )
 
         prompt_state = pygame_runtime(renderer).prompt
         prompt_state.active = True
-        prompt_state.title = title
-        prompt_state.body = body
-        prompt_state.prompt = prompt
-        prompt_state.input_text = initial_text
+        prompt_state.title = request.title
+        prompt_state.body = request.body_text()
+        prompt_state.prompt = request.prompt_text()
+        prompt_state.input_text = request.initial_text
         prompt_state.active_start_block_index = len(prompt_state.history_blocks)
-        self._append_history(renderer, f"[{title}]")
-        if body:
-            self._append_history(renderer, body)
+        self._append_history(renderer, f"[{request.title}]")
+        if prompt_state.body:
+            self._append_history(renderer, prompt_state.body)
         set_prompt_scroll_end(renderer)
 
         clock = pygame.time.Clock()
@@ -97,7 +90,7 @@ class Pygame_Overlay_Human_IO(Human_IO):
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_RETURN:
                             submitted = prompt_state.input_text
-                            self._append_history(renderer, f"{prompt}{submitted}")
+                            self._append_history(renderer, f"{prompt_state.prompt}{submitted}")
                             self._append_history(renderer, "")
                             set_prompt_scroll_end(renderer)
                             prompt_state.input_text = ""

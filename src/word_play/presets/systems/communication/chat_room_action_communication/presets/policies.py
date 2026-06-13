@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from word_play.core import Entity, Environment
-from word_play.presets.human_io import Auto_Human_IO, Human_IO
+from word_play.presets.human_io import Auto_Human_IO, Human_IO, Human_Text_Request
 from word_play.presets.systems.communication.core import Communication_Policy
 
 
@@ -20,10 +20,12 @@ class Human_Communication_Policy(Communication_Policy):
         body_lines = [f"Recipients: {', '.join(entity.name for entity in recipients) or 'nobody'}"]
         if info:
             body_lines.append(info)
-        return self.io.read_line(
-            f"{speaker_name} message",
-            body="\n".join(body_lines),
-            prompt=f"{speaker_name} message: ",
+        return self.io.request_text(
+            Human_Text_Request(
+                instruction=f"Write the next message for {speaker_name}.",
+                context="\n".join(body_lines),
+                format_hint="Enter a single plain-text message.",
+            ),
             env=env,
         )
 

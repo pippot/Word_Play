@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from word_play.core import Agent_Policy, Observation
 from word_play.core.actions import Action_Selection
-from word_play.presets.human_io import Auto_Human_IO, Human_IO
+from word_play.presets.human_io import Auto_Human_IO, Human_IO, Human_Text_Request
 
 
 class Human_Takes_Action(Agent_Policy):
@@ -41,10 +41,8 @@ class Human_Takes_Action(Agent_Policy):
     def _choose_action(self, observation: Observation, *, env=None) -> Action_Selection:
         for _ in range(self.MAX_ATTEMPTS):
             try:
-                idx_text = self.io.read_line(
-                    "Action Selection",
-                    body="--------------------\n" + str(observation),
-                    prompt="Input action index: ",
+                idx_text = self.io.request_text(
+                    self._action_selection_request(observation),
                     env=env,
                 )
                 idx = int(idx_text)
@@ -56,8 +54,14 @@ class Human_Takes_Action(Agent_Policy):
             self.io.notify("Invalid action index.", env=env)
         raise RuntimeError("Too many invalid attempts selecting an action.")
 
-    def _format_kwargs_prompt(self, action_selection: Action_Selection) -> str:
+    def _action_selection_request(self, observation: Observation) -> Human_Text_Request:
+        return Human_Text_Request(
+            instruction="Select exactly one action for the current agent.",
+            context=str(observation),
+            format_hint="Enter the numeric index from the AVAILABLE ACTIONS list.",
+        )
 
+    def _format_kwargs_prompt(self, action_selection: Action_Selection) -> str:
         lines = ["Required arguments:"]
 
         for name, arg in action_selection.required_kwargs.items():
@@ -75,13 +79,18 @@ class Human_Takes_Action(Agent_Policy):
 
         return "\n".join(lines)
 
+    def _action_arguments_request(self, action_selection: Action_Selection) -> Human_Text_Request:
+        return Human_Text_Request(
+            instruction="Provide the required arguments for the selected action.",
+            context=self._format_kwargs_prompt(action_selection),
+            format_hint="Enter the values in order, separated by ';'.",
+        )
+
     def _get_action_kwargs(self, action_selection: Action_Selection) -> dict:
         for _ in range(self.MAX_ATTEMPTS):
             try:
-                text = self.io.read_line(
-                    "Action Arguments",
-                    body=self._format_kwargs_prompt(action_selection),
-                    prompt="> ",
+                text = self.io.request_text(
+                    self._action_arguments_request(action_selection),
                     env=action_selection.env,
                 )
                 return action_selection.parse_and_validate_kwarg_list(text)

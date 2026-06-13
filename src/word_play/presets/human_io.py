@@ -1,10 +1,35 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from word_play.core import Environment
+
+
+@dataclass(slots=True)
+class Human_Text_Request:
+    instruction: str
+    context: str = ""
+    format_hint: str = ""
+    prompt_label: str = "Input"
+    title: str = "Human Input"
+    initial_text: str = ""
+
+    def body_text(self) -> str:
+        sections = [f"Task:\n{self.instruction.strip()}"]
+        context = self.context.strip()
+        if context:
+            sections.append(f"Context:\n{context}")
+        format_hint = self.format_hint.strip()
+        if format_hint:
+            sections.append(f"Reply Format:\n{format_hint}")
+        return "\n\n".join(sections)
+
+    def prompt_text(self) -> str:
+        label = self.prompt_label.strip() or "Input"
+        return f"{label}: "
 
 
 class Human_IO(ABC):
@@ -13,15 +38,11 @@ class Human_IO(ABC):
         pass
 
     @abstractmethod
-    def read_line(
+    def request_text(
         self,
-        title: str,
-        /,
+        request: Human_Text_Request,
         *,
-        body: str = "",
-        prompt: str = "> ",
         env: "Environment" | None = None,
-        initial_text: str = "",
     ) -> str:
         pass
 
@@ -32,21 +53,17 @@ class Terminal_Human_IO(Human_IO):
         if text:
             print(text)
 
-    def read_line(
+    def request_text(
         self,
-        title: str,
-        /,
+        request: Human_Text_Request,
         *,
-        body: str = "",
-        prompt: str = "> ",
         env: "Environment" | None = None,
-        initial_text: str = "",
     ) -> str:
-        del env, initial_text
-        sections = [section for section in (title, body) if section]
+        del env
+        sections = [section for section in (request.title, request.body_text()) if section]
         if sections:
             print("\n".join(sections))
-        return input(prompt)
+        return input(request.prompt_text())
 
 
 class Auto_Human_IO(Human_IO):
@@ -75,20 +92,13 @@ class Auto_Human_IO(Human_IO):
     def notify(self, text: str, *, env: "Environment" | None = None) -> None:
         self._delegate(env).notify(text, env=env)
 
-    def read_line(
+    def request_text(
         self,
-        title: str,
-        /,
+        request: Human_Text_Request,
         *,
-        body: str = "",
-        prompt: str = "> ",
         env: "Environment" | None = None,
-        initial_text: str = "",
     ) -> str:
-        return self._delegate(env).read_line(
-            title,
-            body=body,
-            prompt=prompt,
+        return self._delegate(env).request_text(
+            request,
             env=env,
-            initial_text=initial_text,
         )
