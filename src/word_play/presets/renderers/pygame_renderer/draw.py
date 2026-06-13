@@ -792,9 +792,9 @@ def draw_hud_panel(renderer: "Pygame_Renderer", scene: Any, x_offset: int, width
     if is_replay:
         controls_text = "Space: play/pause | Left/Right: step | Home/End: jump | R: restart | ESC: exit"
     elif sidebar_state(scene):
-        controls_text = "Left click agent: inspect | Right click agent: follow | ESC: exit"
+        controls_text = "Left click agent: inspect | Right click agent: follow | Terminal: wheel/PgUp/PgDn scroll | ESC: exit"
     else:
-        controls_text = "Left click agent: inspect | Right click agent: follow | R: reset | ESC: exit"
+        controls_text = "Left click agent: inspect | Right click agent: follow | Terminal: wheel/PgUp/PgDn scroll | R: reset | ESC: exit"
     for line_index, line in enumerate(wrap_text_lines(renderer.small_font, controls_text, width - renderer.margin * 2)[:2]):
         controls = renderer.small_font.render(line, True, (150, 160, 180))
         renderer.screen.blit(controls, (x_offset + renderer.margin, hud_top + 48 + line_index * renderer.small_font.get_linesize()))
@@ -928,6 +928,142 @@ def draw_end_overlay(renderer: "Pygame_Renderer", scene: Any, world_x: int, worl
         subtitle_x = world_x + box_x + (box_width - surf.get_width()) // 2
         renderer.screen.blit(surf, (subtitle_x, subtitle_y))
         subtitle_y += surf.get_height() + 2
+
+
+def wrap_text_block_lines(font: Any, text: str, max_width: int) -> list[str]:
+    """Wrap multi-line text while preserving explicit line breaks."""
+    wrapped_lines: list[str] = []
+    for raw_line in text.splitlines() or [""]:
+        if not raw_line.strip():
+            wrapped_lines.append("")
+            continue
+        wrapped_lines.extend(wrap_text_lines(font, raw_line, max_width=max_width))
+    return wrapped_lines or [""]
+
+
+def terminal_history_lines(renderer: "Pygame_Renderer", prompt_state: Any, max_width: int) -> tuple[list[str], int]:
+    """Build wrapped terminal transcript lines and the active prompt start line."""
+    lines: list[str] = []
+    active_start_line = 0
+    for block_index, block in enumerate(prompt_state.history_blocks):
+        if prompt_state.active_start_block_index == block_index:
+            active_start_line = len(lines)
+        if block == "":
+            lines.append("")
+            continue
+        lines.extend(wrap_text_block_lines(renderer.small_font, str(block), max_width=max_width))
+    if not lines:
+        return ["Human terminal ready."], 0
+    return lines, active_start_line
+
+
+def draw_text_terminal_panel(
+    renderer: "Pygame_Renderer",
+    *,
+    x_offset: int,
+    width: int,
+    world_height: int,
+    total_height: int,
+    hud_height: int,
+) -> None:
+    """Draw a persistent terminal-style panel below the main rendering area."""
+    prompt = pygame_runtime(renderer).prompt
+    panel_top = world_height
+    panel_height = max(80, total_height - world_height - hud_height)
+    panel_rect = pygame.Rect(x_offset, panel_top, width, panel_height)
+    prompt.panel_rect = panel_rect
+
+    pygame.draw.rect(renderer.screen, (10, 13, 18), panel_rect)
+    pygame.draw.line(renderer.screen, (44, 56, 74), (x_offset, panel_top), (x_offset + width, panel_top), 2)
+
+    pad_x = 18
+    pad_y = 14
+    title_text = prompt.title if prompt.active else "Terminal"
+    subtitle_text = "human input active" if prompt.active else "latest human testing output"
+    title_surface = renderer.hud_font.render(title_text, True, (245, 247, 250))
+    subtitle_surface = renderer.small_font.render(subtitle_text, True, (145, 169, 194))
+    renderer.screen.blit(title_surface, (panel_rect.x + pad_x, panel_rect.y + pad_y))
+    renderer.screen.blit(
+        subtitle_surface,
+        (panel_rect.x + pad_x + title_surface.get_width() + 16, panel_rect.y + pad_y + 4),
+    )
+
+    footer_text = "Mouse wheel / PgUp / PgDn scroll | Enter submit | Esc cancel"
+    footer_surface = renderer.small_font.render(footer_text, True, (153, 163, 178))
+    footer_y = panel_rect.bottom - footer_surface.get_height() - 8
+    renderer.screen.blit(footer_surface, (panel_rect.x + pad_x, footer_y))
+
+    input_height = max(42, renderer.hud_font.get_linesize() + 18)
+    input_rect = pygame.Rect(
+        panel_rect.x + pad_x,
+        footer_y - input_height - 10,
+        panel_rect.width - pad_x * 2,
+        input_height,
+    )
+    pygame.draw.rect(renderer.screen, (13, 16, 22), input_rect, border_radius=10)
+    pygame.draw.rect(renderer.screen, (88, 102, 126), input_rect, width=2, border_radius=10)
+
+    prefix_text = prompt.prompt if prompt.active else "> "
+    prefix_surface = renderer.hud_font.render(prefix_text, True, (245, 247, 250))
+    prefix_x = input_rect.x + 12
+    prefix_y = input_rect.y + (input_rect.height - prefix_surface.get_height()) // 2
+    renderer.screen.blit(prefix_surface, (prefix_x, prefix_y))
+
+    if prompt.active:
+        cursor = "_" if int(time.monotonic() * 2) % 2 == 0 else " "
+        input_text = prompt.input_text + cursor
+        input_color = (232, 236, 243)
+    else:
+        input_text = "Waiting for the next human prompt..."
+        input_color = (124, 136, 154)
+    max_input_width = input_rect.width - 24 - prefix_surface.get_width()
+    visible_text = input_text
+    while visible_text and renderer.hud_font.size(visible_text)[0] > max_input_width:
+        visible_text = visible_text[1:]
+    input_surface = renderer.hud_font.render(visible_text, True, input_color)
+    renderer.screen.blit(
+        input_surface,
+        (prefix_x + prefix_surface.get_width(), input_rect.y + (input_rect.height - input_surface.get_height()) // 2),
+    )
+
+    transcript_top = panel_rect.y + pad_y + title_surface.get_height() + 18
+    transcript_bottom = input_rect.y - 10
+    transcript_rect = pygame.Rect(
+        panel_rect.x + pad_x,
+        transcript_top,
+        panel_rect.width - pad_x * 2,
+        max(20, transcript_bottom - transcript_top),
+    )
+    pygame.draw.rect(renderer.screen, (14, 18, 26), transcript_rect, border_radius=10)
+    pygame.draw.rect(renderer.screen, (42, 50, 66), transcript_rect, width=1, border_radius=10)
+
+    line_height = renderer.small_font.get_linesize() + 4
+    visible_line_count = max(1, (transcript_rect.height - 12) // line_height)
+    transcript_lines, active_start_line = terminal_history_lines(renderer, prompt, transcript_rect.width - 20)
+    max_offset = max(0, len(transcript_lines) - visible_line_count)
+    if prompt.active and prompt.active_start_block_index is not None:
+        max_relative_offset = max(0, len(transcript_lines) - visible_line_count - active_start_line)
+        prompt.scroll_lines = max(0, min(prompt.scroll_lines, max_relative_offset))
+        start_index = min(len(transcript_lines), active_start_line + prompt.scroll_lines)
+    else:
+        prompt.scroll_lines = max(0, min(prompt.scroll_lines, max_offset))
+        start_index = prompt.scroll_lines
+    end_index = min(len(transcript_lines), start_index + visible_line_count)
+    line_y = transcript_rect.y + 8
+    for line in transcript_lines[start_index:end_index]:
+        if line:
+            surface = renderer.small_font.render(line, True, (207, 214, 224))
+            renderer.screen.blit(surface, (transcript_rect.x + 10, line_y))
+        line_y += line_height
+
+    if max_offset > 0:
+        track_rect = pygame.Rect(transcript_rect.right - 10, transcript_rect.y + 8, 4, transcript_rect.height - 16)
+        pygame.draw.rect(renderer.screen, (36, 44, 58), track_rect, border_radius=4)
+        thumb_height = max(18, int(track_rect.height * (visible_line_count / max(1, len(transcript_lines)))))
+        scroll_ratio = start_index / max(1, max_offset)
+        thumb_y = track_rect.y + int((track_rect.height - thumb_height) * scroll_ratio)
+        thumb_rect = pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_height)
+        pygame.draw.rect(renderer.screen, renderer.selection_panel_accent, thumb_rect, border_radius=4)
 
 
 def draw_world_vignette(renderer: "Pygame_Renderer", world_x: int, world_width: int, world_height: int) -> None:
@@ -1228,8 +1364,9 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
         )
     world_width = renderer.viewport_pad_w + renderer.viewport_pad_e + grid_width * renderer.tile_size
     hud_height = 0 if not hud_visible else renderer.hud_height
+    terminal_height = renderer.terminal_height
     width = world_width + sidebar_width
-    height = renderer.viewport_pad_n + renderer.viewport_pad_s + grid_height * renderer.tile_size + hud_height
+    height = renderer.viewport_pad_n + renderer.viewport_pad_s + grid_height * renderer.tile_size + terminal_height + hud_height
     ensure_screen_size(renderer, width, height)
 
     renderer.screen.fill((8, 11, 16))
@@ -1321,7 +1458,15 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
     renderer.screen.blit(renderer.effect_surface, (world_x, 0))
     draw_world_vignette(renderer, world_x, world_width, world_height)
 
+    draw_text_terminal_panel(
+        renderer,
+        x_offset=world_x,
+        width=world_width,
+        world_height=world_height,
+        total_height=height,
+        hud_height=hud_height,
+    )
     draw_hud_panel(renderer, scene, world_x, world_width, height)
     draw_sidebar_panel(renderer, scene, world_x + world_width, height, sidebar_width)
-    draw_end_overlay(renderer, scene, world_x, world_width, height - hud_height)
+    draw_end_overlay(renderer, scene, world_x, world_width, world_height)
     pygame.display.flip()

@@ -22,6 +22,7 @@ from word_play.core import (
 )
 from word_play.presets.action_args import Int_Arg
 from word_play.presets.action_policies.human import Human_Takes_Action
+from word_play.presets.human_io import Human_IO
 from word_play.presets.movement.simple_2d_grid import INFINITE_2D_MOVEMENT_SYSTEM, Position_2D
 from word_play.presets.renderers import (
     Renderable,
@@ -94,6 +95,31 @@ class DummyEnv(Environment):
 
     def _reset(self, seed=None) -> None:
         return None
+
+
+class RecordingHumanIO(Human_IO):
+    def __init__(self, responses: list[str]):
+        self.responses = list(responses)
+        self.notifications: list[str] = []
+        self.requests: list[tuple[str, str, str]] = []
+
+    def notify(self, text: str, *, env: Environment | None = None) -> None:
+        del env
+        self.notifications.append(text)
+
+    def read_line(
+        self,
+        title: str,
+        /,
+        *,
+        body: str = "",
+        prompt: str = "> ",
+        env: Environment | None = None,
+        initial_text: str = "",
+    ) -> str:
+        del env, initial_text
+        self.requests.append((title, body, prompt))
+        return self.responses.pop(0)
 
 
 class RenderingRefactorTests(unittest.TestCase):
@@ -191,6 +217,44 @@ class RenderingRefactorTests(unittest.TestCase):
             message = policy.send_message([recipient], env)
 
         self.assertEqual(message, "hello")
+
+    def test_human_policy_accepts_custom_human_io(self):
+        io_backend = RecordingHumanIO(["0", "7"])
+        agent = Entity(
+            name="Agent",
+            position=Position_2D(0, 0),
+            actions=[Self_Count_Action()],
+            components=[Human_Takes_Action(io=io_backend), Renderable("agent.png")],
+        )
+        env = DummyEnv([agent])
+
+        action_selection, _ = env.agents[0].get_component(Human_Takes_Action).select_action(env.observe(0))
+
+        self.assertEqual(action_selection.action_kwargs, {"count": 7})
+        self.assertEqual(io_backend.requests[0][0], "Action Selection")
+        self.assertIn("OBSERVATION TEXT", io_backend.requests[0][1])
+        self.assertEqual(io_backend.requests[1][0], "Action Arguments")
+
+    def test_human_communication_policy_accepts_custom_human_io(self):
+        io_backend = RecordingHumanIO(["hello"])
+        policy = Human_Communication_Policy(io=io_backend)
+        speaker = Entity(
+            name="Speaker",
+            position=Position_2D(0, 0),
+            components=[policy],
+        )
+        recipient = Entity(
+            name="Recipient",
+            position=Position_2D(0, 1),
+            components=[TalkingCow()],
+        )
+        env = DummyEnv([speaker])
+
+        message = policy.send_message([recipient], env)
+
+        self.assertEqual(message, "hello")
+        self.assertEqual(io_backend.requests[0][0], "Speaker message")
+        self.assertIn("Recipients: Recipient", io_backend.requests[0][1])
 
     def test_conversation_messages_publish_into_renderer_state_events(self):
         first = Entity(

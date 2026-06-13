@@ -42,10 +42,24 @@ class Pygame_Effect_State:
 
 
 @dataclass(slots=True)
+class Pygame_Prompt_State:
+    active: bool = False
+    title: str = ""
+    body: str = ""
+    prompt: str = "> "
+    input_text: str = ""
+    history_blocks: list[str] = field(default_factory=list)
+    scroll_lines: int = 0
+    active_start_block_index: int | None = None
+    panel_rect: pygame.Rect | None = None
+
+
+@dataclass(slots=True)
 class Pygame_Runtime_State:
     session: Pygame_Session_State = field(default_factory=Pygame_Session_State)
     view: Pygame_View_State = field(default_factory=Pygame_View_State)
     effects: Pygame_Effect_State = field(default_factory=Pygame_Effect_State)
+    prompt: Pygame_Prompt_State = field(default_factory=Pygame_Prompt_State)
 
 
 def pygame_runtime(renderer: "Pygame_Renderer") -> Pygame_Runtime_State:
@@ -114,6 +128,7 @@ def apply_renderer_metrics(renderer: "Pygame_Renderer", tile_size: int) -> None:
     """Apply tile-size-derived layout metrics and rebuild dependent font state."""
     renderer.tile_size = tile_size
     renderer.hud_height = max(100, min(180, tile_size * 3 + 24))
+    renderer.terminal_height = max(170, min(300, tile_size * 4 + 42))
     renderer.margin = max(12, tile_size // 2)
     renderer.viewport_pad_w = renderer.margin
     renderer.viewport_pad_e = renderer.margin
@@ -176,11 +191,12 @@ def fitted_tile_size(
         viewport_pad_w = margin
         viewport_pad_e = margin
         hud_height = max(156, tile_size * 4) if hud_visible else 0
+        terminal_height = max(170, min(300, tile_size * 4 + 42))
         scaled_sidebar = 0
         if sidebar_width > 0:
             scaled_sidebar = max(280, int(round(sidebar_width * (tile_size / max(1, base_tile)))))
         width = viewport_pad_w + viewport_pad_e + grid_width * tile_size + scaled_sidebar
-        height = viewport_pad_n + viewport_pad_s + grid_height * tile_size + hud_height
+        height = viewport_pad_n + viewport_pad_s + grid_height * tile_size + terminal_height + hud_height
         if width <= max_width and height <= max_height:
             fitting_tiles.append(tile_size)
         if min_halfscreen_tile is None and (width >= min_width or height >= min_height):
@@ -221,3 +237,62 @@ def ensure_screen_size(renderer: "Pygame_Renderer", width: int, height: int) -> 
         return
     renderer.screen = pygame.display.set_mode(desired_size)
     runtime.session.window_size = desired_size
+
+
+def scroll_prompt_lines(renderer: "Pygame_Renderer", delta_lines: int) -> None:
+    prompt = pygame_runtime(renderer).prompt
+    prompt.scroll_lines = max(0, prompt.scroll_lines + delta_lines)
+
+
+def set_prompt_scroll_home(renderer: "Pygame_Renderer") -> None:
+    pygame_runtime(renderer).prompt.scroll_lines = 0
+
+
+def set_prompt_scroll_end(renderer: "Pygame_Renderer") -> None:
+    pygame_runtime(renderer).prompt.scroll_lines = 10**9
+
+
+def handle_prompt_panel_event(renderer: "Pygame_Renderer", event: pygame.event.Event) -> bool:
+    prompt = pygame_runtime(renderer).prompt
+    panel_rect = prompt.panel_rect
+    if panel_rect is None:
+        return False
+
+    if event.type == pygame.MOUSEWHEEL:
+        if panel_rect.collidepoint(pygame.mouse.get_pos()):
+            scroll_prompt_lines(renderer, -event.y * 3)
+            return True
+        return False
+
+    if event.type == pygame.MOUSEBUTTONDOWN and event.button in (4, 5):
+        if panel_rect.collidepoint(event.pos):
+            scroll_prompt_lines(renderer, 3 if event.button == 5 else -3)
+            return True
+        return False
+
+    if event.type != pygame.KEYDOWN:
+        return False
+
+    if not prompt.active and not panel_rect.collidepoint(pygame.mouse.get_pos()):
+        return False
+
+    if event.key == pygame.K_PAGEUP:
+        scroll_prompt_lines(renderer, -12)
+        return True
+    if event.key == pygame.K_PAGEDOWN:
+        scroll_prompt_lines(renderer, 12)
+        return True
+    if event.key == pygame.K_HOME:
+        set_prompt_scroll_home(renderer)
+        return True
+    if event.key == pygame.K_END:
+        set_prompt_scroll_end(renderer)
+        return True
+    if event.key == pygame.K_UP:
+        scroll_prompt_lines(renderer, -1)
+        return True
+    if event.key == pygame.K_DOWN:
+        scroll_prompt_lines(renderer, 1)
+        return True
+
+    return False

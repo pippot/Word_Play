@@ -8,7 +8,7 @@ from word_play.core import Render_Context, Render_Extractor, Render_Result, Rend
 
 from .draw import render_environment
 from .extractors import default_pygame_extractors
-from .runtime import configure_renderer, handle_entity_click, init_pygame_if_needed
+from .runtime import configure_renderer, handle_entity_click, handle_prompt_panel_event, init_pygame_if_needed
 
 if TYPE_CHECKING:
     from word_play.core import Environment
@@ -47,18 +47,33 @@ class Pygame_Renderer(Renderer):
             extractor.extract(env, env.render_state, scene, self.render_context)
         return scene
 
-    def render(self, env: "Environment") -> Render_Result:
+    def present(self, env: "Environment") -> None:
         init_pygame_if_needed(self)
         render_environment(self, env, self.extract_scene(env))
 
+    def handle_event(
+        self,
+        env: "Environment",
+        event: pygame.event.Event,
+        result: Render_Result | None = None,
+    ) -> Render_Result:
+        result = Render_Result() if result is None else result
+        if handle_prompt_panel_event(self, event):
+            return result
+        if event.type == pygame.QUIT:
+            result.quit_requested = True
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            result.quit_requested = True
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+            result.reset_requested = True
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button in (1, 3):
+            handle_entity_click(self, env, event.pos, button=event.button)
+        return result
+
+    def render(self, env: "Environment") -> Render_Result:
+        self.present(env)
+
         result = Render_Result()
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                result.quit_requested = True
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                result.quit_requested = True
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                result.reset_requested = True
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button in (1, 3):
-                handle_entity_click(self, env, event.pos, button=event.button)
+            result = self.handle_event(env, event, result)
         return result

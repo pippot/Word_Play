@@ -13,6 +13,7 @@ from word_play.presets.action_args import (
 )
 from word_play.presets.action_policies.follow_action_sequence import Follow_Action_Sequence
 from word_play.presets.action_policies.human import Human_Takes_Action
+from word_play.presets.action_policies.random_action import Random_Action_Policy
 from word_play.presets.entity_orderings import randomize_agent_order
 from word_play.presets.environments.simple_2d_grid_world import Simple_2D_Grid_World
 from word_play.presets.movement.simple_2d_grid import (
@@ -41,6 +42,7 @@ from word_play.presets.systems.inventory import Inventory
 from word_play.utils import tilemap_to_entities
 
 import pprint
+import time
 
 
 class Test_Action(Action):
@@ -101,11 +103,12 @@ def run_exp():
                 Move_Left(),
                 Move_Right(),
                 Attack(name="Zap", damage_amount=1),
-                Start_Public_Conversation(),
-                Start_Private_Conversation(),
+                # Start_Public_Conversation(),
+                # Start_Private_Conversation(),
             ],
             "components": [
-                Human_Takes_Action(),
+                # Human_Takes_Action(),
+                Random_Action_Policy(),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
@@ -139,11 +142,12 @@ def run_exp():
                 Move_Left(),
                 Move_Right(),
                 Attack(name="Zap", damage_amount=1),
-                Start_Public_Conversation(),
-                Start_Private_Conversation(),
+                # Start_Public_Conversation(),
+                # Start_Private_Conversation(),
             ],
             "components": [
-                Human_Takes_Action(),
+                # Human_Takes_Action(),
+                Random_Action_Policy(),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
@@ -164,13 +168,17 @@ def run_exp():
                 Health(max_health=5, starting_health=3),
                 Collidable(collidable_tags=["wall"]),
                 Human_Communication_Policy(),
-                Renderable(sprite_path="sprite_library/src/characters/humanoids/human/ordinary_human_2.png", z_index=10),
+                Renderable(
+                    sprite_path="sprite_library/src/characters/humanoids/human/ordinary_human_2.png", z_index=10
+                ),
             ],
         },
         "f": {
             "name": "Blue Flower",
             "tags": ["item"],
-            "components": [Renderable(sprite_path="sprite_library/src/characters/flora/plant/twoflower.png", z_index=2)],
+            "components": [
+                Renderable(sprite_path="sprite_library/src/characters/flora/plant/twoflower.png", z_index=2)
+            ],
         },
         "b": {
             "name": "Barrel",
@@ -226,6 +234,8 @@ def run_exp():
     )
 
     for step in range(exp_steps):
+        time.sleep(0.25)
+
         render_result = env.render()
         if render_result.quit_requested:
             break

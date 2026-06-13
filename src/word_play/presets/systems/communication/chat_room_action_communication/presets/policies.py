@@ -1,31 +1,39 @@
 from __future__ import annotations
 
 from word_play.core import Entity, Environment
+from word_play.presets.human_io import Auto_Human_IO, Human_IO
 from word_play.presets.systems.communication.core import Communication_Policy
 
 
 class Human_Communication_Policy(Communication_Policy):
+    def __init__(self, io: Human_IO | None = None):
+        super().__init__()
+        self.io = io or Auto_Human_IO()
 
     def start_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
-        print(f"====== Starting conversation with: {[entity.name for entity in participants]} ======")
+        self.io.notify(f"====== Starting conversation with: {[entity.name for entity in participants]} ======", env=env)
         if info:
-            print(info)
+            self.io.notify(info, env=env)
 
     def send_message(self, recipients: list[Entity], env: Environment, info: str | None = None) -> str:
         speaker_name = self.entity.name if self.entity is not None else "Human"
-        print(f"Recipients: {', '.join(entity.name for entity in recipients) or 'nobody'}")
+        body_lines = [f"Recipients: {', '.join(entity.name for entity in recipients) or 'nobody'}"]
         if info:
-            print(info)
-        message = input(f"{speaker_name} message: ")
-        return message
+            body_lines.append(info)
+        return self.io.read_line(
+            f"{speaker_name} message",
+            body="\n".join(body_lines),
+            prompt=f"{speaker_name} message: ",
+            env=env,
+        )
 
     def receive_message(self, message: str, sender: Entity, env: Environment) -> None:
-        print(f"Received message from {sender.name}: {message}")
+        self.io.notify(f"Received message from {sender.name}: {message}", env=env)
 
     def end_conversation(self, participants: list[Entity], env: Environment, info: str | None = None) -> None:
         if info:
-            print(info)
-        print(f"====== Ending conversation with: {[entity.name for entity in participants]} ======")
+            self.io.notify(info, env=env)
+        self.io.notify(f"====== Ending conversation with: {[entity.name for entity in participants]} ======", env=env)
 
 
 class TalkingCow(Communication_Policy):
