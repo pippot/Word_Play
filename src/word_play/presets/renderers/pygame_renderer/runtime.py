@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import pygame
 
@@ -11,6 +12,46 @@ if TYPE_CHECKING:
     from .renderer import Pygame_Renderer
 
 
+_PYGAME_RUNTIME_KEY = object()
+
+
+@dataclass(slots=True)
+class Pygame_Session_State:
+    pygame_initialized: bool = False
+    image_cache: dict[str, Any] = field(default_factory=dict)
+    scaled_image_cache: dict[tuple[str, int, int], Any] = field(default_factory=dict)
+    wall_set_cache: dict[str, dict[str, str]] = field(default_factory=dict)
+    vignette_cache: dict[tuple[int, int], Any] = field(default_factory=dict)
+    window_size: tuple[int, int] | None = None
+
+
+@dataclass(slots=True)
+class Pygame_View_State:
+    selected_entity: Any | None = None
+    camera_focus_entity: Any | None = None
+    camera_focus_radius_tiles: int = 1
+    last_drawn_entity_rects: dict[Any, pygame.Rect] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class Pygame_Effect_State:
+    last_health_values: dict[Any, float] = field(default_factory=dict)
+    damage_flash_until: dict[Any, float] = field(default_factory=dict)
+    camera_shake_until: float = 0.0
+    camera_shake_strength: float = 0.0
+
+
+@dataclass(slots=True)
+class Pygame_Runtime_State:
+    session: Pygame_Session_State = field(default_factory=Pygame_Session_State)
+    view: Pygame_View_State = field(default_factory=Pygame_View_State)
+    effects: Pygame_Effect_State = field(default_factory=Pygame_Effect_State)
+
+
+def pygame_runtime(renderer: "Pygame_Renderer") -> Pygame_Runtime_State:
+    return renderer.render_context.value_for(_PYGAME_RUNTIME_KEY, Pygame_Runtime_State)
+
+
 def configure_renderer(
     renderer: "Pygame_Renderer",
     *,
@@ -18,31 +59,20 @@ def configure_renderer(
     tile_size: int,
 ) -> None:
     """Initialize renderer configuration, caches, and transient state."""
+    renderer.render_context.private[_PYGAME_RUNTIME_KEY] = Pygame_Runtime_State()
+    runtime = pygame_runtime(renderer)
     renderer.layout = layout
     renderer.base_tile_size = tile_size
     renderer.display_safe_margin = 72
     apply_renderer_metrics(renderer, tile_size)
-    renderer._pygame_initialized = False
-    renderer._image_cache = {}
-    renderer._scaled_image_cache = {}
-    renderer._wall_set_cache = {}
-    renderer._window_size = None
-    renderer._last_health_values = {}
-    renderer._damage_flash_until = {}
-    renderer.camera_focus_entity = None
-    renderer.camera_focus_radius_tiles = 1
-    renderer.camera_shake_until = 0.0
-    renderer.camera_shake_strength = 0.0
-    renderer._last_drawn_entity_rects = {}
     renderer.focus_outline_color = (245, 214, 102)
     renderer.selection_outline_color = (128, 203, 255)
     renderer.selection_panel_accent = (128, 203, 255)
-    renderer._vignette_cache = {}
-    renderer.selected_entity = None
+    runtime.session.window_size = None
 
 
 def focused_radius(env: "Environment", renderer: "Pygame_Renderer") -> int:
-    radius = getattr(env, "observation_radius", renderer.camera_focus_radius_tiles)
+    radius = getattr(env, "observation_radius", pygame_runtime(renderer).view.camera_focus_radius_tiles)
     render_state = getattr(env, "render_state", None)
     if render_state is not None:
         radius = render_state.frame.get("camera.focus_radius", radius)
@@ -56,27 +86,28 @@ def handle_entity_click(
     *,
     button: int = 1,
 ) -> None:
+    view = pygame_runtime(renderer).view
     for entity in getattr(getattr(env, "state", None), "entities", []):
         if not getattr(entity, "is_agent", False):
             continue
 
-        rect = renderer._last_drawn_entity_rects.get(entity)
+        rect = view.last_drawn_entity_rects.get(entity)
         if rect is None or not rect.collidepoint(mouse_pos):
             continue
 
         if button == 1:
-            renderer.selected_entity = entity
+            view.selected_entity = entity
             return
 
         if button == 3:
-            renderer.camera_focus_entity = entity
-            renderer.camera_focus_radius_tiles = focused_radius(env, renderer)
+            view.camera_focus_entity = entity
+            view.camera_focus_radius_tiles = focused_radius(env, renderer)
         return
 
     if button == 1:
-        renderer.selected_entity = None
+        view.selected_entity = None
     elif button == 3:
-        renderer.camera_focus_entity = None
+        view.camera_focus_entity = None
 
 
 def apply_renderer_metrics(renderer: "Pygame_Renderer", tile_size: int) -> None:
@@ -89,7 +120,7 @@ def apply_renderer_metrics(renderer: "Pygame_Renderer", tile_size: int) -> None:
     renderer.viewport_pad_s = renderer.margin
     renderer.viewport_pad_n = max(renderer.margin, int(tile_size * 2.15))
 
-    if getattr(renderer, "_pygame_initialized", False):
+    if pygame_runtime(renderer).session.pygame_initialized:
         renderer.font = pygame.font.SysFont(None, renderer.tile_size)
         renderer.small_font = pygame.font.SysFont(None, max(16, renderer.tile_size // 2))
         renderer.sidebar_font = pygame.font.SysFont(None, max(13, int(renderer.tile_size * 0.32)))
@@ -170,21 +201,23 @@ def fitted_tile_size(
 
 def init_pygame_if_needed(renderer: "Pygame_Renderer") -> None:
     """Create the pygame window and fonts the first time rendering is used."""
-    if renderer._pygame_initialized:
+    runtime = pygame_runtime(renderer)
+    if runtime.session.pygame_initialized:
         return
 
     pygame.init()
     pygame.font.init()
     renderer.screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("Environment Render")
-    renderer._pygame_initialized = True
+    runtime.session.pygame_initialized = True
     apply_renderer_metrics(renderer, renderer.tile_size)
 
 
 def ensure_screen_size(renderer: "Pygame_Renderer", width: int, height: int) -> None:
     """Resize the pygame window only when the target dimensions change."""
+    runtime = pygame_runtime(renderer)
     desired_size = (width, height)
-    if renderer._window_size == desired_size:
+    if runtime.session.window_size == desired_size:
         return
     renderer.screen = pygame.display.set_mode(desired_size)
-    renderer._window_size = desired_size
+    runtime.session.window_size = desired_size

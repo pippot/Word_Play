@@ -12,7 +12,7 @@ from word_play.presets.systems.inventory import Inventory
 from .assets import get_or_load_image, get_scaled_image, resolve_wall_sprite
 from .wall_geometry import collect_wall_positions, screen_rect_for_tile, wall_neighbor_mask, world_bounds
 from .renderable import Renderable
-from .runtime import apply_renderer_metrics, ensure_screen_size, fitted_tile_size, focused_radius
+from .runtime import apply_renderer_metrics, ensure_screen_size, fitted_tile_size, focused_radius, pygame_runtime
 
 if TYPE_CHECKING:
     from word_play.core import Environment
@@ -36,10 +36,6 @@ def sidebar_state(scene: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
-
-
-def scene_layer_data(scene: Any, namespace: str) -> list[Any]:
-    return scene.get_layer(namespace)
 
 
 def entity_health_value(entity: Entity) -> float | None:
@@ -131,7 +127,7 @@ def selected_card_metrics(renderer: "Pygame_Renderer", *, stat_count: int, inven
 
 def selected_entity(env: "Environment", renderer: "Pygame_Renderer") -> Entity | None:
     """Return the entity currently selected in the renderer, if it still exists."""
-    selected = getattr(renderer, "selected_entity", None)
+    selected = pygame_runtime(renderer).view.selected_entity
     if selected is None:
         return None
     return selected if selected in env.state.entities else None
@@ -139,23 +135,24 @@ def selected_entity(env: "Environment", renderer: "Pygame_Renderer") -> Entity |
 
 def update_damage_flash_state(renderer: "Pygame_Renderer", env: "Environment", scene: Any) -> None:
     """Track recent health drops so damaged entities can flash briefly."""
+    effects = pygame_runtime(renderer).effects
     now = time.monotonic()
     active_entities = set(env.state.entities)
-    renderer._damage_flash_until = {
+    effects.damage_flash_until = {
         entity: until
-        for entity, until in renderer._damage_flash_until.items()
+        for entity, until in effects.damage_flash_until.items()
         if entity in active_entities and until > now
     }
     current_step = int(scene_metadata(scene, "simulation.step", getattr(env, "cur_step", 0)))
-    for hit_payload in scene_layer_data(scene, "effects.entity_hits"):
+    for hit_payload in scene.layers.get("effects.entity_hits", []):
         entity = hit_payload.get("entity") if isinstance(hit_payload, dict) else hit_payload
         visible_step = hit_payload.get("step") if isinstance(hit_payload, dict) else None
         if entity not in active_entities:
             continue
         if visible_step is not None and int(visible_step) != current_step:
             continue
-        renderer._damage_flash_until[entity] = max(
-                renderer._damage_flash_until.get(entity, 0.0),
+        effects.damage_flash_until[entity] = max(
+                effects.damage_flash_until.get(entity, 0.0),
                 now + 1.0,
         )
 
@@ -165,13 +162,13 @@ def update_damage_flash_state(renderer: "Pygame_Renderer", env: "Environment", s
         if health_value is None:
             continue
         next_health_values[entity] = health_value
-        previous_value = renderer._last_health_values.get(entity)
+        previous_value = effects.last_health_values.get(entity)
         if previous_value is not None and health_value < previous_value:
-            renderer._damage_flash_until[entity] = now + 1.0
-            renderer.camera_shake_until = max(renderer.camera_shake_until, now + 0.22)
-            renderer.camera_shake_strength = max(renderer.camera_shake_strength, renderer.tile_size * 0.12)
+            effects.damage_flash_until[entity] = now + 1.0
+            effects.camera_shake_until = max(effects.camera_shake_until, now + 0.22)
+            effects.camera_shake_strength = max(effects.camera_shake_strength, renderer.tile_size * 0.12)
 
-    renderer._last_health_values = next_health_values
+    effects.last_health_values = next_health_values
 
 
 def entity_world_position(
@@ -183,7 +180,7 @@ def entity_world_position(
     position = getattr(entity, "position", None)
     if position is None:
         return None
-    x, y = renderer.layout.screen_position(entity, env)
+    x, y = renderer.layout.screen_position(entity, env, renderer.render_context)
     return int(x), int(y)
 
 
@@ -197,22 +194,25 @@ def update_camera_state(
     max_world_y: int,
 ) -> tuple[int, int, int, int]:
     """Choose visible tile bounds from either full-map or focused camera mode."""
-    focused = getattr(renderer, "camera_focus_entity", None)
+    runtime = pygame_runtime(renderer)
+    view = runtime.view
+    effects = runtime.effects
+    focused = view.camera_focus_entity
     if focused in env.state.entities:
         position = entity_world_position(renderer, env, focused)
         if position is not None:
             focus_x, focus_y = position
             radius = focused_radius(env, renderer)
-            renderer.camera_focus_radius_tiles = radius
-            renderer.camera_shake_strength = (
-                0.0 if renderer.camera_shake_until <= time.monotonic() else renderer.camera_shake_strength
+            view.camera_focus_radius_tiles = radius
+            effects.camera_shake_strength = (
+                0.0 if effects.camera_shake_until <= time.monotonic() else effects.camera_shake_strength
             )
             return (
                 *centered_camera_axis(focus_x, radius, min_world_x, max_world_x),
                 *centered_camera_axis(focus_y, radius, min_world_y, max_world_y),
             )
 
-    renderer.camera_shake_strength = 0.0 if renderer.camera_shake_until <= time.monotonic() else renderer.camera_shake_strength
+    effects.camera_shake_strength = 0.0 if effects.camera_shake_until <= time.monotonic() else effects.camera_shake_strength
     return min_world_x, max_world_x, min_world_y, max_world_y
 
 
@@ -316,7 +316,7 @@ def shared_tile_entity_rect(
 
 def draw_focus_ring(renderer: "Pygame_Renderer", entity: Entity, px: int, py: int, size: int | None = None) -> None:
     """Highlight the focused agent so the camera mode is visually obvious."""
-    if renderer.camera_focus_entity is not entity:
+    if pygame_runtime(renderer).view.camera_focus_entity is not entity:
         return
     entity_size = renderer.tile_size if size is None else size
     ring_rect = pygame.Rect(px - 4, py - 4, entity_size + 8, entity_size + 8)
@@ -325,7 +325,7 @@ def draw_focus_ring(renderer: "Pygame_Renderer", entity: Entity, px: int, py: in
 
 def draw_selection_ring(renderer: "Pygame_Renderer", entity: Entity, px: int, py: int, size: int | None = None) -> None:
     """Highlight the selected entity so inspection is visually anchored."""
-    if renderer.selected_entity is not entity:
+    if pygame_runtime(renderer).view.selected_entity is not entity:
         return
     entity_size = renderer.tile_size if size is None else size
     ring_rect = pygame.Rect(px - 7, py - 7, entity_size + 14, entity_size + 14)
@@ -350,7 +350,7 @@ def draw_selected_entity_card(
         return
 
     px, py = position
-    entity_rect = renderer._last_drawn_entity_rects.get(
+    entity_rect = pygame_runtime(renderer).view.last_drawn_entity_rects.get(
         inspected,
         pygame.Rect(px, py, renderer.tile_size, renderer.tile_size),
     )
@@ -610,7 +610,7 @@ def draw_entity(
         raise FileNotFoundError(
             f"Sprite renderer expected a valid sprite path for '{entity.name}', but could not resolve '{sprite_name}'."
         )
-    flash_until = renderer._damage_flash_until.get(entity, 0.0)
+    flash_until = pygame_runtime(renderer).effects.damage_flash_until.get(entity, 0.0)
     if flash_until > time.monotonic():
         scaled_image = flash_tinted_surface(scaled_image, tint=(190, 20, 20), alpha=140)
     is_wall = renderable.wall_set is not None
@@ -623,7 +623,7 @@ def draw_entity(
         shadow_y = py + sprite_size - shadow_height // 2 - max(2, sprite_size // 12)
         renderer.shadow_surface.blit(shadow, (shadow_x, shadow_y))
     renderer.entity_surface.blit(scaled_image, (px, py))
-    renderer._last_drawn_entity_rects[entity] = pygame.Rect(px, py, sprite_size, sprite_size)
+    pygame_runtime(renderer).view.last_drawn_entity_rects[entity] = pygame.Rect(px, py, sprite_size, sprite_size)
     draw_selection_ring(renderer, entity, px, py, sprite_size)
     draw_focus_ring(renderer, entity, px, py, sprite_size)
 
@@ -678,7 +678,7 @@ def draw_hit_effects(
     entity_positions: dict[Entity, tuple[int, int]],
 ) -> None:
     """Draw transient hit-effect sprites centered on affected entities."""
-    hit_effects = scene_layer_data(scene, "effects.entity_hits")
+    hit_effects = scene.layers.get("effects.entity_hits", [])
     if not hit_effects:
         return
 
@@ -695,7 +695,7 @@ def draw_hit_effects(
             continue
 
         px, py = entity_positions[entity]
-        entity_rect = renderer._last_drawn_entity_rects.get(
+        entity_rect = pygame_runtime(renderer).view.last_drawn_entity_rects.get(
             entity,
             pygame.Rect(px, py, renderer.tile_size, renderer.tile_size),
         )
@@ -933,7 +933,8 @@ def draw_end_overlay(renderer: "Pygame_Renderer", scene: Any, world_x: int, worl
 def draw_world_vignette(renderer: "Pygame_Renderer", world_x: int, world_width: int, world_height: int) -> None:
     """Apply a subtle darkening toward the edges of the world view."""
     cache_key = (world_width, world_height)
-    overlay = renderer._vignette_cache.get(cache_key)
+    session = pygame_runtime(renderer).session
+    overlay = session.vignette_cache.get(cache_key)
     if overlay is None:
         overlay = pygame.Surface((world_width, world_height), pygame.SRCALPHA)
         center_x = world_width / 2
@@ -944,7 +945,7 @@ def draw_world_vignette(renderer: "Pygame_Renderer", world_x: int, world_width: 
                 distance = math.hypot(x - center_x, y - center_y)
                 alpha = int(max(0.0, min(78.0, ((distance / max_distance) ** 1.9) * 78.0)))
                 overlay.set_at((x, y), (6, 8, 12, alpha))
-        renderer._vignette_cache[cache_key] = overlay
+        session.vignette_cache[cache_key] = overlay
     renderer.screen.blit(overlay, (world_x, 0))
 
 
@@ -994,7 +995,7 @@ def collect_speech_bubbles(scene: Any) -> list[dict[str, Any]]:
     """Collect speech bubble payloads published into the renderer state."""
     current_step = int(scene_metadata(scene, "simulation.step", 0))
     bubbles = []
-    for bubble in scene_layer_data(scene, "ui.speech_bubbles"):
+    for bubble in scene.layers.get("ui.speech_bubbles", []):
         if not isinstance(bubble, dict):
             continue
         visible_step = bubble.get("step", bubble.get("_step"))
@@ -1037,7 +1038,7 @@ def draw_speech_bubbles(
             continue
 
         px, py = entity_positions[entity]
-        entity_rect = renderer._last_drawn_entity_rects.get(
+        entity_rect = pygame_runtime(renderer).view.last_drawn_entity_rects.get(
             entity,
             pygame.Rect(px, py, renderer.tile_size, renderer.tile_size),
         )
@@ -1164,12 +1165,14 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
     if scene is None:
         scene = renderer.extract_scene(env)
     update_damage_flash_state(renderer, env, scene)
-    renderables = scene_layer_data(scene, "world.renderables")
-    background = scene_layer_data(scene, "world.background_tiles")
-    if renderer.selected_entity is not None and selected_entity(env, renderer) is None:
-        renderer.selected_entity = None
-    if renderer.camera_focus_entity is not None and renderer.camera_focus_entity not in env.state.entities:
-        renderer.camera_focus_entity = None
+    runtime = pygame_runtime(renderer)
+    view = runtime.view
+    renderables = scene.layers.get("world.renderables", [])
+    background = scene.layers.get("world.background_tiles", [])
+    if view.selected_entity is not None and selected_entity(env, renderer) is None:
+        view.selected_entity = None
+    if view.camera_focus_entity is not None and view.camera_focus_entity not in env.state.entities:
+        view.camera_focus_entity = None
     min_world_x, max_world_x, min_world_y, max_world_y = world_bounds(renderer, env, background, renderables)
     full_grid_width = max(1, max_world_x - min_world_x + 1)
     full_grid_height = max(1, max_world_y - min_world_y + 1)
@@ -1208,7 +1211,7 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
     tile_area_width = grid_width * layout_tile_size
     tile_area_height = grid_height * layout_tile_size
     active_tile_size = layout_tile_size
-    if renderer.camera_focus_entity is not None:
+    if view.camera_focus_entity is not None:
         focus_fit = min(
             tile_area_width // view_grid_width,
             tile_area_height // view_grid_height,
@@ -1237,7 +1240,7 @@ def render_environment(renderer: "Pygame_Renderer", env: "Environment", scene: A
     renderer.effect_surface = pygame.Surface((world_width, world_height), pygame.SRCALPHA)
     renderer.world_surface = renderer.floor_surface
     renderer.floor_surface.fill((8, 11, 16))
-    renderer._last_drawn_entity_rects = {}
+    view.last_drawn_entity_rects = {}
 
     renderer.tile_size = active_tile_size
     try:

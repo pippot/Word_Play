@@ -34,9 +34,8 @@ class Frame_Metadata_Extractor(Render_Extractor):
         env: "Environment",
         render_state: Renderer_State,
         scene: Render_Scene,
-        context: Render_Context,
+        _context: Render_Context,
     ) -> None:
-        del context
         scene.metadata.update(render_state.frame)
         scene.metadata.setdefault("simulation.step", _frame_step(env))
         scene.metadata.setdefault("simulation.is_replay", False)
@@ -47,11 +46,10 @@ class Visible_Renderables_Extractor(Render_Extractor):
     def extract(
         self,
         env: "Environment",
-        render_state: Renderer_State,
+        _render_state: Renderer_State,
         scene: Render_Scene,
-        context: Render_Context,
+        _context: Render_Context,
     ) -> None:
-        del render_state, context
         renderables: list[tuple[int, Entity, Renderable]] = []
         for entity in env.state.entities:
             renderable = entity.get_component(Renderable)
@@ -59,7 +57,7 @@ class Visible_Renderables_Extractor(Render_Extractor):
                 continue
             renderables.append((renderable.z_index, entity, renderable))
         renderables.sort(key=lambda item: item[0])
-        scene.set_layer("world.renderables", renderables)
+        scene.layers["world.renderables"] = renderables
 
 
 class Background_Tiles_Extractor(Render_Extractor):
@@ -69,22 +67,18 @@ class Background_Tiles_Extractor(Render_Extractor):
     def extract(
         self,
         env: "Environment",
-        render_state: Renderer_State,
+        _render_state: Renderer_State,
         scene: Render_Scene,
         context: Render_Context,
     ) -> None:
-        del render_state, context
-        self.layout.prepare_env(env)
+        self.layout.prepare_env(env, context)
         positioned_entities: list[tuple[Any, float, float]] = []
-        for _, entity, _ in scene.get_layer("world.renderables"):
-            x, y = self.layout.screen_position(entity, env)
+        for _, entity, _ in scene.layers.get("world.renderables", []):
+            x, y = self.layout.screen_position(entity, env, context)
             positioned_entities.append((entity, x, y))
 
-        background = self.layout.background(env, positioned_entities)
-        scene.set_layer(
-            "world.background_tiles",
-            [normalize_background_item(item) for item in background],
-        )
+        background = self.layout.background(env, positioned_entities, context)
+        scene.layers["world.background_tiles"] = [normalize_background_item(item) for item in background]
 
 
 class Speech_Bubble_Extractor(Render_Extractor):
@@ -93,9 +87,8 @@ class Speech_Bubble_Extractor(Render_Extractor):
         env: "Environment",
         render_state: Renderer_State,
         scene: Render_Scene,
-        context: Render_Context,
+        _context: Render_Context,
     ) -> None:
-        del context
         current_step = int(scene.metadata.get("simulation.step", _frame_step(env)))
         bubbles: list[dict[str, Any]] = []
         for event in render_state.events:
@@ -117,22 +110,18 @@ class Speech_Bubble_Extractor(Render_Extractor):
                 if current_step > bubble_step:
                     continue
             bubbles.append(bubble)
-        scene.set_layer("ui.speech_bubbles", bubbles)
+        scene.layers["ui.speech_bubbles"] = bubbles
 
 
 class Hit_Effect_Extractor(Render_Extractor):
     def extract(
         self,
-        env: "Environment",
+        _env: "Environment",
         render_state: Renderer_State,
         scene: Render_Scene,
-        context: Render_Context,
+        _context: Render_Context,
     ) -> None:
-        del env, context
-        scene.set_layer(
-            "effects.entity_hits",
-            [dict(event.payload) for event in render_state.events if event.kind == "hit"],
-        )
+        scene.layers["effects.entity_hits"] = [dict(event.payload) for event in render_state.events if event.kind == "hit"]
 
 
 def default_pygame_extractors(layout: "Position_Layout_Adapter") -> list[Render_Extractor]:

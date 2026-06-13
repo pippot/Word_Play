@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, TypeVar, cast
 
 if TYPE_CHECKING:
     from .environment import Environment
+
+
+T = TypeVar("T")
 
 
 @dataclass(slots=True)
@@ -31,25 +34,17 @@ class Render_Scene:
     metadata: dict[str, Any] = field(default_factory=dict)
     layers: dict[str, list[Any]] = field(default_factory=dict)
 
-    def set_layer(self, name: str, items: list[Any]) -> None:
-        self.layers[name] = list(items)
-
-    def add(self, name: str, item: Any) -> None:
-        self.layers.setdefault(name, []).append(item)
-
-    def extend(self, name: str, items: list[Any]) -> None:
-        self.layers.setdefault(name, []).extend(items)
-
-    def get_layer(self, name: str) -> list[Any]:
-        return self.layers.get(name, [])
-
 
 @dataclass(slots=True)
 class Render_Context:
-    private: dict[object, dict[str, Any]] = field(default_factory=dict)
+    private: dict[object, Any] = field(default_factory=dict)
 
-    def state_for(self, owner: object) -> dict[str, Any]:
-        return self.private.setdefault(owner, {})
+    def value_for(self, owner: object, factory: Callable[[], T]) -> T:
+        value = self.private.get(owner)
+        if value is None:
+            value = factory()
+            self.private[owner] = value
+        return cast(T, value)
 
 
 @dataclass(slots=True)

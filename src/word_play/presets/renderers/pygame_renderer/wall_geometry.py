@@ -36,7 +36,7 @@ def world_bounds(
 
     for _, entity, _ in renderables:
         try:
-            x, y = renderer.layout.screen_position(entity, env)
+            x, y = renderer.layout.screen_position(entity, env, renderer.render_context)
         except AttributeError:
             continue
         xs.append(int(x))

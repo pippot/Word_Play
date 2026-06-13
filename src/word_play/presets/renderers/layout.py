@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
 from word_play.presets.movement.single_point import Single_Point_Position
 
 if TYPE_CHECKING:
-    from word_play.core import Environment
+    from word_play.core import Environment, Render_Context
 
 
 _DEFAULT_FLOOR = "src/world_tiles/indoors/floors/day_brick_floor_c.png"
+
+
+@dataclass(slots=True)
+class _SinglePointLayoutState:
+    cached_background: list[dict[str, Any]] | None = None
+    offsets_by_entity: dict[Any, tuple[float, float]] = field(default_factory=dict)
 
 
 def _render_frame(env: "Environment" | None) -> dict[str, Any]:
@@ -70,18 +77,24 @@ class Position_Layout_Adapter(ABC):
     """Map environment positions and optional backgrounds into render space."""
 
     @abstractmethod
-    def screen_position(self, entity: Any, env: "Environment") -> tuple[float, float]:
+    def screen_position(
+        self,
+        entity: Any,
+        env: "Environment",
+        context: "Render_Context | None" = None,
+    ) -> tuple[float, float]:
         """Convert a world position into renderer grid coordinates."""
 
     def background(
         self,
         env: "Environment",
         positioned_entities: list[tuple[Any, float, float]],
+        _context: "Render_Context | None" = None,
     ) -> list[dict[str, Any]]:
         """Return background tiles to draw behind entities."""
         return []
 
-    def prepare_env(self, env: "Environment") -> None:
+    def prepare_env(self, env: "Environment", _context: "Render_Context | None" = None) -> None:
         """Update any renderer-facing derived state before drawing."""
         return None
 
@@ -93,6 +106,7 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
         self,
         env: "Environment",
         positioned_entities: list[tuple[Any, float, float]],
+        _context: "Render_Context | None" = None,
     ) -> list[dict[str, Any]]:
         """Fetch background tiles from renderer data or auto-generate a floor."""
         render_frame = _render_frame(env)
@@ -122,7 +136,12 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
             ]
         return []
 
-    def screen_position(self, entity: Any, env: "Environment") -> tuple[float, float]:
+    def screen_position(
+        self,
+        entity: Any,
+        _env: "Environment",
+        _context: "Render_Context | None" = None,
+    ) -> tuple[float, float]:
         """Project the position without changing its coordinates."""
         position = getattr(entity, "position", entity)
         x = getattr(position, 'x', None)
@@ -134,7 +153,7 @@ class Grid_Layout_Adapter(Position_Layout_Adapter):
             return float(position[0]), float(position[1])
         return 0.0, 0.0
 
-    def prepare_env(self, env: "Environment") -> None:
+    def prepare_env(self, _env: "Environment", _context: "Render_Context | None" = None) -> None:
         """Grid rendering derives transient visuals at draw time."""
         return None
 
@@ -240,8 +259,11 @@ class SinglePointLayout(Position_Layout_Adapter):
         self.layout_mode = layout_mode
         self.include_room = include_room
         self.only_agents = only_agents
-        self._cached_background: list[dict[str, Any]] | None = None
-        self._offsets_by_entity: dict[Any, tuple[float, float]] = {}
+
+    def _runtime_state(self, context: "Render_Context | None") -> _SinglePointLayoutState:
+        if context is None:
+            raise ValueError("SinglePointLayout requires a Render_Context for renderer-private layout state.")
+        return context.value_for(self, _SinglePointLayoutState)
 
     def _calculate_room_size(self, n_agents: int) -> tuple[int, int]:
         """Calculate room size based on agent count."""
@@ -259,11 +281,12 @@ class SinglePointLayout(Position_Layout_Adapter):
         """Get a nice floor sprite."""
         return SinglePointLayout.DEFAULT_FLOOR
 
-    def prepare_env(self, env: "Environment") -> None:
+    def prepare_env(self, env: "Environment", context: "Render_Context | None" = None) -> None:
         """Calculate visual positions for entities at this point."""
         if env is None:
             return
 
+        runtime = self._runtime_state(context)
         entities = list(getattr(env.state, "entities", []))
 
         # Filter entities to position
@@ -276,7 +299,7 @@ class SinglePointLayout(Position_Layout_Adapter):
             ]
 
         n = len(positioned_entities)
-        self._offsets_by_entity.clear()
+        runtime.offsets_by_entity.clear()
         if n == 0:
             return
 
@@ -289,7 +312,7 @@ class SinglePointLayout(Position_Layout_Adapter):
         # Calculate room size if needed
         agent_count = len([e for e in positioned_entities if getattr(e, "is_agent", False)])
         if self.include_room and agent_count > 0:
-            self._cached_background = None
+            runtime.cached_background = None
 
         # Calculate offsets based on layout mode
         if self.layout_mode == "compass":
@@ -303,21 +326,24 @@ class SinglePointLayout(Position_Layout_Adapter):
                     self.radius * math.sin(angle) * 0.7,
                 ))
 
-        # Cache transient layout offsets in renderer-private state.
+        # Cache transient layout offsets in renderer-owned private runtime state.
         for entity, (offset_x, offset_y) in zip(positioned_entities, offsets):
-            self._offsets_by_entity[entity] = (offset_x, offset_y)
+            runtime.offsets_by_entity[entity] = (offset_x, offset_y)
 
     def background(
         self,
         env: "Environment" | None,
         positioned_entities: list[tuple[Any, float, float]],
+        context: "Render_Context | None" = None,
     ) -> list[dict[str, Any]]:
         """Generate optional room background with walls and flooring."""
+        del positioned_entities
         if not self.include_room:
             return []
 
-        if self._cached_background is not None:
-            return self._cached_background
+        runtime = self._runtime_state(context)
+        if runtime.cached_background is not None:
+            return runtime.cached_background
 
         if env is None:
             return []
@@ -375,14 +401,19 @@ class SinglePointLayout(Position_Layout_Adapter):
                     "wall_set": self.WALL_SET,
                 })
 
-        self._cached_background = tiles
+        runtime.cached_background = tiles
         return tiles
 
-    def screen_position(self, entity: Any, env: "Environment") -> tuple[float, float]:
+    def screen_position(
+        self,
+        entity: Any,
+        env: "Environment",
+        context: "Render_Context | None" = None,
+    ) -> tuple[float, float]:
         """Convert position to screen coordinates."""
         position = getattr(entity, "position", entity)
         if isinstance(position, Single_Point_Position):
-            offset_x, offset_y = self._offsets_by_entity.get(entity, (0.0, 0.0))
+            offset_x, offset_y = self._runtime_state(context).offsets_by_entity.get(entity, (0.0, 0.0))
             return (self.base_x + offset_x, self.base_y + offset_y)
 
         # Fallback: try to get x/y attributes, default to center

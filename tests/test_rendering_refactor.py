@@ -14,6 +14,7 @@ from word_play.core import (
     Entity,
     Environment,
     Observation,
+    Render_Context,
     Render_Result,
     Renderer,
     Renderer_State,
@@ -119,6 +120,19 @@ class RenderingRefactorTests(unittest.TestCase):
         self.assertEqual(env.render_state.events, [])
         self.assertFalse(hasattr(env, "renderer_impl"))
         self.assertFalse(hasattr(env, "renderer_recorder"))
+
+    def test_render_context_can_store_typed_private_runtime_state(self):
+        @dataclass(slots=True)
+        class RuntimeBox:
+            counter: int = 0
+
+        context = Render_Context()
+        first = context.value_for("runtime.box", RuntimeBox)
+        second = context.value_for("runtime.box", RuntimeBox)
+
+        first.counter = 7
+        self.assertIs(first, second)
+        self.assertEqual(second.counter, 7)
 
     def test_reset_recreates_renderer_state(self):
         renderer = DummyRenderer()

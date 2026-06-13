@@ -26,13 +26,13 @@ class Pygame_Renderer(Renderer):
         default_floor_sprite: str = "sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png",
         extractors: Sequence[Render_Extractor] | None = None,
     ):
+        self.render_context: Render_Context = self.create_render_context()
         configure_renderer(
             self,
             layout=layout,
             tile_size=tile_size,
         )
         self.default_floor_sprite = default_floor_sprite
-        self.render_context: Render_Context = self.create_render_context()
         self.extractors: list[Render_Extractor] = list(extractors or default_pygame_extractors(layout))
 
     def create_renderer_state(self) -> Renderer_State:

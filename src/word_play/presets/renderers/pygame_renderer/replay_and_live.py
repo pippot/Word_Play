@@ -238,7 +238,7 @@ def replay_frames(
     import pygame
 
     from .draw import render_environment
-    from .runtime import handle_entity_click, init_pygame_if_needed
+    from .runtime import handle_entity_click, init_pygame_if_needed, pygame_runtime
 
     init_pygame_if_needed(renderer)
     if not frames:
@@ -248,13 +248,14 @@ def replay_frames(
     paused = not autoplay
     viewing_index = 0
     last_advance = time.monotonic()
-    renderer.camera_focus_entity = None
-    renderer.selected_entity = None
+    view = pygame_runtime(renderer).view
+    view.camera_focus_entity = None
+    view.selected_entity = None
 
     while True:
         replay_env = ReplayFrameEnvironment(dict(frames[viewing_index]))
-        renderer.selected_entity = _remap_replay_entity(renderer.selected_entity, replay_env)
-        renderer.camera_focus_entity = _remap_replay_entity(renderer.camera_focus_entity, replay_env)
+        view.selected_entity = _remap_replay_entity(view.selected_entity, replay_env)
+        view.camera_focus_entity = _remap_replay_entity(view.camera_focus_entity, replay_env)
         render_environment(renderer, replay_env)
 
         for event in pygame.event.get():
