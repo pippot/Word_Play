@@ -125,4 +125,8 @@ see `src/word_play/presets/renderers/README.md`.
 
 ## Acknowledgements
 
+We acknowledge the following sponsors, who support our research with financial and in-kind contributions: CIFAR through the Canada CIFAR AI Chair, NSERC through the Discovery Grant and an Alliance Grant with ServiceNow and DRDC, the Schmidt Sciences foundation through the AI2050 Early Career Fellow program. Resources used in preparing this research were provided, in part, by the Province of Ontario, the Government of Canada through CIFAR, and companies sponsoring the Vector Institute. We thank the computing team at the University of Toronto’s Computer Science Department for administrating and procuring the compute infrastructure used for the experiments in this paper.
+
+This work was supported in part by the German Federal Ministry of Education and Research (BMBF): Tübingen AI Center, FKZ: 01IS18039B; by the Machine Learning Cluster of Excellence, EXC number 2064/1 – Project number 390727645; by Schmidt Sciences SAFE-AI Grant; by the Frontier Model Forum and AI Safety Fund; by Coefficient Giving; by the Canadian AI Safety Institute Research Program at CIFAR; by the Canadian AI Safety Institute Research Program at CIFAR through a Catalyst Award; by the Survival and Flourishing Fund; and by the Cooperative AI Foundation. The usage of OpenAI credits is largely supported by the Tübingen AI Center and Schmidt Sciences. Resources used in preparing this research project were provided, in part, by the Province of Ontario, the Government of Canada through CIFAR, and companies sponsoring the Vector Institute.
+
 We are thankful to Darci Prout for coming up with the name "WordPlay."
