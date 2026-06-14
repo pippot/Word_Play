@@ -42,7 +42,6 @@ from word_play.presets.systems.inventory import Inventory
 from word_play.utils import tilemap_to_entities
 
 import pprint
-import time
 
 
 class Test_Action(Action):
@@ -108,7 +107,6 @@ def run_exp():
             ],
             "components": [
                 Human_Takes_Action(),
-                # Random_Action_Policy(),
                 Inventory(
                     collectable_tags=["item"],
                     inventory_size=2,
@@ -232,8 +230,6 @@ def run_exp():
     )
 
     for step in range(exp_steps):
-        time.sleep(0.25)
-
         render_result = env.render()
         if render_result.quit_requested:
             break
