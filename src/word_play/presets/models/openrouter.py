@@ -25,7 +25,7 @@ class OpenRouter_Model(Model):
         site_url: str | None = None,
         app_name: str | None = None,
         base_url: str = "https://openrouter.ai/api/v1",
-        api_key_env: str = "OPENROUTER_API_KEY",
+        api_key_env_var_name: str = "OPENROUTER_API_KEY",
         verbosity: int = 0,
     ):
         super().__init__(verbosity=verbosity)
@@ -33,7 +33,7 @@ class OpenRouter_Model(Model):
         self.system_prompt = system_prompt
         self.default_generation_config = dict(generation_config or {})
         self.base_url = base_url
-        self.api_key_env = api_key_env
+        self.api_key_env_var_name = api_key_env_var_name
 
         self._headers: dict[str, str] = {}
         if site_url:
@@ -42,7 +42,7 @@ class OpenRouter_Model(Model):
             self._headers["X-Title"] = app_name
 
     def _get_client(self):
-        cache_key = (self.base_url, self.api_key_env, tuple(sorted(self._headers.items())))
+        cache_key = (self.base_url, self.api_key_env_var_name, tuple(sorted(self._headers.items())))
         if cache_key in self._CLIENT_CACHE:
             return self._CLIENT_CACHE[cache_key]
 
@@ -51,9 +51,9 @@ class OpenRouter_Model(Model):
         except ImportError as exc:
             raise ImportError("OpenRouter_Model requires the 'openai' package.") from exc
 
-        api_key = os.getenv(self.api_key_env)
+        api_key = os.getenv(self.api_key_env_var_name)
         if not api_key:
-            raise EnvironmentError(f"Missing environment variable: {self.api_key_env}")
+            raise EnvironmentError(f"Missing environment variable: {self.api_key_env_var_name}")
 
         client = OpenAI(
             api_key=api_key,
@@ -63,9 +63,7 @@ class OpenRouter_Model(Model):
         self._CLIENT_CACHE[cache_key] = client
         return client
 
-    def _build_messages(
-        self, messages: Sequence[Chat_Message | Mapping[str, Any]]
-    ) -> list[dict[str, str]]:
+    def _build_messages(self, messages: Sequence[Chat_Message | Mapping[str, Any]]) -> list[dict[str, str]]:
         normalized = normalize_chat_messages(messages)
         if self.system_prompt and not any(message["role"] == "system" for message in normalized):
             return [{"role": "system", "content": self.system_prompt}, *normalized]

@@ -90,7 +90,8 @@ class Model(ABC):
         max_new_tokens: int | None = None,
     ) -> str:
         if not isinstance(input_text, str):
-            raise TypeError("generate_text() accepts one string.")
+            raise TypeError("generate_text() accepts one string. Use generate_text_batch() for batched inputs.")
+
         return self.generate_chat(
             messages=[Chat_Message(role="user", content=input_text)],
             generation_config=generation_config,
