@@ -16,9 +16,10 @@ class Model_Registry:
 
     Usage:
         # register once before building any agents
-        LLM_MODEL_REGISTRY.register("main", OpenRouter_Model,
-            model_name="qwen/qwen3-0.6b-04-28:free",
-            system_prompt="...",
+        register_openrouter_model(
+            "main",
+            model_name="openai/gpt-5-mini",
+            api_key_env="OPENROUTER_API_KEY",
         )
 
         # agents hold only the key string

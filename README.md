@@ -29,17 +29,18 @@ The LLM examples also require an OpenRouter API key:
 
 ```bash
 export OPENROUTER_API_KEY=...
-python examples/llm_action_only_goal_line.py
-python examples/llm_three_agent_communication.py
+python examples/agent_goal_tracking.py
+python examples/llm_communication.py
 ```
 
 ## Examples
 
-- `examples/simple_env_0.py`: a hand-built `Simple_2D_Grid_World` with human action and communication policies, movement, combat, health, inventory, collision, and nearby entities.
-- `examples/simple_env_1.py`: similar to `simple_env_0.py`, but builds entities from a compact tilemap and includes an action with typed kwargs.
-- `examples/complex_tilemap.py`: a larger tilemap example using the list-based tilemap format and `randomize_agent_order`.
-- `examples/llm_action_only_goal_line.py`: one LLM-controlled agent using `LLM_Action_And_Communication_Policy` for action selection only. No communication actions are added.
-- `examples/llm_three_agent_communication.py`: three LLM-controlled agents share private signals, then choose actions based on the conversation. This is a compact check that LLM communication is working.
+- `examples/simple_env_0.py`: a minimal `Simple_2D_Grid_World` showing human-controlled actions, communication, combat, health, inventory, and collision.
+- `examples/complex_tilemap.py`: a larger tilemap-driven grid world that demonstrates `tilemap_to_entities`, `randomize_agent_order`, observation radius, and typed action kwargs.
+- `examples/rendering_demo.py`: a live pygame rendering demo with sprite-backed entities, walls, items, mixed human and random policies, and reset/quit handling through `env.render()`.
+- `examples/parallelized_agents.py`: a renderer-backed arena that computes multiple agent actions in parallel. This is an important speed-up for multi-agent environments
+- `examples/agent_goal_tracking.py`: a small one-dimensional action-only LLM example where an agent learns to move toward a goal under a time limit.
+- `examples/llm_communication.py`: a three-agent LLM coordination game where each agent shares a private signal, communicates, and then chooses a synchronized action.
 
 ## Optional Dependencies
 
@@ -109,6 +110,9 @@ environments:
 - `entity_orderings.py`: deterministic and randomized entity ordering helpers.
 - `reward_functions.py`: simple reward helpers.
 - `action_args.py` and `action_validations.py`: reusable typed kwargs and action validators.
+
+For renderer architecture, extension points, and pygame implementation details,
+see `src/word_play/presets/renderers/README.md`.
 
 ## Codebase Layout
 

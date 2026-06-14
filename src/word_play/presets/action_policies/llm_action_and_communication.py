@@ -98,11 +98,13 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             try:
                 action_selection = self._parse_selection(raw, observation)
                 self._record_observation(observation)
-                return action_selection, {
+                info = {
                     "raw_response": raw,
                     "reasoning": reasoning,
                     "attempt": attempt + 1,
                 }
+                self._record_last_selection(action_selection, info)
+                return action_selection, info
             except Exception as exc:
                 last_exc = exc
                 selection_prompt = self._retry_prompt(selection_prompt, raw, str(exc))
@@ -112,6 +114,10 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             f"Last error: {last_exc}\n"
             f"Last raw response:\n{last_raw}"
         )
+
+    def _record_last_selection(self, action_selection: Action_Selection, info: dict) -> None:
+        self._last_action = action_selection
+        self._last_info = {**info, "_last_action": action_selection}
 
     def _record_observation(self, observation: Observation) -> None:
         observation_text = self._truncate_text(str(observation), self.max_stored_observation_chars)
