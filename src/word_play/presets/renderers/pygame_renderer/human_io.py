@@ -60,12 +60,11 @@ class Pygame_Overlay_Human_IO(Human_IO):
 
         prompt_state = pygame_runtime(renderer).prompt
         prompt_state.active = True
-        prompt_state.title = request.title
-        prompt_state.body = request.body_text()
+        prompt_state.title = "Human IO"
+        prompt_state.body = request.observation_text
         prompt_state.prompt = request.prompt_text()
         prompt_state.input_text = request.initial_text
         prompt_state.active_start_block_index = len(prompt_state.history_blocks)
-        self._append_history(renderer, f"[{request.title}]")
         if prompt_state.body:
             self._append_history(renderer, prompt_state.body)
         set_prompt_scroll_end(renderer)

@@ -10,26 +10,11 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class Human_Text_Request:
-    instruction: str
-    context: str = ""
-    format_hint: str = ""
-    prompt_label: str = "Input"
-    title: str = "Human Input"
+    observation_text: str
     initial_text: str = ""
 
-    def body_text(self) -> str:
-        sections = [f"Task:\n{self.instruction.strip()}"]
-        context = self.context.strip()
-        if context:
-            sections.append(f"Context:\n{context}")
-        format_hint = self.format_hint.strip()
-        if format_hint:
-            sections.append(f"Reply Format:\n{format_hint}")
-        return "\n\n".join(sections)
-
     def prompt_text(self) -> str:
-        label = self.prompt_label.strip() or "Input"
-        return f"{label}: "
+        return "> "
 
 
 class Human_IO(ABC):
@@ -60,9 +45,9 @@ class Terminal_Human_IO(Human_IO):
         env: "Environment" | None = None,
     ) -> str:
         del env
-        sections = [section for section in (request.title, request.body_text()) if section]
-        if sections:
-            print("\n".join(sections))
+        observation_text = request.observation_text.strip()
+        if observation_text:
+            print(observation_text)
         return input(request.prompt_text())
 
 

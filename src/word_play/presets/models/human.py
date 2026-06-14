@@ -26,8 +26,6 @@ class Human_Model(Model):
         rendered = "\n".join(f"[{message['role']}] {message['content']}" for message in normalized)
         return self.io.request_text(
             Human_Text_Request(
-                instruction="Respond as the human stand-in for the model.",
-                context=rendered,
-                format_hint="Enter the assistant response as plain text.",
+                observation_text=rendered,
             )
         )

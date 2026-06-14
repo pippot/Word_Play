@@ -56,9 +56,7 @@ class Human_Takes_Action(Agent_Policy):
 
     def _action_selection_request(self, observation: Observation) -> Human_Text_Request:
         return Human_Text_Request(
-            instruction="Select exactly one action for the current agent.",
-            context=str(observation),
-            format_hint="Enter the numeric index from the AVAILABLE ACTIONS list.",
+            observation_text=str(observation),
         )
 
     def _format_kwargs_prompt(self, action_selection: Action_Selection) -> str:
@@ -81,9 +79,7 @@ class Human_Takes_Action(Agent_Policy):
 
     def _action_arguments_request(self, action_selection: Action_Selection) -> Human_Text_Request:
         return Human_Text_Request(
-            instruction="Provide the required arguments for the selected action.",
-            context=self._format_kwargs_prompt(action_selection),
-            format_hint="Enter the values in order, separated by ';'.",
+            observation_text=self._format_kwargs_prompt(action_selection),
         )
 
     def _get_action_kwargs(self, action_selection: Action_Selection) -> dict:

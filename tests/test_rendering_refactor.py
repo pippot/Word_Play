@@ -222,10 +222,8 @@ class RenderingRefactorTests(unittest.TestCase):
         action_selection, _ = env.agents[0].get_component(Human_Takes_Action).select_action(env.observe(0))
 
         self.assertEqual(action_selection.action_kwargs, {"count": 7})
-        self.assertEqual(io_backend.requests[0].title, "Human Input")
-        self.assertIn("Select exactly one action", io_backend.requests[0].instruction)
-        self.assertIn("OBSERVATION TEXT", io_backend.requests[0].context)
-        self.assertIn("Provide the required arguments", io_backend.requests[1].instruction)
+        self.assertIn("OBSERVATION TEXT", io_backend.requests[0].observation_text)
+        self.assertIn("Required arguments:", io_backend.requests[1].observation_text)
 
     def test_human_communication_policy_accepts_custom_human_io(self):
         io_backend = RecordingHumanIO(["hello"])
@@ -245,9 +243,7 @@ class RenderingRefactorTests(unittest.TestCase):
         message = policy.send_message([recipient], env)
 
         self.assertEqual(message, "hello")
-        self.assertEqual(io_backend.requests[0].title, "Human Input")
-        self.assertIn("Write the next message for Speaker.", io_backend.requests[0].instruction)
-        self.assertIn("Recipients: Recipient", io_backend.requests[0].context)
+        self.assertIn("Recipients: Recipient", io_backend.requests[0].observation_text)
 
     def test_conversation_messages_publish_into_renderer_state_events(self):
         first = Entity(

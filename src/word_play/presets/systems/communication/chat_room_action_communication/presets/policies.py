@@ -22,9 +22,7 @@ class Human_Communication_Policy(Communication_Policy):
             body_lines.append(info)
         return self.io.request_text(
             Human_Text_Request(
-                instruction=f"Write the next message for {speaker_name}.",
-                context="\n".join(body_lines),
-                format_hint="Enter a single plain-text message.",
+                observation_text="\n".join(body_lines),
             ),
             env=env,
         )
