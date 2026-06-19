@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordPlay — Text Worlds for Language Agents</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #fcf9f5;
+            --bg-alt: #f6f1ea;
+            --text: #2d2a24;
+            --text-soft: #6b645b;
+            --text-muted: #9e958b;
+            --accent: #c25a3a;
+            --accent-light: #f0ddd6;
+            --accent-dark: #9e3f25;
+            --sage: #7a9e8e;
+            --sage-light: #dce8e2;
+            --border: #e5ddd4;
+            --shadow: rgba(45, 42, 36, 0.06);
+            --radius: 10px;
+            --max-w: 1200px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-align: center;
+        }
+
+        .container { max-width: 1500px; margin: 0 auto; padding: 0 16px; }
+
+        /* ── Header ── */
+        header {
+            text-align: left;
+            padding: 72px 0 48px;
+        }
+        header .label {
+            display: inline-block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            margin-bottom: 16px;
+            border: 1.5px solid var(--accent-light);
+            border-radius: 999px;
+            padding: 4px 14px;
+        }
+        header h1 {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: 3.4rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            margin-bottom: 16px;
+        }
+        header .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-soft);
+            max-width: 640px;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+        .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .links a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .links .primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .links .primary:hover { background: var(--accent-dark); }
+        .links .secondary {
+            background: var(--bg-alt);
+            color: var(--text);
+            border: 1.5px solid var(--border);
+        }
+        .links .secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        header .byline {
+            margin-top: 24px;
+            font-size: 0.95rem;
+            color: var(--text-soft);
+        }
+        header .byline strong { color: var(--text); }
+
+        /* ── Divider ── */
+        .divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--border), transparent);
+            margin: 0;
+        }
+
+        /* ── Sections ── */
+        section { padding: 56px 0; }
+        section h2 {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin-bottom: 20px;
+            color: var(--text);
+        }
+        section h2 .accent { color: var(--accent); }
+        section p { font-size: 1.05rem; color: var(--text-soft); margin-bottom: 14px; }
+        section p:last-child { margin-bottom: 0; }
+        section p strong { color: var(--text); }
+        section p a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+        section p a:hover { color: var(--accent-dark); }
+
+        section.alt { background: var(--bg-alt); margin: 0 -24px; padding-left: 24px; padding-right: 24px; }
+
+        /* ── Abstract pull quote ── */
+        .abstract-block {
+            background: #fff;
+            border-left: 3px solid var(--accent);
+            border-radius: 0 var(--radius) var(--radius) 0;
+            padding: 28px 32px;
+            margin: 24px 0;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+        .abstract-block p {
+            font-size: 1.1rem;
+            line-height: 1.7;
+            color: var(--text);
+        }
+
+        /* ── Architecture diagram ── */
+        .diagram-wrapper {
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin: 24px 0;
+            box-shadow: 0 2px 16px var(--shadow);
+            overflow-x: auto;
+        }
+        .diagram-wrapper img {
+            width: 100%;
+            display: block;
+            border-radius: 4px;
+        }
+        .diagram-wrapper svg {
+            display: none;
+        }
+
+        /* ── Feature grid ── */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
+            margin: 24px 0;
+        }
+        .feature-card {
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 26px 24px;
+            transition: box-shadow 0.2s;
+        }
+        .feature-card:hover { box-shadow: 0 4px 20px var(--shadow); }
+        .feature-card .icon {
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+        }
+        .feature-card h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+        .feature-card p {
+            font-size: 0.92rem;
+            color: var(--text-soft);
+            margin: 0;
+        }
+
+        /* ── Video grid ── */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 18px;
+            margin: 24px 0;
+        }
+        .video-card {
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            aspect-ratio: 16 / 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            text-align: center;
+            padding: 20px;
+            gap: 8px;
+            transition: box-shadow 0.2s;
+        }
+        .video-card:hover { box-shadow: 0 4px 20px var(--shadow); }
+        .video-card .play-icon {
+            font-size: 2rem;
+            opacity: 0.4;
+        }
+        .video-card .hint {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Benchmarks ── */
+        .benchmark-group {
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            margin-bottom: 12px;
+        }
+        .benchmark-group:last-child { margin-bottom: 0; }
+        .benchmark-group h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .benchmark-group p {
+            font-size: 0.92rem;
+            margin: 0;
+        }
+
+        /* ── Code block ── */
+        .code-block {
+            background: #2d2a24;
+            color: #e8e4dd;
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 0.88rem;
+            line-height: 1.7;
+            overflow-x: auto;
+            margin: 20px 0;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .code-block .comment { color: #8a847a; }
+        .code-block .prompt { color: var(--sage); }
+
+        /* ── BibTeX ── */
+        .bibtex {
+            background: #f6f1ea;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 20px 0;
+            margin-left: auto;
+            margin-right: auto;
+            white-space: pre;
+        }
+
+        /* ── Acknowledgements ── */
+        .ack-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+        .ack-item {
+            flex: 1;
+            min-width: 200px;
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+        }
+        .ack-item p { font-size: 0.92rem; margin: 0; }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 48px 0 60px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--accent); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        /* ── Hand-drawn decorative squiggle divider ── */
+        .squiggle {
+            text-align: center;
+            color: var(--border);
+            font-size: 1.6rem;
+            letter-spacing: 0.4em;
+            padding: 8px 0;
+            user-select: none;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            header h1 { font-size: 2.2rem; }
+            header { padding: 44px 0 28px; }
+            section { padding: 36px 0; }
+            .abstract-block { padding: 20px; }
+            .feature-grid { grid-template-columns: 1fr; }
+            .video-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ── Tooltip-style badges ── */
+        .tag {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 500;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: var(--accent-light);
+            color: var(--accent-dark);
+            margin-right: 4px;
+        }
+        .tag.sage { background: var(--sage-light); color: #3d6b5a; }
+
+        /* list styling */
+        ul.dashed {
+            list-style: none;
+            padding: 0;
+        }
+        ul.dashed li {
+            padding: 6px 0 6px 24px;
+            position: relative;
+            font-size: 1rem;
+            color: var(--text-soft);
+        }
+        ul.dashed li::before {
+            content: "~";
+            position: absolute;
+            left: 4px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+        ul.dashed li strong { color: var(--text); }
+
+        /* small print */
+        .small { font-size: 0.88rem; color: var(--text-muted); }
+
+        /* ── Focused polish pass ── */
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: #f7f7f3;
+        }
+
+        .container {
+            max-width: 1500px;
+            padding: 0 16px;
+        }
+
+        .topbar {
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px 24px;
+            padding: 6px 0 5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .wordmark {
+            color: var(--text);
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .wordmark span { color: var(--accent); }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 22px;
+        }
+
+        .nav-links a {
+            color: var(--text-soft);
+            font-size: 0.82rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .nav-links a:hover { color: var(--accent); }
+
+        header {
+            max-width: 880px;
+            padding: 12px 0 4px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        header .eyebrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            color: var(--accent);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        header .eyebrow::before {
+            width: 28px;
+            height: 2px;
+            background: var(--accent);
+            content: "";
+        }
+
+        header h1 {
+            font-size: 3.9rem;
+            letter-spacing: 0;
+            margin-bottom: 8px;
+        }
+
+        header .subtitle {
+            max-width: 760px;
+            font-size: 1.04rem;
+            margin-bottom: 12px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .links a {
+            min-height: 38px;
+            border-radius: 6px;
+            padding: 7px 16px;
+        }
+
+        .links {
+            justify-content: center;
+        }
+
+        .links a:hover {
+            transform: translateY(-1px);
+        }
+
+        .links .primary {
+            box-shadow: 0 6px 16px rgba(158, 63, 37, 0.16);
+        }
+
+        .links a:focus-visible,
+        .nav-links a:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+
+        .byline {
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px 24px;
+            padding: 8px 0 10px;
+            color: var(--text-soft);
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .meta-row span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .meta-row span::before {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--sage);
+            content: "";
+        }
+
+        .hero-gallery {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+            width: 37%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-shot {
+            position: relative;
+            aspect-ratio: 88 / 67;
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fff;
+        }
+
+        .hero-shot img,
+        .hero-shot video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            image-rendering: pixelated;
+            transition: transform 0.35s ease;
+            background: #ead2ad;
+        }
+
+        .hero-shot:hover img,
+        .hero-shot:hover video { transform: scale(1.015); }
+
+        .hero-shot figcaption {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            padding: 5px 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            background: rgba(9, 12, 18, 0.82);
+            color: rgba(255, 255, 255, 0.82);
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .scene-strip {
+            display: grid;
+            grid-auto-columns: 150px;
+            grid-auto-flow: column;
+            gap: 8px;
+            padding: 4px 0 14px;
+            overflow-x: auto;
+            overscroll-behavior-inline: contain;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .scene-card {
+            position: relative;
+            aspect-ratio: 4 / 3;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: #fff;
+        }
+
+        .scene-card img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: fill;
+            image-rendering: pixelated;
+            opacity: 0.88;
+            transition: opacity 0.2s ease, transform 0.25s ease;
+        }
+
+        .scene-card:hover img {
+            opacity: 1;
+            transform: scale(1.03);
+        }
+
+        .scene-card figcaption {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            padding: 22px 8px 7px;
+            background: linear-gradient(to top, rgba(7, 9, 14, 0.94), transparent);
+            color: #fff;
+            font-size: 0.69rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        section { padding: 64px 0; }
+
+        section h2 {
+            font-size: 1.72rem;
+            letter-spacing: 0;
+            margin-bottom: 18px;
+        }
+
+        section > p {
+            max-width: 820px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        section.alt {
+            margin: 0 -32px;
+            padding-right: 32px;
+            padding-left: 32px;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: #f0f3ef;
+        }
+
+        .abstract-block,
+        .diagram-wrapper,
+        .feature-card,
+        .video-card,
+        .benchmark-group,
+        .ack-item {
+            border-width: 1px;
+            border-radius: 7px;
+        }
+
+        .abstract-block {
+            max-width: 960px;
+            background: #fff;
+            box-shadow: none;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .diagram-wrapper {
+            padding: 18px;
+            box-shadow: none;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .feature-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .feature-card {
+            padding: 22px;
+            box-shadow: none;
+        }
+
+        .feature-card:hover {
+            border-color: #cfc5ba;
+            box-shadow: 0 8px 20px var(--shadow);
+            transform: translateY(-2px);
+        }
+
+        .feature-card .icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 6px;
+            background: var(--accent-light);
+            color: var(--accent-dark);
+            font-size: 1rem;
+        }
+
+        .video-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .video-card {
+            position: relative;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            align-items: flex-start;
+            justify-content: flex-end;
+            border-color: #30343d;
+            background: #0b0e14;
+            color: #fff;
+            text-align: left;
+        }
+
+        .video-card img,
+        .video-card video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            image-rendering: pixelated;
+            opacity: 0.9;
+            transition: opacity 0.25s ease, transform 0.3s ease;
+        }
+
+        .video-card::after {
+            position: absolute;
+            inset: 52% 0 0;
+            background: linear-gradient(to top, rgba(7, 9, 14, 0.7), transparent);
+            content: "";
+        }
+
+        .video-card strong,
+        .video-card .hint {
+            position: relative;
+            z-index: 1;
+        }
+
+        .video-card strong { font-size: 0.98rem; }
+
+        .video-card .hint {
+            color: rgba(255, 255, 255, 0.82);
+            font-size: 0.75rem;
+            text-align: left;
+        }
+
+        .video-card:hover img,
+        .video-card:hover video {
+            opacity: 1;
+            transform: scale(1.02);
+        }
+
+        .launch-video {
+            overflow: hidden;
+            border: 1px solid #30343d;
+            border-radius: 7px;
+            background: #0b0e14;
+            aspect-ratio: 16 / 9;
+            margin: 24px 0 14px;
+        }
+
+        .launch-video video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            image-rendering: pixelated;
+        }
+
+        .video-card.placeholder {
+            border-color: var(--border);
+            background: linear-gradient(135deg, #f5efe6, #ebe2d6);
+            color: var(--text);
+            justify-content: space-between;
+        }
+
+        .video-card.placeholder::after {
+            display: none;
+        }
+
+        .video-card.placeholder strong {
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .video-card.placeholder .hint {
+            color: var(--text-soft);
+            font-size: 0.82rem;
+        }
+
+        .placeholder-label {
+            position: relative;
+            z-index: 1;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .example-card {
+            background: #fff;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .example-name {
+            font-size: 0.98rem;
+            color: var(--text);
+        }
+
+        .example-preview,
+        .example-command {
+            border: 1.5px dashed var(--border);
+            border-radius: 8px;
+            background: var(--bg-alt);
+            color: var(--text-soft);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 14px;
+        }
+
+        .example-preview {
+            aspect-ratio: 4 / 3;
+            font-size: 0.92rem;
+        }
+
+        .example-command {
+            min-height: 56px;
+            font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 0.8rem;
+        }
+
+        .squiggle {
+            height: 1px;
+            margin: 8px 0;
+            padding: 0;
+            overflow: hidden;
+            background: var(--border);
+            font-size: 0;
+        }
+
+        .code-block {
+            max-width: 760px;
+            border: 1px solid #3f434b;
+            border-radius: 7px;
+            background: #15181f;
+        }
+
+        .bibtex { max-width: 820px; }
+
+        #benchmarks {
+            padding-top: 24px;
+            padding-bottom: 24px;
+        }
+
+        #benchmarks h2 {
+            margin-bottom: 8px;
+        }
+
+        #benchmarks > p {
+            max-width: 1080px;
+            margin-bottom: 0;
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        .benchmark-gallery {
+            display: grid;
+            grid-template-columns: repeat(10, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .benchmark-preview {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: #fff;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .benchmark-preview:hover {
+            border-color: #c8b9aa;
+            transform: translateY(-2px);
+        }
+
+        .benchmark-preview img {
+            width: 100%;
+            aspect-ratio: 6 / 5;
+            display: block;
+            object-fit: fill;
+            image-rendering: pixelated;
+        }
+
+        .benchmark-preview figcaption {
+            overflow: hidden;
+            padding: 4px 6px;
+            color: var(--text);
+            font-size: 0.58rem;
+            font-weight: 600;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 800px) {
+            .nav-links { display: none; }
+            header { padding-top: 28px; }
+            header h1 { font-size: 3.6rem; }
+            .hero-gallery {
+                grid-template-columns: 1fr;
+                width: 100%;
+            }
+            .feature-grid,
+            .video-grid,
+            .benchmark-gallery { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 0 18px; }
+            header h1 { font-size: 3rem; }
+            header .subtitle { font-size: 1.02rem; }
+            .links a { justify-content: center; flex: 1 1 100%; }
+            .meta-row { gap: 8px 16px; }
+            .hero-gallery {
+                grid-template-columns: 1fr;
+                gap: 6px;
+                width: 100%;
+            }
+            section { padding: 40px 0; }
+            section.alt {
+                margin: 0 -18px;
+                padding-right: 18px;
+                padding-left: 18px;
+            }
+            .feature-grid,
+            .video-grid,
+            .benchmark-gallery { grid-template-columns: 1fr; }
+            .diagram-wrapper { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <nav class="topbar" aria-label="Primary navigation">
+            <a class="wordmark" href="#"><span>//</span> WordPlay</a>
+            <div class="nav-links">
+                <a href="#about">About</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#examples">Examples</a>
+                <a href="#benchmarks">Benchmarks</a>
+                <a href="#start">Get started</a>
+            </div>
+        </nav>
+
+        <!-- ─── HEADER ─── -->
+        <header>
+            <p class="eyebrow">Text worlds for language agents</p>
+            <h1>WordPlay</h1>
+            <p class="subtitle">
+                A modular toolkit for building text-based simulation environments
+                where language model agents move, act, communicate, and cooperate.
+            </p>
+            <div class="links">
+                <a class="primary" href="#">&#8595; Paper (preprint)</a>
+                <a class="secondary" href="https://github.com/andrei-muresanu/word_play" target="_blank">&#8599; Code</a>
+                <a class="secondary" href="#">&#8599; Docs</a>
+                <a class="secondary" href="#">&#8599; Benchmark Suite</a>
+            </div>
+        </header>
+
+        <!-- ─── AUTHORS ─── -->
+        <p class="byline" style="margin-bottom:24px;">
+            <strong>Author list: TBD</strong> &nbsp;·&nbsp; Jinesis AI Lab, Vector Institute &amp; University of Toronto
+        </p>
+
+        <div class="meta-row" aria-label="Project highlights">
+            <span>38 benchmark scenarios</span>
+            <span>4 composable primitives</span>
+            <span>Text and tile rendering</span>
+        </div>
+
+        <!-- ─── HERO IMAGES ─── -->
+        <div class="hero-gallery" aria-label="WordPlay RPG town preview">
+            <figure class="hero-shot">
+                <video autoplay muted loop playsinline preload="metadata" poster="videos/posters/rpg_town.jpg" aria-label="WordPlay RPG town demo with in-world chat and trade">
+                    <source src="videos/rpg_town_placeholder.mp4" type="video/mp4">
+                    <img src="videos/posters/rpg_town.jpg" alt="WordPlay RPG town demo with in-world chat and trade">
+                </video>
+                <figcaption>RPG Town</figcaption>
+            </figure>
+        </div>
+
+        <!-- ─── BENCHMARK VIDEOS ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section style="padding: 18px 0 10px;">
+            <div class="scene-strip" aria-label="More benchmark previews">
+                <figure class="scene-card"><img src="benchmark_gifs/collaborative_cooking__figure_eight.gif" alt="Collaborative Cooking Figure Eight"><figcaption>Cooking: Figure Eight</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/predator_prey__orchard.gif" alt="Predator Prey Orchard"><figcaption>Predator-Prey: Orchard</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/chemistry__three_metabolic_cycles.gif" alt="Chemistry Three Metabolic Cycles"><figcaption>Chemistry: 3 Cycles</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/commons_harvest__partnership.gif" alt="Commons Harvest Partnership"><figcaption>Harvest: Partnership</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/paintball__capture_the_flag.gif" alt="Paintball Capture the Flag"><figcaption>Paintball: CTF</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/fruit_market.gif" alt="Fruit Market"><figcaption>Fruit Market</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/factory_commons.gif" alt="Factory Commons"><figcaption>Factory Commons</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/externality_mushrooms__dense.gif" alt="Externality Mushrooms Dense"><figcaption>Mushrooms: Dense</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/allelopathic_harvest__open.gif" alt="Allelopathic Harvest Open"><figcaption>Allelopathic Harvest</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/coop_mining.gif" alt="Cooperative Mining"><figcaption>Cooperative Mining</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/daycare.gif" alt="Daycare"><figcaption>Daycare</figcaption></figure>
+                <figure class="scene-card"><img src="benchmark_gifs/hidden_agenda.gif" alt="Hidden Agenda"><figcaption>Hidden Agenda</figcaption></figure>
+            </div>
+        </section>
+
+        <!-- ─── ABSTRACT ─── -->
+        <hr class="divider">
+        <section id="about">
+            <h2><span class="accent">//</span> Abstract</h2>
+            <div class="abstract-block">
+                <p>
+                    Language agents do not live in the real world, so WordPlay gives them worlds made of words.
+                    <strong>WordPlay</strong> is a Python framework for constructing environments for
+                    language agents. Environments are built from four composable primitives:
+                    <strong>Entities</strong>, <strong>Actions</strong>, <strong>Systems</strong>, and
+                    <strong>Movement</strong>. This makes it easy to go from a tiny grid world to a
+                    bustling multi-agent environment with inventory, combat, communication, and trading.
+                    Environments can be rendered as text descriptions or tilemaps, and agents can be
+                    controlled by language models, scripted policies, or humans. The framework also
+                    includes benchmark scenarios adapted from DeepMind's Melting Pot for evaluating
+                    cooperation, coordination, and social behavior.
+                </p>
+            </div>
+        </section>
+
+        <!-- ─── ARCHITECTURE ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section id="architecture">
+            <h2><span class="accent">//</span> How It Works</h2>
+            <p>
+                Under the hood, every environment follows the same loop: observe, choose an action,
+                validate it, execute it, run shared systems, and render the next state.
+            </p>
+
+            <div class="diagram-wrapper">
+                <img src="assets/how-it-works.png" alt="WordPlay environment loop: agents observe, choose actions, validate them, update modular systems, and render the next state">
+                <!-- Hand-drawn style architecture diagram -->
+                <svg viewBox="0 0 820 600" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Inter', sans-serif;">
+                    <defs>
+                        <filter id="sketch" x="-2%" y="-2%" width="104%" height="104%">
+                            <feTurbulence type="turbulence" baseFrequency="0.015" numOctaves="2" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+                        </filter>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                            <path d="M0,1 L9,5 L0,9" fill="none" stroke="#9e958b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </marker>
+                        <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                            <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c25a3a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </marker>
+                    </defs>
+
+                    <!-- subtle background -->
+                    <rect width="820" height="600" fill="#fcf9f5" rx="8" />
+
+                    <!-- === STEP 0: Environment title === -->
+                    <text x="410" y="36" font-size="11" fill="#9e958b" text-anchor="middle" font-weight="500" letter-spacing="0.06em">ONE STEP OF THE ENVIRONMENT LOOP</text>
+
+                    <!-- ===== ENVIRONMENT BOX (top) ===== -->
+                    <rect x="310" y="50" width="200" height="48" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="2" filter="url(#sketch)"/>
+                    <text x="410" y="79" font-size="14" fill="#c25a3a" text-anchor="middle" font-weight="700">Environment</text>
+
+                    <!-- arrow down to "for each entity" -->
+                    <path d="M410,98 L410,110 Q410,118 420,118 L480,118" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+                    <text x="475" y="115" font-size="9" fill="#9e958b" text-anchor="end">for each entity:</text>
+
+                    <!-- ===== OBSERVE ===== -->
+                    <rect x="490" y="104" width="150" height="40" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="128" font-size="12" fill="#3d6b5a" text-anchor="middle" font-weight="600">1. Observe</text>
+                    <text x="565" y="140" font-size="8" fill="#7a9e8e" text-anchor="middle">state -> text description</text>
+
+                    <!-- arrow from observe to choose action -->
+                    <path d="M565,144 L565,170" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+                    <!-- ===== CHOOSE ACTION ===== -->
+                    <rect x="490" y="174" width="150" height="56" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="196" font-size="12" fill="#c25a3a" text-anchor="middle" font-weight="600">2. Choose Action</text>
+                    <text x="565" y="210" font-size="8" fill="#9e958b" text-anchor="middle">LLM / Human / Scripted</text>
+                    <text x="565" y="224" font-size="8" fill="#9e958b" text-anchor="middle">action + target + args</text>
+
+                    <!-- arrow down -->
+                    <path d="M565,230 L565,256" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+                    <!-- ===== VALIDATE ===== -->
+                    <rect x="490" y="260" width="150" height="40" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="284" font-size="12" fill="#3d6b5a" text-anchor="middle" font-weight="600">3. Validate</text>
+                    <text x="565" y="296" font-size="8" fill="#9e958b" text-anchor="middle">target is nearby, etc.</text>
+
+                    <!-- arrow right to "next entity" -->
+                    <path d="M640,280 L680,280 L680,118 L650,118" fill="none" stroke="#9e958b" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+                    <text x="696" y="200" font-size="9" fill="#9e958b" text-anchor="start">loop over</text>
+                    <text x="696" y="214" font-size="9" fill="#9e958b" text-anchor="start">entities</text>
+
+                    <!-- arrow down to execute -->
+                    <path d="M565,300 L565,326" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+                    <!-- ===== EXECUTE ===== -->
+                    <rect x="490" y="330" width="150" height="40" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="354" font-size="12" fill="#c25a3a" text-anchor="middle" font-weight="600">4. Execute Action</text>
+
+                    <!-- arrow down -->
+                    <path d="M565,370 L565,396" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+                    <!-- ===== SYSTEMS ===== -->
+                    <rect x="490" y="400" width="150" height="56" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="422" font-size="12" fill="#3d6b5a" text-anchor="middle" font-weight="600">5. Run Systems</text>
+                    <text x="565" y="436" font-size="8" fill="#9e958b" text-anchor="middle">combat / inventory</text>
+                    <text x="565" y="450" font-size="8" fill="#9e958b" text-anchor="middle">health / communication</text>
+
+                    <!-- arrow down -->
+                    <path d="M565,456 L565,482" fill="none" stroke="#9e958b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+                    <!-- ===== RENDER ===== -->
+                    <rect x="490" y="486" width="150" height="40" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="510" font-size="12" fill="#c25a3a" text-anchor="middle" font-weight="600">6. Render</text>
+                    <text x="565" y="522" font-size="8" fill="#9e958b" text-anchor="middle">text description / tilemap</text>
+
+                    <!-- ===== SIDE: ENTITY MODEL ===== -->
+                    <rect x="60" y="112" width="180" height="74" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="150" y="134" font-size="13" fill="#3d6b5a" text-anchor="middle" font-weight="700">Entity</text>
+                    <text x="150" y="152" font-size="9" fill="#9e958b" text-anchor="middle">position + tags</text>
+                    <text x="150" y="166" font-size="9" fill="#9e958b" text-anchor="middle">components (inventory, health...)</text>
+                    <text x="150" y="180" font-size="9" fill="#9e958b" text-anchor="middle">available actions</text>
+
+                    <!-- entity: side arrow into the pipeline -->
+                    <path d="M240,150 L300,150 Q310,150 310,160 L310,195 Q310,205 320,205 L488,205" fill="none" stroke="#9e958b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                    <!-- ===== SIDE: ACTION POLICIES ===== -->
+                    <rect x="60" y="240" width="180" height="100" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="150" y="262" font-size="13" fill="#c25a3a" text-anchor="middle" font-weight="700">Action Policies</text>
+                    <circle cx="80" cy="282" r="4" fill="#d4624a" opacity="0.6"/>
+                    <text x="92" y="286" font-size="10" fill="#6b645b" text-anchor="start">LLM Agent (OpenAI / OpenRouter)</text>
+                    <circle cx="80" cy="302" r="4" fill="#7a9e8e" opacity="0.6"/>
+                    <text x="92" y="306" font-size="10" fill="#6b645b" text-anchor="start">Human-in-the-loop</text>
+                    <circle cx="80" cy="322" r="4" fill="#9e958b" opacity="0.6"/>
+                    <text x="92" y="326" font-size="10" fill="#6b645b" text-anchor="start">Scripted / Follow Sequence</text>
+
+                    <!-- policy arrow into pipeline -->
+                    <path d="M240,290 L488,290" fill="none" stroke="#9e958b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                    <!-- ===== SIDE: SYSTEMS ===== -->
+                    <rect x="60" y="398" width="180" height="100" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="150" y="420" font-size="13" fill="#3d6b5a" text-anchor="middle" font-weight="700">Systems</text>
+                    <circle cx="80" cy="440" r="4" fill="#7a9e8e" opacity="0.6"/>
+                    <text x="92" y="444" font-size="10" fill="#6b645b">Combat</text>
+                    <circle cx="80" cy="460" r="4" fill="#7a9e8e" opacity="0.6"/>
+                    <text x="92" y="464" font-size="10" fill="#6b645b">Inventory &amp; Trading</text>
+                    <circle cx="80" cy="480" r="4" fill="#7a9e8e" opacity="0.6"/>
+                    <text x="92" y="484" font-size="10" fill="#6b645b">Communication (Chat Room)</text>
+                    <circle cx="80" cy="500" r="4" fill="#7a9e8e" opacity="0.6"/>
+                    <text x="92" y="504" font-size="10" fill="#6b645b">Health / Do-Nothing</text>
+
+                    <!-- systems arrow into pipeline -->
+                    <path d="M240,448 L488,448" fill="none" stroke="#9e958b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                    <!-- ===== SIDE: MOVEMENT ===== -->
+                    <rect x="60" y="540" width="180" height="46" rx="8" fill="#fff" stroke="#c25a3a" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="150" y="564" font-size="13" fill="#c25a3a" text-anchor="middle" font-weight="700">Movement</text>
+                    <text x="150" y="580" font-size="9" fill="#9e958b" text-anchor="middle">2D grid / single-point / freeform</text>
+
+                    <!-- ===== BOTTOM: render output ===== -->
+                    <rect x="490" y="540" width="150" height="46" rx="8" fill="#fff" stroke="#7a9e8e" stroke-width="1.8" filter="url(#sketch)"/>
+                    <text x="565" y="562" font-size="12" fill="#3d6b5a" text-anchor="middle" font-weight="600">Output</text>
+                    <text x="565" y="578" font-size="9" fill="#9e958b" text-anchor="middle">text UI or tilemap image</text>
+
+                </svg>
+            </div>
+
+            <p class="small" style="margin-top: 12px;">
+                The same interface supports human policies, scripted policies, and LLM policies,
+                so you can swap the driver without rebuilding the world.
+                Components and systems can be mixed, matched, and extended without pulling the rest apart.
+            </p>
+        </section>
+
+        <!-- ─── HIGHLIGHTS ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section class="alt">
+            <h2><span class="accent">//</span> What makes it different</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="icon">&#9881;</div>
+                    <h3>Composable primitives</h3>
+                    <p>Entities, actions, systems, and movement models snap together like building blocks. Swap the movement system without touching the combat code.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">&#129302;</div>
+                    <h3>LLM-native design</h3>
+                    <p>Agents act from natural-language action descriptions. Plug in OpenAI, OpenRouter, or local models through one shared interface.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">&#128065;</div>
+                    <h3>Human-in-the-loop</h3>
+                    <p>Drop in a human policy for interactive play, debugging, or data collection. Same world, different driver.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">&#128196;</div>
+                    <h3>Text &amp; tile rendering</h3>
+                    <p>Render environments as text descriptions or as 2D tilemaps with sprite assets. Replay and live-view rendering are built in.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">&#129309;</div>
+                    <h3>Multi-agent ready</h3>
+                    <p>Built for multi-agent settings with communication, trading, shared tasks, and the occasional glorious mess of coordination.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">&#128200;</div>
+                    <h3>Built-in benchmarks</h3>
+                    <p>Includes 38 benchmark scenarios adapted from Melting Pot, plus the tools you need to author strange new little worlds of your own.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── ACTUAL DEMOS ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section id="examples">
+            <h2><span class="accent">//</span> Examples</h2>
+            <p>
+                A few small worlds to get you moving: chat, trade, and a single-point room where three agents share one abstract location.
+            </p>
+            <div class="video-grid">
+                <figure class="video-card">
+                    <video autoplay muted loop playsinline preload="metadata" poster="videos/posters/chat_demo.jpg" aria-label="Chat demo with speech bubbles">
+                        <source src="videos/chat_demo.mp4" type="video/mp4">
+                        <img src="videos/posters/chat_demo.jpg" alt="Chat demo with speech bubbles">
+                    </video>
+                    <strong>Chat</strong>
+                    <span class="hint">Private conversation rendered as in-world speech bubbles.</span>
+                </figure>
+                <figure class="video-card">
+                    <video autoplay muted loop playsinline preload="metadata" poster="videos/posters/trade_demo.jpg" aria-label="Trade demo with updating offers">
+                        <source src="videos/trade_demo.mp4" type="video/mp4">
+                        <img src="videos/posters/trade_demo.jpg" alt="Trade demo with updating offers">
+                    </video>
+                    <strong>Trade</strong>
+                    <span class="hint">Negotiation rounds add items to each side of the offer.</span>
+                </figure>
+                <figure class="video-card">
+                    <video autoplay muted loop playsinline preload="metadata" poster="videos/posters/single_point_3_agents.jpg" aria-label="Single-point room demo with three agents">
+                        <source src="videos/single_point_3_agents.mp4" type="video/mp4">
+                        <img src="videos/posters/single_point_3_agents.jpg" alt="Single-point room demo with three agents">
+                    </video>
+                    <strong>Single-point room</strong>
+                    <span class="hint">Three agents share one abstract position inside a boardroom-style render.</span>
+                </figure>
+            </div>
+        </section>
+
+
+        <!-- ─── BENCHMARKS ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section id="benchmarks">
+            <h2><span class="accent">//</span> Benchmarks</h2>
+            <p>
+                WordPlay ships with 38 benchmark scenarios ported from
+                <strong>DeepMind's Melting Pot</strong>, translated from pixel-grid to
+                text-grid format for LLM agent evaluation. Run any with
+                <code>--policy random</code> for scripted agents,
+                <code>--policy llm --model-name &lt;model&gt;</code> for LLM agents,
+                or <code>--policy human</code> for interactive play.
+            </p>
+            <div class="benchmark-gallery" aria-label="All benchmark environments">
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/allelopathic_harvest.gif" alt="Allelopathic Harvest"><figcaption>Allelopathic Harvest</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/allelopathic_harvest__open.gif" alt="Allelopathic Harvest Open"><figcaption>Allelopathic Harvest: Open</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/boat_race.gif" alt="Boat Race"><figcaption>Boat Race</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/boat_race__eight_races.gif" alt="Boat Race Eight Races"><figcaption>Boat Race: Eight Races</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/chemistry__three_metabolic_cycles.gif" alt="Chemistry Three Metabolic Cycles"><figcaption>Chemistry: Three Metabolic Cycles</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/chemistry__three_metabolic_cycles_with_plentiful_distractors.gif" alt="Chemistry Three Metabolic Cycles With Plentiful Distractors"><figcaption>Chemistry: Three Cycles + Distractors</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/chemistry__two_metabolic_cycles.gif" alt="Chemistry Two Metabolic Cycles"><figcaption>Chemistry: Two Metabolic Cycles</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/chemistry__two_metabolic_cycles_with_distractors.gif" alt="Chemistry Two Metabolic Cycles With Distractors"><figcaption>Chemistry: Two Cycles + Distractors</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/clean_up.gif" alt="Clean Up"><figcaption>Clean Up</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/coins.gif" alt="Coins"><figcaption>Coins</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking.gif" alt="Collaborative Cooking"><figcaption>Collaborative Cooking</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__asymmetric.gif" alt="Collaborative Cooking Asymmetric"><figcaption>Collaborative Cooking: Asymmetric</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__circuit.gif" alt="Collaborative Cooking Circuit"><figcaption>Collaborative Cooking: Circuit</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__cramped.gif" alt="Collaborative Cooking Cramped"><figcaption>Collaborative Cooking: Cramped</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__crowded.gif" alt="Collaborative Cooking Crowded"><figcaption>Collaborative Cooking: Crowded</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__figure_eight.gif" alt="Collaborative Cooking Figure Eight"><figcaption>Collaborative Cooking: Figure Eight</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__forced.gif" alt="Collaborative Cooking Forced"><figcaption>Collaborative Cooking: Forced</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/collaborative_cooking__ring.gif" alt="Collaborative Cooking Ring"><figcaption>Collaborative Cooking: Ring</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/commons_harvest__closed.gif" alt="Commons Harvest Closed"><figcaption>Commons Harvest: Closed</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/commons_harvest__open.gif" alt="Commons Harvest Open"><figcaption>Commons Harvest: Open</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/commons_harvest__partnership.gif" alt="Commons Harvest Partnership"><figcaption>Commons Harvest: Partnership</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/coop_mining.gif" alt="Cooperative Mining"><figcaption>Cooperative Mining</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/daycare.gif" alt="Daycare"><figcaption>Daycare</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/externality_mushrooms.gif" alt="Externality Mushrooms"><figcaption>Externality Mushrooms</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/externality_mushrooms__dense.gif" alt="Externality Mushrooms Dense"><figcaption>Externality Mushrooms: Dense</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/factory_commons.gif" alt="Factory Commons"><figcaption>Factory Commons</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/factory_commons__either_or.gif" alt="Factory Commons Either Or"><figcaption>Factory Commons: Either-Or</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/fruit_market.gif" alt="Fruit Market"><figcaption>Fruit Market</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/fruit_market__concentric_rivers.gif" alt="Fruit Market Concentric Rivers"><figcaption>Fruit Market: Concentric Rivers</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/gift_refinements.gif" alt="Gift Refinements"><figcaption>Gift Refinements</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/hidden_agenda.gif" alt="Hidden Agenda"><figcaption>Hidden Agenda</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/paintball__capture_the_flag.gif" alt="Paintball Capture The Flag"><figcaption>Paintball: Capture the Flag</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/paintball__king_of_the_hill.gif" alt="Paintball King Of The Hill"><figcaption>Paintball: King of the Hill</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/predator_prey.gif" alt="Predator Prey"><figcaption>Predator-Prey</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/predator_prey__alley_hunt.gif" alt="Predator Prey Alley Hunt"><figcaption>Predator-Prey: Alley Hunt</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/predator_prey__open.gif" alt="Predator Prey Open"><figcaption>Predator-Prey: Open</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/predator_prey__orchard.gif" alt="Predator Prey Orchard"><figcaption>Predator-Prey: Orchard</figcaption></figure>
+                <figure class="benchmark-preview"><img loading="lazy" src="benchmark_gifs/predator_prey__random_forest.gif" alt="Predator Prey Random Forest"><figcaption>Predator-Prey: Random Forest</figcaption></figure>
+            </div>
+        </section>
+
+        <!-- ─── GETTING STARTED ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section id="start">
+            <h2><span class="accent">//</span> Getting Started</h2>
+            <p>Two commands, one grid world, one LLM agent:</p>
+            <div class="code-block">
+                <span class="comment"># install (zero deps — just Python 3.13+)</span>
+                <span class="prompt">$</span> pip install -e .<br><br>
+                <span class="comment"># run a simple environment with an LLM-driven agent</span>
+                <span class="prompt">$</span> python examples/simple_env_1.py
+            </div>
+            <p>
+                See the <a href="https://github.com/andrei-muresanu/word_play" target="_blank">GitHub repo</a>
+                for full API docs, architecture guide, and more examples.
+            </p>
+        </section>
+
+        <!-- ─── CITATION ─── -->
+        <div class="squiggle">~ ~ ~ ~</div>
+        <section>
+            <h2><span class="accent">//</span> Citation</h2>
+            <p>If WordPlay is useful in your research:</p>
+            <div class="bibtex">@software{wordplay_2025,
+  author  = {Author list: TBD},
+  title   = {WordPlay: A Modular Framework for Text-Based Environments},
+  year    = {2025},
+  publisher = {GitHub},
+  url     = {https://github.com/andrei-muresanu/word_play}
+}</div>
+        </section>
+
+        <!-- ─── ACKNOWLEDGEMENTS ─── -->
+        <hr class="divider">
+        <section>
+            <h2><span class="accent">//</span> Thanks</h2>
+            <p>
+                The name "WordPlay" was suggested by <strong>Darci Prout</strong>.
+            </p>
+            <p>
+                Sprite assets in the tilemap renderer come from open-licensed packs including
+                DawnLike, Kenney Tiny Dungeon, and Mana Seed Character Base.
+                See <code>sprite_library/art_source/citations.md</code> for full credits.
+            </p>
+        </section>
+
+        <footer>
+            <p>
+                <span style="opacity:0.4;">Built with</span>
+                <a href="https://sites.google.com/view/steve-eye" target="_blank">&#9829;</a>
+                <span style="opacity:0.4;">at Jinesis AI Lab, Vector Institute &amp; University of Toronto</span>
+            </p>
+            <p style="margin-top: 8px; font-size: 0.78rem; opacity: 0.5;">
+                WordPlay is not affiliated with DeepMind or Melting Pot.
+            </p>
+        </footer>
+
+    </div>
+</body>
+</html>
