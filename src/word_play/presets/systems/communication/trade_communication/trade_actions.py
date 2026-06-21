@@ -11,7 +11,7 @@ from word_play.core import Component, Entity, Environment, Action, Action_Valida
 from word_play.core.actions import Target_Is_Self, Target_Is_Nearby, Target_Not_Self
 from word_play.presets.systems.inventory import Inventory
 from word_play.presets.systems.currency import Money
-from word_play.presets.renderers.renderer import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 
 
 @dataclass

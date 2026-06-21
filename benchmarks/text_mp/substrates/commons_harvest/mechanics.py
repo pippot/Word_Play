@@ -8,7 +8,7 @@ from word_play.presets.systems.cooldown import Action_On_Cooldown, Cooldown
 from word_play.presets.systems.do_nothing import Do_Nothing
 from word_play.presets.systems.reward import Rewardable, award_reward
 
-from examples.text_meltingpot.core.timing import BENCHMARK_STEPS, normalized_probability, normalized_steps
+from benchmarks.text_mp.core.timing import BENCHMARK_STEPS, normalized_probability, normalized_steps
 
 
 def commons_events(env: Environment) -> list[str]:

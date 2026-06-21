@@ -40,9 +40,10 @@ def make_policy(
         return LLM_Action_And_Communication_Policy(
             model_key=model_key,
             system_prompt=system_prompt,
-            use_chain_of_thought=True,
+            use_chain_of_thought=False,
             observation_memory_window=observation_memory_window,
             conversation_memory_window=conversation_memory_window,
+            action_max_new_tokens=512,
         )
     if policy_kind == "human":
         return Human_Takes_Action()

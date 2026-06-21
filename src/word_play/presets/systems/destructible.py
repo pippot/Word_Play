@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Callable
 
 from word_play.core import Component, Entity, Environment
-from word_play.presets.renderers import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 from word_play.presets.systems.health import Health
 
 

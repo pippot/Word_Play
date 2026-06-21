@@ -10,7 +10,7 @@ from __future__ import annotations
 from word_play.core import Action, Component, Entity, Environment
 from word_play.presets.action_validations import Target_Has_Component, Target_Is_Nearby
 from word_play.presets.systems.do_nothing import Do_Nothing
-from word_play.presets.renderers import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 
 
 class Freezable(Component):

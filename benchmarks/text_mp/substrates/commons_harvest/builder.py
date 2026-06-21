@@ -19,15 +19,15 @@ from word_play.presets.systems.reward import Rewardable
 from word_play.utils import tilemap_to_entities
 from word_play.utils.tilemap import find_tile_positions
 
-from examples.text_meltingpot.core.policies import PolicyKind, make_policy, register_llm_model
-from examples.text_meltingpot.core.timing import normalized_steps
-from examples.text_meltingpot.substrates.commons_harvest.mechanics import (
+from benchmarks.text_mp.core.policies import PolicyKind, make_policy, register_llm_model
+from benchmarks.text_mp.core.timing import normalized_steps
+from benchmarks.text_mp.substrates.commons_harvest.mechanics import (
     Commons_Apple_Patch,
     Commons_Freezable,
     Commons_Zap,
     Role_Based_Punishment_Tile,
 )
-from examples.text_meltingpot.substrates.commons_harvest.variants import CommonsHarvestVariant
+from benchmarks.text_mp.substrates.commons_harvest.variants import CommonsHarvestVariant
 
 
 def build_env(

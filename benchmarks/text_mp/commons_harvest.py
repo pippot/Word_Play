@@ -11,10 +11,10 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from examples.text_meltingpot.core.runner import run_episode  # noqa: E402
-from examples.text_meltingpot.core.timing import BENCHMARK_STEPS  # noqa: E402
-from examples.text_meltingpot.substrates.commons_harvest.builder import build_env  # noqa: E402
-from examples.text_meltingpot.substrates.commons_harvest.variants import VARIANTS  # noqa: E402
+from benchmarks.text_mp.core.runner import run_episode  # noqa: E402
+from benchmarks.text_mp.core.timing import BENCHMARK_STEPS  # noqa: E402
+from benchmarks.text_mp.substrates.commons_harvest.builder import build_env  # noqa: E402
+from benchmarks.text_mp.substrates.commons_harvest.variants import VARIANTS  # noqa: E402
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

@@ -5,8 +5,8 @@ from typing import Callable, Iterable
 
 from word_play.core import Agent_Policy, Environment
 
-from examples.text_meltingpot.core.rewards import install_reward_buffer, reset_step_rewards
-from examples.text_meltingpot.core.timing import BENCHMARK_STEPS
+from benchmarks.text_mp.core.rewards import install_reward_buffer, reset_step_rewards
+from benchmarks.text_mp.core.timing import BENCHMARK_STEPS
 
 
 @dataclass
@@ -44,8 +44,13 @@ def run_episode(
                 raise ValueError(f"{agent.name} does not have an Agent_Policy component.")
             action, info = policy.select_action(observation)
             info = info or {}
-            if print_raw_responses and info.get("raw_response"):
-                print_fn(f"[step {step}] {agent.name} raw -> {info['raw_response'].strip()}")
+            if print_raw_responses:
+                raw_response = info.get("raw_response")
+                if raw_response is not None:
+                    raw_text = raw_response.strip() or "<empty>"
+                    print_fn(f"[step {step}] {agent.name} raw -> {raw_text}")
+                if info.get("fallback"):
+                    print_fn(f"[step {step}] {agent.name} fallback -> {info.get('fallback_reason')}")
             if print_actions:
                 print_fn(f"[step {step}] {agent.name} -> {action}")
             actions.append(action)

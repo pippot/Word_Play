@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Callable
 
 from word_play.core import Action_Validation, Component, Entity, Environment, Position
-from word_play.presets.renderers import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 
 
 class Respawnable(Component):

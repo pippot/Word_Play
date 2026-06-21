@@ -25,7 +25,7 @@ from word_play.presets.action_validations import (
     Target_Is_Self,
     Target_Not_Self,
 )
-from word_play.presets.renderers.renderer import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 from word_play.presets.systems.reward import Rewardable, award_reward
 
 

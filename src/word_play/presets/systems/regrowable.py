@@ -16,7 +16,7 @@ from word_play.presets.action_validations import (
     Target_Has_Component,
     Target_Is_Nearby,
 )
-from word_play.presets.renderers import Renderable
+from word_play.presets.renderers.pygame_renderer.renderable import Renderable
 from word_play.presets.systems.inventory import Inventory, materialize_item
 from word_play.presets.systems.reward import Rewardable, award_reward
 
