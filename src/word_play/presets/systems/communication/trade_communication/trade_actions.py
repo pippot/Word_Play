@@ -62,11 +62,11 @@ def _actor_money_amount(actor: Entity) -> float:
     return 0 if money is None else money.amount
 
 
-def _selected_public_offer_this_step(actor: Entity, env: Environment) -> bool:
+def _other_accept_on_same_offer_this_step(actor: Entity, target_entity: Entity, env: Environment) -> bool:
     for selection in getattr(env, "_current_step_action_selections", []) or []:
         if selection.actor is actor:
             continue
-        if isinstance(selection.action, Start_Public_Trade):
+        if isinstance(selection.action, Accept_Public_Trade) and selection.target_entity is target_entity:
             return True
     return False
 
@@ -120,9 +120,9 @@ class No_Active_Public_Trade_Offer(Action_Validation):
         return not has_active_public_trade_offer(actor)
 
 
-class No_Other_Public_Trade_Offer_Selected_This_Step(Action_Validation):
+class No_Other_Accept_On_Same_Offer_This_Step(Action_Validation):
     def is_valid(self, actor: Entity, target_entity: Entity, env: Environment) -> bool:
-        return not _selected_public_offer_this_step(actor, env)
+        return not _other_accept_on_same_offer_this_step(actor, target_entity, env)
 
 
 class A_Trade_Partner_Is_Nearby(Action_Validation):
@@ -279,7 +279,7 @@ class Accept_Public_Trade(Action):
                 Target_Is_Nearby(),
                 Not_In_Trade(),
                 No_Active_Public_Trade_Offer(),
-                No_Other_Public_Trade_Offer_Selected_This_Step(),
+                No_Other_Accept_On_Same_Offer_This_Step(),
                 Public_Trade_Offer_Is_Available(),
             ],
             required_kwargs={
@@ -323,7 +323,6 @@ class Start_Private_Trade(Action):
                 Target_Is_Self(),
                 Not_In_Trade(),
                 No_Active_Public_Trade_Offer(),
-                No_Other_Public_Trade_Offer_Selected_This_Step(),
                 A_Trade_Partner_Is_Nearby(),
             ],
             required_kwargs={"trade partners": Nearby_Trade_Partner_Indices()},
