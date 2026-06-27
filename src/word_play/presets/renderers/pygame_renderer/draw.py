@@ -1194,50 +1194,75 @@ def draw_speech_bubbles(
         if entity not in bubble_groups.setdefault(group_key, []):
             bubble_groups[group_key].append(entity)
 
-    # Fan bubbles outward from the centroid of everyone currently speaking, so
-    # several simultaneous bubbles spread around the scene instead of stacking
-    # on top of each other. Each bubble still grows a tail pointing back at its
-    # speaker, so it stays clear who is talking no matter how far it is pushed.
-    anchor_of: dict[Entity, tuple[int, int]] = {}
+    # Bubbles fan out from the centroid of everyone speaking. Each is sized to
+    # the largest box that fits between its angular neighbours and the screen
+    # edge; its text then wraps into that box. So a lone speaker gets a big
+    # bubble, while a crowded debate packs many smaller ones with no overlap —
+    # every bubble keeps a tail pointing back at its own speaker.
+    world_width = renderer.effect_surface.get_width()
+    world_height = renderer.effect_surface.get_height()
+    half_min = 0.5 * min(world_width, world_height)
+    tile = max(1, renderer.tile_size)
+
+    anchors = []
     for entity, _text, entity_rect, _group_key in visible_bubbles:
-        anchor_of[entity] = (
+        anchors.append((
             entity_rect.centerx,
-            entity_rect.top + max(4, min(renderer.tile_size // 6, entity_rect.height // 3)),
-        )
-    centroid_x = sum(ax for ax, _ in anchor_of.values()) / len(anchor_of)
-    centroid_y = sum(ay for _, ay in anchor_of.values()) / len(anchor_of)
+            entity_rect.top + max(4, min(tile // 6, entity_rect.height // 3)),
+        ))
+    centroid_x = sum(ax for ax, _ in anchors) / len(anchors)
+    centroid_y = sum(ay for _, ay in anchors) / len(anchors)
     concurrent = len(visible_bubbles)
 
-    for entity, text, entity_rect, group_key in visible_bubbles:
+    # ── Pass 1: geometry — direction of each bubble away from the crowd. ──
+    specs: list[dict[str, Any]] = []
+    for (entity, text, entity_rect, group_key), (anchor_x, anchor_y) in zip(visible_bubbles, anchors):
         renderable = renderable_component(entity)
         scale = getattr(renderable, "speech_bubble_scale", 1.0) if renderable is not None else 1.0
-
         group = bubble_groups[group_key]
-        columns, rows = overlap_grid_dimensions(len(group))
-        col, row, row_slots = centered_grid_slot(group.index(entity), len(group), columns)
+        columns, _ = overlap_grid_dimensions(len(group))
+        col, _, row_slots = centered_grid_slot(group.index(entity), len(group), columns)
+        dx, dy = anchor_x - centroid_x, anchor_y - centroid_y
+        angle = -math.pi / 2 if math.hypot(dx, dy) < 1e-3 else math.atan2(dy, dx)
+        if len(group) > 1:  # spread co-located speakers so their slices differ
+            angle += (col - (row_slots - 1) / 2) * 0.30
+        specs.append({
+            "entity": entity, "text": text, "scale": scale,
+            "anchor_x": anchor_x, "anchor_y": anchor_y, "angle": angle,
+        })
 
-        anchor_x = entity_rect.centerx
-        anchor_y = entity_rect.top + max(4, min(renderer.tile_size // 6, entity_rect.height // 3))
+    ring_radius = 0.0 if concurrent <= 1 else min(0.62 * half_min, tile * (2.0 + 0.5 * concurrent))
 
-        world_width = renderer.effect_surface.get_width()
-        world_height = renderer.effect_surface.get_height()
+    # ── Pass 2: how large a box each bubble may occupy given its neighbours. ──
+    if concurrent > 1:
+        order = sorted(range(concurrent), key=lambda i: specs[i]["angle"])
+        m = len(order)
+        for oi, idx in enumerate(order):
+            here = specs[idx]["angle"]
+            prev_a = specs[order[(oi - 1) % m]]["angle"]
+            next_a = specs[order[(oi + 1) % m]]["angle"]
+            gap = min((here - prev_a) % (2 * math.pi), (next_a - here) % (2 * math.pi))
+            chord = 2 * ring_radius * math.sin(min(math.pi, gap) / 2)  # spacing to nearest neighbour
+            specs[idx]["max_w"] = max(tile * 1.6, chord * 0.9)
+        radial_room = min(half_min * 0.96 - ring_radius, ring_radius - tile * 1.3)
+        max_box_h = max(tile * 2.2, 2.0 * max(0.0, radial_room))
+    else:
+        specs[0]["max_w"] = min(world_width * 0.6, tile * 8.0)
+        max_box_h = world_height * 0.5
 
-        pad_left = max(int(10 * scale), int(renderer.tile_size * 0.18 * scale))
-        pad_right = max(int(10 * scale), int(renderer.tile_size * 0.18 * scale))
-        pad_top = max(int(8 * scale), int(renderer.tile_size * 0.14 * scale))
-        pad_bottom = max(int(9 * scale), int(renderer.tile_size * 0.16 * scale))
-        tail_width = max(int(14 * scale), int(renderer.tile_size * 0.5 * scale))
-        tail_height = max(int(10 * scale), int(renderer.tile_size * 0.26 * scale))
-        radius = max(int(10 * scale), int(renderer.tile_size * 0.24 * scale))
+    # ── Pass 3: wrap text into the fitted box, then place and draw. ──
+    for spec in specs:
+        entity, text, scale = spec["entity"], spec["text"], spec["scale"]
+        anchor_x, anchor_y, angle = spec["anchor_x"], spec["anchor_y"], spec["angle"]
 
-        # Dynamic sizing: the bubble hugs its text. Long messages wrap at a cap
-        # that tightens as more agents speak at once (so crowded scenes stay
-        # readable); short messages get correspondingly small bubbles.
-        crowd_factor = 1.0 if concurrent <= 2 else max(0.55, 1.0 - (concurrent - 2) * 0.06)
-        max_content_width = max(
-            int(renderer.tile_size * 2.0 * scale),
-            int(min(world_width * 0.5, renderer.tile_size * 7.0) * scale * crowd_factor),
-        )
+        pad_left = pad_right = max(int(10 * scale), int(tile * 0.18 * scale))
+        pad_top = max(int(8 * scale), int(tile * 0.14 * scale))
+        pad_bottom = max(int(9 * scale), int(tile * 0.16 * scale))
+        tail_width = max(int(14 * scale), int(tile * 0.5 * scale))
+        tail_height = max(int(10 * scale), int(tile * 0.26 * scale))
+        radius = max(int(10 * scale), int(tile * 0.24 * scale))
+
+        max_content_width = max(int(tile * 1.4), int(spec["max_w"]) - pad_left - pad_right)
         speech_font, lines = fit_wrapped_text_lines(
             list(renderer.speech_fonts[:-1]) if len(renderer.speech_fonts) > 1 else renderer.speech_fonts,
             text,
@@ -1246,49 +1271,28 @@ def draw_speech_bubbles(
         )
         text_surfaces = [speech_font.render(line, True, (18, 16, 14)) for line in lines]
         text_width = max(surface.get_width() for surface in text_surfaces)
-        line_gap = max(1, int(renderer.tile_size * 0.02))
-        text_height = sum(surface.get_height() for surface in text_surfaces) + max(0, len(text_surfaces) - 1) * line_gap
+        line_gap = max(1, int(tile * 0.02))
+        text_height = sum(s.get_height() for s in text_surfaces) + max(0, len(text_surfaces) - 1) * line_gap
 
-        min_content_width = max(tail_width + 6, int(renderer.tile_size * 0.9 * scale))
+        min_content_width = max(tail_width + 6, int(tile * 0.9 * scale))
         content_w = max(min_content_width, min(text_width, max_content_width))
         bubble_width = content_w + pad_left + pad_right
-        bubble_height = max(int(renderer.tile_size * 0.66 * scale), text_height + pad_top + pad_bottom)
-
-        # Default: a bubble floats just above its speaker's head (single speaker).
-        baseline_cx = float(anchor_x)
-        baseline_cy = float(anchor_y - tail_height - bubble_height / 2)
-
-        # Radial outward direction from the crowd's centre through this speaker;
-        # co-located speakers (same group) get a small angular spread so their
-        # bubbles also separate. The push grows with the number of speakers.
-        direction_x = anchor_x - centroid_x
-        direction_y = anchor_y - centroid_y
-        distance = math.hypot(direction_x, direction_y)
-        if distance < 1e-3:
-            angle = -math.pi / 2  # nobody to fan away from — point straight up
-        else:
-            angle = math.atan2(direction_y, direction_x)
-        if len(group) > 1:
-            angle += (col - (row_slots - 1) / 2) * 0.30
-        unit_x, unit_y = math.cos(angle), math.sin(angle)
-
-        max_push = 0.40 * min(world_width, world_height)
-        push = 0.0 if concurrent <= 1 else min(
-            max_push, (concurrent - 1) * (renderer.tile_size * 0.55 + bubble_height * 0.12)
+        bubble_height = min(
+            int(max_box_h),
+            max(int(tile * 0.66 * scale), text_height + pad_top + pad_bottom),
         )
-        bubble_cx = baseline_cx + unit_x * push
-        bubble_cy = baseline_cy + unit_y * push
+
+        if concurrent <= 1:  # lone speaker: bubble floats just above the head
+            bubble_cx = float(anchor_x)
+            bubble_cy = float(anchor_y - tail_height - bubble_height / 2)
+        else:  # seat the bubble on the fan ring at its own angle
+            bubble_cx = centroid_x + math.cos(angle) * ring_radius
+            bubble_cy = centroid_y + math.sin(angle) * ring_radius
 
         bubble_x = int(bubble_cx - bubble_width / 2)
         bubble_y = int(bubble_cy - bubble_height / 2)
-        if world_width > bubble_width + 12:
-            bubble_x = max(6, min(bubble_x, world_width - bubble_width - 6))
-        else:
-            bubble_x = 6
-        if world_height > bubble_height + 12:
-            bubble_y = max(6, min(bubble_y, world_height - bubble_height - 6))
-        else:
-            bubble_y = 6
+        bubble_x = max(6, min(bubble_x, world_width - bubble_width - 6)) if world_width > bubble_width + 12 else 6
+        bubble_y = max(6, min(bubble_y, world_height - bubble_height - 6)) if world_height > bubble_height + 12 else 6
         content_left = bubble_x + pad_left
         content_top = bubble_y + pad_top
         content_width = bubble_width - pad_left - pad_right
