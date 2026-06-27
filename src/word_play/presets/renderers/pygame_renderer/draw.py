@@ -1231,24 +1231,38 @@ def draw_speech_bubbles(
             "anchor_x": anchor_x, "anchor_y": anchor_y, "angle": angle,
         })
 
-    ring_radius = 0.0 if concurrent <= 1 else min(0.62 * half_min, tile * (2.0 + 0.5 * concurrent))
+    ring_radius = 0.0 if concurrent <= 1 else min(0.55 * half_min, tile * (1.8 + 0.45 * concurrent))
 
     # ── Pass 2: how large a box each bubble may occupy given its neighbours. ──
+    # The gap to the nearest neighbour bounds the bubble in BOTH axes: neighbours
+    # sit along the ring tangent, horizontal at top/bottom (width-limited) but
+    # vertical at the sides (height-limited). Capping each side to ~the chord
+    # keeps neighbours from overlapping whatever their orientation. When the ring
+    # gets too tight for legible bubbles, speakers are staggered between an inner
+    # and outer radius so each bubble's same-ring neighbour is two slots away,
+    # roughly doubling the room around it.
     if concurrent > 1:
         order = sorted(range(concurrent), key=lambda i: specs[i]["angle"])
         m = len(order)
+        single_chord = 2 * ring_radius * math.sin(math.pi / m)
+        stagger = m >= 6 and single_chord < tile * 3.4
+        outer_radius = min(0.80 * half_min, ring_radius + max(tile * 2.6, ring_radius * 0.42))
         for oi, idx in enumerate(order):
+            r_i = outer_radius if (stagger and oi % 2) else ring_radius
             here = specs[idx]["angle"]
             prev_a = specs[order[(oi - 1) % m]]["angle"]
             next_a = specs[order[(oi + 1) % m]]["angle"]
             gap = min((here - prev_a) % (2 * math.pi), (next_a - here) % (2 * math.pi))
-            chord = 2 * ring_radius * math.sin(min(math.pi, gap) / 2)  # spacing to nearest neighbour
-            specs[idx]["max_w"] = max(tile * 1.6, chord * 0.9)
-        radial_room = min(half_min * 0.96 - ring_radius, ring_radius - tile * 1.3)
-        max_box_h = max(tile * 2.2, 2.0 * max(0.0, radial_room))
+            if stagger:
+                gap *= 2  # nearest same-ring neighbour is two slots around
+            chord = 2 * r_i * math.sin(min(math.pi, gap) / 2)
+            specs[idx]["radius"] = r_i
+            specs[idx]["max_w"] = max(tile * 1.4, chord * 0.92)
+            specs[idx]["max_h"] = max(tile * 1.5, min(world_height * 0.6, chord * 0.92))
     else:
+        specs[0]["radius"] = 0.0
         specs[0]["max_w"] = min(world_width * 0.6, tile * 8.0)
-        max_box_h = world_height * 0.5
+        specs[0]["max_h"] = world_height * 0.5
 
     # ── Pass 3: wrap text into the fitted box, then place and draw. ──
     for spec in specs:
@@ -1278,16 +1292,16 @@ def draw_speech_bubbles(
         content_w = max(min_content_width, min(text_width, max_content_width))
         bubble_width = content_w + pad_left + pad_right
         bubble_height = min(
-            int(max_box_h),
+            int(spec["max_h"]),
             max(int(tile * 0.66 * scale), text_height + pad_top + pad_bottom),
         )
 
         if concurrent <= 1:  # lone speaker: bubble floats just above the head
             bubble_cx = float(anchor_x)
             bubble_cy = float(anchor_y - tail_height - bubble_height / 2)
-        else:  # seat the bubble on the fan ring at its own angle
-            bubble_cx = centroid_x + math.cos(angle) * ring_radius
-            bubble_cy = centroid_y + math.sin(angle) * ring_radius
+        else:  # seat the bubble on its fan ring (inner or outer) at its angle
+            bubble_cx = centroid_x + math.cos(angle) * spec["radius"]
+            bubble_cy = centroid_y + math.sin(angle) * spec["radius"]
 
         bubble_x = int(bubble_cx - bubble_width / 2)
         bubble_y = int(bubble_cy - bubble_height / 2)
