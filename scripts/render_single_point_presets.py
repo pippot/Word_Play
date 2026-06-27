@@ -35,6 +35,17 @@ _HUMANS = [
 ]
 _HUMAN_DIR = "sprite_library/src/characters/humanoids/human"
 
+_CHAT_LINES = [
+    "I move that we adjourn.",
+    "The motion is seconded.",
+    "Point of order!",
+    "We must reach consensus.",
+    "Aye.",
+    "The treaty stands.",
+    "Let the record show.",
+    "I yield my time.",
+]
+
 
 def _human_sprite(i: int) -> str:
     # Fall back through the directory if a preferred name is missing.
@@ -110,6 +121,8 @@ def main() -> None:
     ap.add_argument("--tile-size", type=int, default=48)
     ap.add_argument("--modes", default="ring,compass,boardroom,horseshoe,auditorium,debate")
     ap.add_argument("--out-dir", default="docs/single_point_previews")
+    ap.add_argument("--chat", type=int, default=0,
+                    help="give speech bubbles to every Nth agent (0 = none)")
     args = ap.parse_args()
 
     out_dir = ROOT / args.out_dir
@@ -125,6 +138,10 @@ def main() -> None:
                                          "sprite_library/src/world_tiles/indoors/floors/day_brick_floor_c.png"),
         )
         env = SinglePointEnv(args.agents, renderer=renderer)
+        if args.chat > 0:
+            for i, agent in enumerate(env.agents):
+                if i % args.chat == 0:
+                    env.render_state.emit("speech", entity=agent, text=_CHAT_LINES[i % len(_CHAT_LINES)])
         env.render()
         surface = getattr(renderer, "captured", None)
         if surface is None:

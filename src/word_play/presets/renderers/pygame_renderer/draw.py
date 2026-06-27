@@ -1194,6 +1194,20 @@ def draw_speech_bubbles(
         if entity not in bubble_groups.setdefault(group_key, []):
             bubble_groups[group_key].append(entity)
 
+    # Fan bubbles outward from the centroid of everyone currently speaking, so
+    # several simultaneous bubbles spread around the scene instead of stacking
+    # on top of each other. Each bubble still grows a tail pointing back at its
+    # speaker, so it stays clear who is talking no matter how far it is pushed.
+    anchor_of: dict[Entity, tuple[int, int]] = {}
+    for entity, _text, entity_rect, _group_key in visible_bubbles:
+        anchor_of[entity] = (
+            entity_rect.centerx,
+            entity_rect.top + max(4, min(renderer.tile_size // 6, entity_rect.height // 3)),
+        )
+    centroid_x = sum(ax for ax, _ in anchor_of.values()) / len(anchor_of)
+    centroid_y = sum(ay for _, ay in anchor_of.values()) / len(anchor_of)
+    concurrent = len(visible_bubbles)
+
     for entity, text, entity_rect, group_key in visible_bubbles:
         renderable = renderable_component(entity)
         scale = getattr(renderable, "speech_bubble_scale", 1.0) if renderable is not None else 1.0
@@ -1233,33 +1247,71 @@ def draw_speech_bubbles(
             text_height + pad_top + pad_bottom,
             int(renderer.tile_size * (0.78 + 0.28 * len(lines))),
         )
-        horizontal_gap = max(8, renderer.tile_size // 6)
-        horizontal_offset = int((col - (row_slots - 1) / 2) * (bubble_width + horizontal_gap))
-        bubble_x = anchor_x - bubble_width // 2 + horizontal_offset
         world_width = renderer.effect_surface.get_width()
+        world_height = renderer.effect_surface.get_height()
+
+        # Default: a bubble floats just above its speaker's head (single speaker).
+        baseline_cx = float(anchor_x)
+        baseline_cy = float(anchor_y - tail_height - bubble_height / 2)
+
+        # Radial outward direction from the crowd's centre through this speaker;
+        # co-located speakers (same group) get a small angular spread so their
+        # bubbles also separate. The push grows with the number of speakers.
+        direction_x = anchor_x - centroid_x
+        direction_y = anchor_y - centroid_y
+        distance = math.hypot(direction_x, direction_y)
+        if distance < 1e-3:
+            angle = -math.pi / 2  # nobody to fan away from — point straight up
+        else:
+            angle = math.atan2(direction_y, direction_x)
+        if len(group) > 1:
+            angle += (col - (row_slots - 1) / 2) * 0.30
+        unit_x, unit_y = math.cos(angle), math.sin(angle)
+
+        max_push = 0.40 * min(world_width, world_height)
+        push = 0.0 if concurrent <= 1 else min(
+            max_push, (concurrent - 1) * (renderer.tile_size * 0.55 + bubble_height * 0.12)
+        )
+        bubble_cx = baseline_cx + unit_x * push
+        bubble_cy = baseline_cy + unit_y * push
+
+        bubble_x = int(bubble_cx - bubble_width / 2)
+        bubble_y = int(bubble_cy - bubble_height / 2)
         if world_width > bubble_width + 12:
             bubble_x = max(6, min(bubble_x, world_width - bubble_width - 6))
         else:
             bubble_x = 6
-
-        vertical_gap = max(6, renderer.tile_size // 10)
-        vertical_offset = int((rows - 1 - row) * (bubble_height + tail_height + vertical_gap))
-        bubble_y = max(6, anchor_y - bubble_height - tail_height - vertical_offset)
+        if world_height > bubble_height + 12:
+            bubble_y = max(6, min(bubble_y, world_height - bubble_height - 6))
+        else:
+            bubble_y = 6
         content_left = bubble_x + pad_left
         content_top = bubble_y + pad_top
         content_width = bubble_width - pad_left - pad_right
         content_height = bubble_height - pad_top - pad_bottom
 
         bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_width, bubble_height)
-        tail_base_x = max(
-            bubble_rect.left + tail_width // 2,
-            min(anchor_x, bubble_rect.right - tail_width // 2),
-        )
-        tail = [
-            (tail_base_x - tail_width // 2, bubble_rect.bottom - 2),
-            (tail_base_x + tail_width // 2, bubble_rect.bottom - 2),
-            (anchor_x, anchor_y),
-        ]
+
+        # Tail leader: from the bubble edge point nearest the speaker, narrowing
+        # to a point exactly at the speaker's head — always identifies the owner.
+        base_x = max(bubble_rect.left + 2, min(anchor_x, bubble_rect.right - 2))
+        base_y = max(bubble_rect.top + 2, min(anchor_y, bubble_rect.bottom - 2))
+        lead_x, lead_y = anchor_x - base_x, anchor_y - base_y
+        lead_len = math.hypot(lead_x, lead_y)
+        if lead_len < 1e-3:
+            tail = [
+                (base_x - tail_width // 2, bubble_rect.bottom - 2),
+                (base_x + tail_width // 2, bubble_rect.bottom - 2),
+                (anchor_x, anchor_y + tail_height),
+            ]
+        else:
+            perp_x, perp_y = -lead_y / lead_len, lead_x / lead_len
+            half = tail_width / 2
+            tail = [
+                (base_x + perp_x * half, base_y + perp_y * half),
+                (base_x - perp_x * half, base_y - perp_y * half),
+                (anchor_x, anchor_y),
+            ]
         pygame.draw.rect(renderer.effect_surface, (250, 245, 233), bubble_rect, border_radius=radius)
         pygame.draw.rect(renderer.effect_surface, (56, 46, 39), bubble_rect, width=2, border_radius=radius)
         pygame.draw.polygon(renderer.effect_surface, (250, 245, 233), tail)

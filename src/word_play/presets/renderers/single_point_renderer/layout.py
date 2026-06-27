@@ -111,12 +111,27 @@ _DEFAULT_PRESET = "summit"
 # Offset generators — each returns exactly n (x, y) tuples
 # ═══════════════════════════════════════════════════════════════════
 
+_RING_SPACING = 1.7  # min arc gap between neighbours / gap between rings
+
+
 def _ring_offsets(n: int, r: float) -> list[tuple[float, float]]:
-    """Evenly spaced circle; y compressed 0.72× for a faux-isometric read."""
+    """Concentric rings around the centre; y compressed 0.72× for a faux-iso
+    read. Up to a ring's circumference of agents sit on it, then the next ring
+    fans out — so the arrangement scales smoothly from a handful to a crowd."""
     if n == 1:
         return [(0.0, 0.0)]
-    return [(r * math.cos(a), r * math.sin(a) * 0.72)
-            for a in (-math.pi / 2 + 2 * math.pi * i / n for i in range(n))]
+    offs: list[tuple[float, float]] = []
+    placed, ring = 0, 0
+    while placed < n:
+        radius = r + ring * _RING_SPACING
+        capacity = max(1, int((2 * math.pi * radius) / _RING_SPACING))
+        count = min(capacity, n - placed)
+        for i in range(count):
+            a = -math.pi / 2 + 2 * math.pi * i / count
+            offs.append((radius * math.cos(a), radius * math.sin(a) * 0.72))
+        placed += count
+        ring += 1
+    return offs
 
 
 def _compass_offsets(n: int, r: float) -> list[tuple[float, float]]:
