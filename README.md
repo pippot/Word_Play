@@ -33,6 +33,40 @@ python examples/agent_goal_tracking.py
 python examples/llm_communication.py
 ```
 
+### Install with `uv` (recommended for Linux / fresh checkouts)
+
+`uv` is the fastest way to get a working environment on a new machine
+(including Ubuntu). The repo ships a `uv.lock` so a single command resolves
+and installs everything in a virtual environment:
+
+```bash
+# Install uv once (e.g. on Ubuntu):
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# In the repo root, install word-play + LLM + renderer dependencies:
+uv sync --all-extras
+
+# Run any example inside the managed environment:
+uv run python examples/simple_env_0.py
+uv run python examples/llm_among_us.py
+```
+
+The optional dependency groups in `pyproject.toml` are:
+
+| Extra    | Installs            | Used by                                |
+| -------- | ------------------- | -------------------------------------- |
+| `render` | `pygame`            | `rendering_demo.py`, replay tool       |
+| `llm`    | `openai`            | all LLM examples                       |
+| `all`    | `pygame` + `openai` | `llm_among_us.py` and the replay tool  |
+
+To target a specific Linux architecture other than the lockfile's default
+x86_64, pass `--python-platform`:
+
+```bash
+uv sync --all-extras --python-platform aarch64-unknown-linux-gnu   # ARM64
+uv sync --all-extras --python-platform x86_64-unknown-linux-gnu   # x86_64
+```
+
 ## Examples
 
 - `examples/simple_env_0.py`: a minimal `Simple_2D_Grid_World` showing human-controlled actions, communication, combat, health, inventory, and collision.

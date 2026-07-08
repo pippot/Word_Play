@@ -13,6 +13,21 @@ authors = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+# Mirrors ``optional_requirements.txt``. Kept in sync so users can install
+# via either ``pip install -r optional_requirements.txt`` or
+# ``uv sync --extra <name>`` / ``uv sync --all-extras``.
+render = [
+    "pygame>=2.5",
+]
+llm = [
+    "openai>=1.40",
+]
+all = [
+    "pygame>=2.5",
+    "openai>=1.40",
+]
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 
