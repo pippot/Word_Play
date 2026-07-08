@@ -41,6 +41,9 @@ python examples/llm_communication.py
 - `examples/parallelized_agents.py`: a renderer-backed arena that computes multiple agent actions in parallel. This is an important speed-up for multi-agent environments
 - `examples/agent_goal_tracking.py`: a small one-dimensional action-only LLM example where an agent learns to move toward a goal under a time limit.
 - `examples/llm_communication.py`: a three-agent LLM coordination game where each agent shares a private signal, communicates, and then chooses a synchronized action.
+- `examples/llm_among_us.py`: a social-deduction 2D grid game where 6 LLM agents (1 impostor + 5 crewmates, served by SGLang / Qwen3-27B) move, chat, attack, and call emergency meetings; the run is recorded to a replay log (no live window) so it can be inspected later with the pygame replay tool.
+- `examples/sglang_inference.py`: a goal-seeking agent whose LLM is served by a local [SGLang](https://github.com/sgl-project/sglang) inference server (talks to the server's OpenAI-compatible HTTP API).
+- `examples/huggingface_local_model.py`: a fully local LLM agent using a Hugging Face Transformers model.
 
 ## Optional Dependencies
 
@@ -48,7 +51,7 @@ The base package intentionally has no runtime dependencies in `requirements.txt`
 Optional features need extra packages:
 
 - Renderer presets: `pygame`
-- OpenRouter-backed LLM models: `openai`
+- OpenAI/OpenRouter/SGLang-backed LLM models: `openai` (SGLang preset also needs a running SGLang server)
 
 Install both with:
 
@@ -101,7 +104,7 @@ The `src/word_play/presets` folder contains reusable pieces for common
 environments:
 
 - `action_policies`: human input, fixed action sequences, and LLM action plus communication policy.
-- `models`: model interface, registry, human model, and OpenRouter model.
+- `models`: model interface, registry, human model, OpenAI/OpenRouter/Claude/Gemini/Hugging Face clients, and an SGLang inference preset.
 - `movement`: simple 1D grid, 2D grid, single-point movement, and collision helpers.
 - `observation`: `Simple_Observation` plus formatting helpers for action lists and entity state.
 - `systems`: reusable gameplay systems such as communication, combat, health, inventory, action composition, and do-nothing actions.

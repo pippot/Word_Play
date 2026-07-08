@@ -309,6 +309,8 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
 
     def _extract_json(self, text: str) -> dict:
         text = re.sub(r"```(?:json)?\s*", "", text).strip()
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        text = re.sub(r"<reasoning>.*?</reasoning>", "", text, flags=re.DOTALL).strip()
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
             raise ValueError("No JSON object found in model response.")

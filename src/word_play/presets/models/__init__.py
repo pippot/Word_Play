@@ -5,6 +5,7 @@ from word_play.presets.models.gemini import Gemini_Model, register_gemini_model
 from word_play.presets.models.huggingface import HuggingFace_Model, register_huggingface_model
 from word_play.presets.models.openai import OpenAI_Model, register_openai_model
 from word_play.presets.models.openrouter import OpenRouter_Model, register_openrouter_model
+from word_play.presets.models.sglang import SGLang_Model, register_sglang_model
 from word_play.presets.models.registry import (
     LLM_MODEL_REGISTRY,
     Model_Registry,
@@ -27,6 +28,8 @@ __all__ = [
     "register_openai_model",
     "OpenRouter_Model",
     "register_openrouter_model",
+    "SGLang_Model",
+    "register_sglang_model",
     "Human_Model",
     "Model_Registry",
     "LLM_MODEL_REGISTRY",
