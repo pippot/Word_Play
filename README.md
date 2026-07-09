@@ -157,6 +157,7 @@ see `src/word_play/presets/renderers/README.md`.
 - `src/word_play/presets`: reusable policies, systems, movement models, observations, models, renderers, and environment helpers.
 - `src/word_play/utils`: utility helpers, including tilemap construction.
 - `examples`: small runnable examples showing how to assemble environments.
+- `tools`: debugging utilities (not part of the runtime package). See `tools/README.md`.
 - `sprite_library`: renderer sprite assets and generation utilities.
 - `tests`: test package placeholder.
 
