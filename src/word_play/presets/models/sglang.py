@@ -268,8 +268,18 @@ class SGLang_Model(Model):
         # SGLang accepts them through the ``extra_body`` field of the
         # OpenAI client. We forward whatever the caller put there.
         extra_body = dict(params.pop("extra_body", {}) or {})
-        if extra_body:
-            params["extra_body"] = extra_body
+
+        # Disable Qwen3-style "thinking" output by default. Qwen3's chat
+        # template emits a ``<think>...</think>`` block followed by the
+        # actual reply when ``enable_thinking`` is left on, and SGLang
+        # folds that block into ``message.content`` -- so without this,
+        # the LLM's internal reasoning leaks into the visible response.
+        # Callers can override by passing their own ``chat_template_kwargs``
+        # in ``extra_body``.
+        if "chat_template_kwargs" not in extra_body:
+            extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+
+        params["extra_body"] = extra_body
 
         # Hit the server.
         response = self._get_client().chat.completions.create(

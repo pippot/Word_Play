@@ -23,7 +23,7 @@ WHAT THIS EXAMPLE SHOWS
    emergency meetings, and per-team win conditions.
 2. Combining LLM-driven action selection with LLM-driven public chat via
    custom ``Action`` subclasses (``Make_Public_Statement`` and
-   ``Report_Body``) plus a custom one-round chat format.
+   ``Report_Body``) plus a custom multi-round chat format.
 3. Running multiple LLM-controlled agents in parallel with
    ``ThreadPoolExecutor`` for faster wall-clock time.
 4. Saving the entire episode to a replay log with ``ExperimentRecorder``
@@ -174,22 +174,22 @@ SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
 
 NUM_CREW = 5
 MAX_STEPS = 60
-OBSERVATION_RADIUS = 3
+OBSERVATION_RADIUS = 5
 MAX_PARALLEL_WORKERS = 6
 
-# Classic Among Us color names. We pick ``NUM_CREW + 1`` of them; one of those
-# is secretly the impostor and the rest are crew.
+# First names for the players. We pick ``NUM_CREW + 1`` of them; one of those
+# is secretly the traitor and the rest are innocents.
 CREWMATE_NAMES: list[str] = [
-    "Red",
-    "Blue",
-    "Green",
-    "Yellow",
-    "Cyan",
-    "Lime",
-    "Orange",
-    "Purple",
-    "White",
-    "Pink",
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Diana",
+    "Eve",
+    "Frank",
+    "Grace",
+    "Henry",
+    "Iris",
+    "Jack",
 ]
 
 # Visually distinct crewmate sprites (cycled if there are more crew than sprites).
@@ -335,48 +335,62 @@ class Report_Body(Action):
         )
 
     def action_description_text(self, actor, target_entity, env) -> str:  # type: ignore[override]
-        return "Report a body (call emergency meeting)."
+        return "Report a fallen player (call a meeting)."
 
 
 # ============================================================================
 # CUSTOM ACTION: MAKE A PUBLIC STATEMENT
 # ============================================================================
 #
-# This wraps a single-round public chat. The default ``Start_Public_Conversation``
-# action uses ``sim_simple_conversation`` which runs 3 rounds; for Among Us we
-# want exactly 1 message per participant per turn to keep transcripts short
-# and the per-step cost predictable.
+# This wraps a multi-round public chat. We run 3 rounds per TALK action so
+# adjacent players can actually go back and forth -- one round per action is
+# too short for any real debate, accusation, or defence. Each participant
+# still writes one short message per round, and the cost stays predictable
+# because the calls run in parallel.
+
+NUM_CHAT_ROUNDS = 3
+MEETING_DISCUSSION_ROUNDS = 3
+
 
 def among_us_chat_format(participants: list[Entity], env, info: str | None = None) -> None:
-    """One round of public chat, logging messages to ``env.public_message_log``."""
+    """Run ``NUM_CHAT_ROUNDS`` of public chat, logging every message."""
     for speaker in participants:
         speaker.get_component(Communication_Policy).start_conversation(participants, env, info=info)
 
-    for speaker in participants:
-        recipients = [entity for entity in participants if entity is not speaker]
-        message = speaker.get_component(Communication_Policy).send_message(recipients, env, info=info)
-        env.public_message_log.append(
-            {
-                "step": env.cur_step + 1,
-                "speaker": speaker.name,
-                "text": str(message),
-            }
-        )
-        env.render_state.emit(
-            "speech",
-            entity=speaker,
-            text=str(message),
-            step=env.cur_step + 1,
-        )
-        for recipient in recipients:
-            recipient.get_component(Communication_Policy).receive_message(message, speaker, env)
+    for turn in range(NUM_CHAT_ROUNDS):
+        for speaker in participants:
+            recipients = [entity for entity in participants if entity is not speaker]
+            # The info string is only needed for the first round; later rounds
+            # see the same context via the rolling conversation history.
+            message = speaker.get_component(Communication_Policy).send_message(
+                recipients,
+                env,
+                info=info if turn == 0 else None,
+            )
+            env.public_message_log.append(
+                {
+                    "step": env.cur_step + 1,
+                    "turn": turn,
+                    "speaker": speaker.name,
+                    "text": str(message),
+                }
+            )
+            env.render_state.emit(
+                "speech",
+                entity=speaker,
+                text=str(message),
+                turn=turn,
+                step=env.cur_step + 1,
+            )
+            for recipient in recipients:
+                recipient.get_component(Communication_Policy).receive_message(message, speaker, env)
 
     for speaker in participants:
         speaker.get_component(Communication_Policy).end_conversation(participants, env, info=info)
 
 
 class Make_Public_Statement(Action):
-    """Make a single public statement to all players standing on adjacent tiles."""
+    """Hold a multi-round public conversation with everyone standing on adjacent tiles."""
 
     def __init__(self) -> None:
         self.conversation_format = among_us_chat_format
@@ -400,15 +414,17 @@ class Make_Public_Statement(Action):
         dead = [a.name for a in env.agents if not env._is_alive(a)]
         recent_kills = env.kill_log[-3:]
         kill_text = (
-            ", ".join(f"{k['killer']} killed {k['victim']}" for k in recent_kills)
+            ", ".join(
+                f"{k['victim']} was eliminated at {k['position']}" for k in recent_kills
+            )
             if recent_kills
-            else "no recent kills"
+            else "no recent eliminations"
         )
         return (
             f"Step {env.cur_step + 1}. "
-            f"Alive crew: {len(alive_crew)}. "
+            f"Alive players: {len(alive_crew)}. "
             f"Dead: {len(dead)}. "
-            f"Recent kills: {kill_text}. "
+            f"Recent eliminations: {kill_text}. "
             f"Speak concisely in character. One short sentence."
         )
 
@@ -551,14 +567,14 @@ class Among_Us_Env(Simple_2D_Grid_World):
 
         is_impostor = agent.name == self.impostor_name
         role_text = (
-            "You are the IMPOSTOR. Kill all crewmates without being ejected."
+            "You are the TRAITOR. Eliminate all innocents without being expelled."
             if is_impostor
-            else "You are a CREWMATE. Find and eject the impostor before they kill everyone."
+            else "You are an INNOCENT. Find and expel the traitor before they eliminate everyone."
         )
         role_hint = (
-            "You know who the crewmates are. They do NOT know who you are. Blend in."
+            "You know who the innocents are. They do NOT know who you are. Blend in."
             if is_impostor
-            else "The impostor is hidden. The impostor is one of the other players (alive or dead)."
+            else "The traitor is hidden. The traitor is one of the other players (alive or dead)."
         )
 
         alive_crew_names = [a.name for a in self._alive_crew()]
@@ -566,17 +582,17 @@ class Among_Us_Env(Simple_2D_Grid_World):
         recent_kills = self.kill_log[-3:]
         kill_text = (
             "\n".join(
-                f"  step {k['step']}: {k['killer']} -> {k['victim']} ({k['method']})"
+                f"  step {k['step']}: {k['victim']} was eliminated at {k['position']} ({k['method']})"
                 for k in recent_kills
             )
             if recent_kills
-            else "  (no kills yet)"
+            else "  (no eliminations yet)"
         )
 
         recent_msgs = list(self.public_message_log)[-6:]
         msg_text = (
             "\n".join(
-                f"  step {m['step']} {m['speaker']}: {m['text']}"
+                f"  step {m['step']}{' [meeting]' if m.get('meeting') else ''} {m['speaker']}: {m['text']}"
                 for m in recent_msgs
             )
             if recent_msgs
@@ -588,9 +604,9 @@ class Among_Us_Env(Simple_2D_Grid_World):
             (
                 "GAME STATE:\n"
                 f"  step: {self.cur_step + 1} / {self.max_steps}\n"
-                f"  alive crew: {', '.join(alive_crew_names) or 'none'}\n"
+                f"  alive players: {', '.join(alive_crew_names) or 'none'}\n"
                 f"  dead: {', '.join(dead_names) or 'none'}\n"
-                f"  recent kills:\n{kill_text}"
+                f"  recent eliminations:\n{kill_text}"
             ),
             f"RECENT PUBLIC MESSAGES:\n{msg_text}",
         )
@@ -673,20 +689,20 @@ class Among_Us_Env(Simple_2D_Grid_World):
         if len(alive_agents) <= 1:
             return None
 
+        discussion_transcript = self._run_meeting_discussion(alive_agents)
+
         vote_tally: dict[str, int] = {a.name: 0 for a in alive_agents}
-        votes: dict[str, str] = {}
 
         for voter in alive_agents:
-            voted_for = self._ask_vote(voter, alive_agents)
+            voted_for = self._ask_vote(voter, alive_agents, discussion_transcript)
             if voted_for is not None and voted_for is not voter:
                 vote_tally[voted_for.name] += 1
-                votes[voter.name] = voted_for.name
 
         if not any(vote_tally.values()):
             self.render_state.emit(
                 "meeting",
                 reporter=self.reporter_name,
-                votes=votes,
+                vote_counts=dict(vote_tally),
                 ejected=None,
                 tie=False,
                 step=self.cur_step + 1,
@@ -700,7 +716,7 @@ class Among_Us_Env(Simple_2D_Grid_World):
             self.render_state.emit(
                 "meeting",
                 reporter=self.reporter_name,
-                votes=votes,
+                vote_counts=dict(vote_tally),
                 ejected=None,
                 tie=True,
                 step=self.cur_step + 1,
@@ -722,14 +738,101 @@ class Among_Us_Env(Simple_2D_Grid_World):
         self.render_state.emit(
             "meeting",
             reporter=self.reporter_name,
-            votes=votes,
+            vote_counts=dict(vote_tally),
             ejected=ejected_name,
             tie=False,
             step=self.cur_step + 1,
         )
         return ejected_name
 
-    def _ask_vote(self, voter: Entity, alive_agents: list[Entity]) -> Entity | None:
+    def _run_meeting_discussion(self, participants: list[Entity]) -> list[dict]:
+        """Hold a multi-round public discussion among all alive participants.
+
+        Every participant gets to speak once per round. Messages are logged
+        to ``self.public_message_log`` with ``meeting=True`` and emitted as
+        speech render events. The full transcript is returned so the voting
+        step can pass it to each voter.
+        """
+        last_kill = self.kill_log[-1] if self.kill_log else None
+        victim = last_kill["victim"] if last_kill else "unknown"
+        position = last_kill.get("position", "unknown") if last_kill else "unknown"
+
+        info = (
+            f"A meeting has been called by {self.reporter_name or 'a player'}. "
+            f"The eliminated player is {victim} at {position}. "
+            f"Discuss openly: accuse, defend, or question others. "
+            f"Speak concisely. One short sentence per message."
+        )
+
+        transcript: list[dict] = []
+
+        self.render_state.emit(
+            "meeting",
+            reporter=self.reporter_name,
+            phase="discussion_start",
+            rounds=MEETING_DISCUSSION_ROUNDS,
+            step=self.cur_step + 1,
+        )
+
+        for speaker in participants:
+            speaker.get_component(Communication_Policy).start_conversation(
+                participants, self, info=info
+            )
+
+        for turn in range(MEETING_DISCUSSION_ROUNDS):
+            for speaker in participants:
+                recipients = [entity for entity in participants if entity is not speaker]
+                message = speaker.get_component(Communication_Policy).send_message(
+                    recipients,
+                    self,
+                    info=info if turn == 0 else None,
+                )
+                message_text = str(message)
+                transcript.append({"speaker": speaker.name, "text": message_text})
+
+                self.public_message_log.append(
+                    {
+                        "step": self.cur_step + 1,
+                        "turn": turn,
+                        "speaker": speaker.name,
+                        "text": message_text,
+                        "meeting": True,
+                    }
+                )
+                self.render_state.emit(
+                    "speech",
+                    entity=speaker,
+                    text=message_text,
+                    turn=turn,
+                    meeting=True,
+                    step=self.cur_step + 1,
+                )
+                for recipient in recipients:
+                    recipient.get_component(Communication_Policy).receive_message(
+                        message, speaker, self
+                    )
+
+        for speaker in participants:
+            speaker.get_component(Communication_Policy).end_conversation(
+                participants, self, info=info
+            )
+
+        self.render_state.emit(
+            "meeting",
+            reporter=self.reporter_name,
+            phase="discussion_end",
+            messages=len(transcript),
+            step=self.cur_step + 1,
+        )
+
+        return transcript
+
+    def _ask_vote(
+        self,
+        voter: Entity,
+        alive_agents: list[Entity],
+        discussion_transcript: list[dict] | None = None,
+    ) -> Entity | None:
         """Ask ``voter``'s LLM to pick one of the other alive agents to eject."""
         candidates = [a for a in alive_agents if a is not voter]
         if not candidates:
@@ -746,18 +849,28 @@ class Among_Us_Env(Simple_2D_Grid_World):
             policy.observation_history[-1] if policy.observation_history else "(no observation)"
         )
         recent_obs = recent_obs[:1800]
-        role = "Impostor" if voter.name == self.impostor_name else "Crewmate"
+        role = "Traitor" if voter.name == self.impostor_name else "Innocent"
 
         system_msg = (
-            f"You are {voter.name}, the {role} in Among Us.\n"
-            f"An emergency meeting has been called by {self.reporter_name or 'a player'}.\n"
-            f"You must vote to eject one player. You cannot vote for yourself."
-            f"{' Vote strategically to deflect suspicion.' if role == 'Impostor' else ' Vote for whoever you think is the impostor.'}"
+            f"You are {voter.name}, the {role} in a social deduction game.\n"
+            f"A meeting has been called by {self.reporter_name or 'a player'}.\n"
+            f"You must vote to expel one player. You cannot vote for yourself."
+            f"{' Vote strategically to deflect suspicion.' if role == 'Traitor' else ' Vote for whoever you think is the traitor.'}"
         )
+
+        if discussion_transcript:
+            discussion_text = "\n".join(
+                f"  {entry['speaker']}: \"{entry['text']}\""
+                for entry in discussion_transcript
+            )
+        else:
+            discussion_text = "  (no discussion)"
 
         prompt = (
             f"Candidates (index, name):\n{candidate_list}\n\n"
+            f"Recent meeting discussion (oldest to newest):\n{discussion_text}\n\n"
             f"Recent game context:\n{recent_obs}\n\n"
+            f"Use the discussion above to inform your vote.\n"
             f'Reply with JSON: {{"vote_choice_idx": <integer>}}'
         )
 
@@ -792,36 +905,36 @@ class Among_Us_Env(Simple_2D_Grid_World):
 # ============================================================================
 
 CREWMATE_SYSTEM_PROMPT_TEMPLATE = (
-    "You are {name}, a CREWMATE in a game of Among Us played on a 2D grid.\n\n"
-    "GOAL: identify and eject the impostor before they kill everyone.\n\n"
+    "You are {name}, an INNOCENT in a social deduction game played on a 2D grid.\n\n"
+    "GOAL: identify and expel the traitor before they eliminate everyone.\n\n"
     "RULES:\n"
-    "- The IMPOSTOR is hidden among the other players. They can MOVE and ATTACK "
-    "nearby crewmates to kill them in one hit.\n"
+    "- The TRAITOR is hidden among the other players. They can MOVE and ATTACK "
+    "nearby players to eliminate them in one hit.\n"
     "- You can MOVE in 4 directions (blocked by walls).\n"
     "- TALK to nearby players to share information and build trust.\n"
-    "- REPORT a corpse (when adjacent to one) to trigger an emergency meeting. "
-    "During the meeting, every alive player votes to eject one person. The most-voted "
-    "is removed. Ties result in no ejection.\n"
+    "- REPORT a fallen player (when adjacent to one) to trigger a meeting. "
+    "During the meeting, every alive player votes to expel one person. The most-voted "
+    "is removed. Ties result in no expulsion.\n"
     "- You can NOT directly attack other players.\n\n"
-    "WIN: the impostor is ejected. LOSE: all crewmates are dead.\n\n"
+    "WIN: the traitor is expelled. LOSE: all innocents are eliminated.\n\n"
     "When you choose TALK, write ONE short in-character sentence. No speaker labels, no quotes.\n"
     "When you choose an action, return the requested JSON object."
 )
 
 IMPOSTOR_SYSTEM_PROMPT_TEMPLATE = (
-    "You are {name}, the IMPOSTOR in a game of Among Us played on a 2D grid.\n\n"
-    "GOAL: kill all crewmates without being voted out.\n\n"
+    "You are {name}, the TRAITOR in a social deduction game played on a 2D grid.\n\n"
+    "GOAL: eliminate all innocents without being voted out.\n\n"
     "RULES:\n"
     "- You can MOVE in 4 directions (blocked by walls).\n"
-    "- ATTACK nearby crewmates to kill them instantly. One hit is enough.\n"
-    "- TALK to nearby players to blend in, deflect suspicion, or accuse crewmates.\n"
-    "- REPORT a corpse (even one you caused) to trigger a meeting -- this can buy time to deflect.\n\n"
-    "Crewmates cannot attack you directly; they can only vote you out during meetings.\n\n"
-    "WIN: all crewmates are dead. LOSE: you are voted out.\n\n"
+    "- ATTACK nearby players to eliminate them instantly. One hit is enough.\n"
+    "- TALK to nearby players to blend in, deflect suspicion, or accuse others.\n"
+    "- REPORT a fallen player (even one you caused) to trigger a meeting -- this can buy time to deflect.\n\n"
+    "Innocents cannot attack you directly; they can only vote you out during meetings.\n\n"
+    "WIN: all innocents are eliminated. LOSE: you are voted out.\n\n"
     "TIPS:\n"
-    "- Kill isolated crewmates. Avoid being seen.\n"
+    "- Eliminate isolated players. Avoid being seen.\n"
     "- Blend in by talking and accusing others.\n"
-    "- During meetings, deflect blame onto a crewmate.\n\n"
+    "- During meetings, deflect blame onto an innocent.\n\n"
     "When you choose TALK, write ONE short in-character sentence. No speaker labels, no quotes.\n"
     "When you choose an action, return the requested JSON object."
 )
@@ -982,7 +1095,7 @@ def build_environment(
     final_entities.extend(wall_entities)
 
     env = Among_Us_Env(
-        description="Among Us - social deduction with LLM agents.",
+        description="A social deduction game on a 2D grid, played by LLM agents.",
         entities=final_entities,
         impostor_name=impostor_name,
         observation_radius=observation_radius,
