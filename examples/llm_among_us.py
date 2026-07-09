@@ -1,3 +1,4 @@
+
 """
 LLM AMONG US EXAMPLE
 ====================
@@ -770,7 +771,7 @@ class Among_Us_Env(Simple_2D_Grid_World):
                 response = policy.model.generate_text(
                     f"{system_msg}\n\n{prompt}",
                     gen_config,
-                    max_new_tokens=64,
+                    max_new_tokens=128,
                 )
                 match = re.search(r"\{.*\}", response, re.DOTALL)
                 if not match:
@@ -872,7 +873,7 @@ def build_crewmate_entity(name: str, position: Position_2D, sprite: str, model_k
                 action_generation_config=ACTION_GENERATION_CONFIG,
                 message_generation_config=MESSAGE_GENERATION_CONFIG,
                 action_max_new_tokens=512,
-                message_max_new_tokens=96,
+                message_max_new_tokens=128,
             ),
             AmongUsHealth(max_health=1, starting_health=1),
             Collidable(collidable_tags=["wall"]),
@@ -903,7 +904,7 @@ def build_impostor_entity(name: str, position: Position_2D, sprite: str, model_k
                 action_generation_config=ACTION_GENERATION_CONFIG,
                 message_generation_config=MESSAGE_GENERATION_CONFIG,
                 action_max_new_tokens=512,
-                message_max_new_tokens=96,
+                message_max_new_tokens=128,
             ),
             AmongUsHealth(max_health=1, starting_health=1),
             Collidable(collidable_tags=["wall"]),
