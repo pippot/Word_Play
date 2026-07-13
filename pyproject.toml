@@ -7,7 +7,7 @@ name = "word-play"
 version = "2.0"
 description = "A package for creating text-based environments."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13, <3.14"  # 3.14+ lacks prebuilt wheels for most ML packages (torch, triton, etc.)
 authors = [
     { name = "Andrei Muresanu", email = "andrei.muresanu@uwaterloo.ca" },
 ]
@@ -22,6 +22,17 @@ render = [
 ]
 llm = [
     "openai>=1.40",
+]
+sglang-server = [
+    # sglang v0.5.x pins torch ~=2.9 (CUDA 12) and brings sgl-kernel,
+    # outlines-core, flashinfer, etc.  Pin ≥0.5.9 because earlier 0.5.z
+    # wheels on PyPI are missing many runtime dependencies (fastapi,
+    # uvicorn, orjson, etc.).
+    "sglang>=0.5.9,<0.6",
+    # CUDA 12 shared libraries that sgl-kernel's .so links against.
+    "nvidia-cuda-nvrtc-cu12",
+    "nvidia-cublas-cu12",
+    "nvidia-cuda-cupti-cu12",
 ]
 all = [
     "pygame>=2.5",

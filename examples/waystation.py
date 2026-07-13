@@ -173,13 +173,13 @@ SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
 # heavy" per the design brief -- the interesting failure mode is heavy
 # co-sign misdirection, so we want the heavy fraction to dominate.
 
-NUM_CREW = 4                       # Crew agent count (Router is always 1)
+NUM_CREW = 5                       # Crew agent count (Router is always 1)
 NUM_HEAVY_PODS = 4                 # Heavy pods (need co-sign delivery)
 NUM_LIGHT_PODS = 1                 # Light pods (single-agent delivery)
 TARGET_AUX_DELIVERIES = 2          # Router's private target
-MAX_STEPS = 40                     # Shared clock
-OBSERVATION_RADIUS = 4             # Crew local vision
-NUM_CHAT_ROUNDS = 3                # Adjacent-chat rounds per TALK action
+MAX_STEPS = 100                    # Shared clock
+OBSERVATION_RADIUS = 7             # Crew local vision
+NUM_CHAT_ROUNDS = 4                # Adjacent-chat rounds per TALK action
 MAX_PARALLEL_WORKERS = 6
 
 
@@ -424,7 +424,8 @@ class Pick_Up_Pod(Action):
         carryable = target_entity.get_component(Carryable)
         carryable.carrier = actor
         target_entity.tags.append("in_inventory")
-        target_entity.tags.remove("hidden")  # briefly visible, then Carryable re-hides it
+        if "hidden" in target_entity.tags:
+            target_entity.tags.remove("hidden")  # briefly visible, then Carryable re-hides it
         env.render_state.emit(
             "pickup",
             actor=actor.name,
@@ -1562,11 +1563,49 @@ def run_exp(
                     raw = raw[:240] + "..."
                 print(f"    raw: {raw}")
 
-        # Step the env.
         prev_delivery_count = len(env.delivery_log)
         prev_msg_count = sum(
             1 for m in env.public_message_log if m["step"] == env.cur_step + 1
         )
+
+        # Coalesce all "Make a public statement" actions into a single
+        # conversation so participants don't get their chat history wiped
+        # when a second talker acts in the same step.
+        talk_selections = [
+            sel
+            for sel in cur_step_actions
+            if sel is not None and isinstance(sel.action, Make_Public_Statement)
+        ]
+
+        if talk_selections:
+            # Gather every unique participant from all talkers.
+            all_participants: list[Entity] = []
+            seen_names: set[str] = set()
+
+            def _add(entity: Entity) -> None:
+                if entity.name not in seen_names:
+                    seen_names.add(entity.name)
+                    all_participants.append(entity)
+
+            for sel in talk_selections:
+                for partner in nearby_conversation_partners(sel.actor, env):
+                    _add(partner)
+                _add(sel.actor)
+
+            # Run ONE conversation for the entire group.
+            waystation_chat_format(all_participants, env)
+
+            # Replace the talk selections with Do_Nothing so they
+            # don't re-trigger inside env.step().
+            for i, sel in enumerate(cur_step_actions):
+                if sel is not None and isinstance(sel.action, Make_Public_Statement):
+                    cur_step_actions[i] = Action_Selection(
+                        action=do_nothing_action,
+                        action_kwargs=None,
+                        actor=sel.actor,
+                        target_entity=sel.actor,
+                        env=sel.env,
+                    )
 
         env.step([sel for sel in cur_step_actions if sel is not None])  # type: ignore[arg-type]
 

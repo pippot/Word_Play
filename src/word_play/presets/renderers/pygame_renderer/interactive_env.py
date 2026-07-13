@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import pickle
 import re
 from dataclasses import fields, is_dataclass
@@ -176,7 +177,7 @@ def capture_environment_frame(
     cur_step = getattr(env, "cur_step", 0)
     renderer_state = env.render_state
 
-    return {
+    frame_dict = {
         "cur_step": cur_step,
         "tick": cur_step,
         "selected_actions": []
@@ -187,16 +188,38 @@ def capture_environment_frame(
         "entities": entities,
         "agent_observations": agent_observations,
     }
+    renderer_state.events.clear()
+    return frame_dict
+
+
+_GZIP_MAGIC = b"\x1f\x8b"
+
+
+def _write_gzip_pickle(path: Path, payload: Any) -> None:
+    """Atomically write a gzip-compressed pickle to *path*."""
+    tmp = path.with_suffix(".tmp" + path.suffix)
+    compressed = gzip.compress(pickle.dumps(payload), compresslevel=6)
+    tmp.write_bytes(compressed)
+    tmp.replace(path)
 
 
 class ExperimentRecorder:
-    def __init__(self, output_path: str | Path, title: str, metadata: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        output_path: str | Path,
+        title: str,
+        metadata: dict[str, Any] | None = None,
+        *,
+        flush_interval: int = 1,
+    ):
         self.output_path = Path(output_path)
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self.title = title
         self.metadata = metadata or {}
         self.frames: list[dict[str, Any]] = []
         self.newest_output_path = newest_experiment_log_path(title, root_dir=self.output_path.parent)
+        self._flush_interval = flush_interval
+        self._flush_counter = 0
 
     def record(
         self,
@@ -210,12 +233,15 @@ class ExperimentRecorder:
         frame_index = len(self.frames)
         frame["frame_index"] = frame_index
         self.frames.append(frame)
-        self.flush()
+        self._flush_counter += 1
+        if self._flush_counter >= self._flush_interval:
+            self._flush_counter = 0
+            self.flush()
         return frame
 
     def payload(self) -> dict[str, Any]:
         return {
-            "version": 4,
+            "version": 5,
             "title": self.title,
             "metadata": self.metadata,
             "frame_count": len(self.frames),
@@ -223,9 +249,16 @@ class ExperimentRecorder:
         }
 
     def flush(self) -> None:
-        payload_bytes = pickle.dumps(self.payload())
-        self.output_path.write_bytes(payload_bytes)
-        self.newest_output_path.write_bytes(payload_bytes)
+        payload = self.payload()
+        _write_gzip_pickle(self.output_path, payload)
+        self.newest_output_path.write_bytes(
+            gzip.compress(pickle.dumps(payload), compresslevel=6)
+        )
+
+    def close(self) -> None:
+        """Force a final flush, writing the complete payload."""
+        self._flush_counter = self._flush_interval
+        self.flush()
 
 
 _default_recorder: ExperimentRecorder | None = None
@@ -239,6 +272,7 @@ def record_step(
     title: str = "wordplay_experiment",
     metadata: dict[str, Any] | None = None,
     selected_actions: list[Action_Selection] | None = None,
+    flush_interval: int = 1,
 ) -> dict[str, Any]:
     """Record one replay frame."""
     global _default_recorder
@@ -249,6 +283,7 @@ def record_step(
             output_path or default_experiment_log_path(title),
             title,
             metadata=metadata,
+            flush_interval=flush_interval,
         )
         _default_recorder = active_recorder
 
@@ -256,8 +291,11 @@ def record_step(
 
 
 def load_recording_payload(log_path: str | Path) -> dict[str, Any]:
-    """Load a pickled replay payload."""
-    payload = pickle.loads(Path(log_path).read_bytes())
+    """Load a replay payload, transparently handling gzip compression."""
+    raw = Path(log_path).read_bytes()
+    if raw.startswith(_GZIP_MAGIC):
+        raw = gzip.decompress(raw)
+    payload = pickle.loads(raw)
     if not isinstance(payload, dict):
         raise TypeError("Replay payload must be a dictionary.")
     return payload
