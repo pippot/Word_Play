@@ -266,8 +266,8 @@ class Carry_Pod(Action):
 class Deliver_Pod(Action):
     """
     Attempt to deliver the pod the actor is carrying.  Both carriers of a
-    pod must use this in the same step while standing on the same dropzone
-    for the delivery to count.
+    pod must use this while standing on the same dropzone (can be in
+    different steps) for the delivery to count.
     """
     def __init__(self) -> None:
         super().__init__(
@@ -279,15 +279,30 @@ class Deliver_Pod(Action):
         )
 
     def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
-        if "deliveries_this_step" not in env.__dict__:
-            env.deliveries_this_step = {}
-        # Record which pod this actor is carrying and where they are
         carried_pod = next(
             pod for pod, carriers in env.carried_pods.items()
             if actor in carriers
         )
         pos = (actor.position.x, actor.position.y)
-        env.deliveries_this_step[actor] = (carried_pod, pos)
+        if pos == (env.main_dropzone.position.x,
+                   env.main_dropzone.position.y):
+            zone = "main"
+        elif pos == (env.secondary_dropzone.position.x,
+                     env.secondary_dropzone.position.y):
+            zone = "secondary"
+        else:
+            return {"delivery_attempted": False, "reason": "not on dropzone"}
+        if carried_pod not in env.pending_deliveries:
+            env.pending_deliveries[carried_pod] = {
+                "deliverers": [], "zone": zone,
+            }
+        entry = env.pending_deliveries[carried_pod]
+        if actor.name not in entry["deliverers"]:
+            if entry["zone"] != zone:
+                entry["deliverers"] = [actor.name]
+                entry["zone"] = zone
+            else:
+                entry["deliverers"].append(actor.name)
         return {"delivery_attempted": True, "pod": carried_pod.name}
 
     def action_description_text(self, actor, target_entity, env) -> str:
@@ -484,6 +499,7 @@ class Waystation_Env(Simple_2D_Grid_World):
         self.delivery_log: list[dict] = []
         self._new_main_deliveries: int = 0
         self._new_secondary_deliveries: int = 0
+        self.pending_deliveries: dict[Entity, dict] = {}
 
         # Message log
         self.message_log: deque = deque(maxlen=MAX_MESSAGE_LOG)
@@ -654,8 +670,47 @@ class Waystation_Env(Simple_2D_Grid_World):
                             )
                     else:
                         self.infos[idx]["delivery_feedback"] = (
-                            f"{d['pod']} delivered to MAIN dropzone."
-                        )
+                                f"{d['pod']} delivered to MAIN dropzone."
+                            )
+
+    def run_coordination_chat(self) -> None:
+        """One-turn coordination chat for each carried pod pair."""
+        next_step = self.cur_step + 1
+        for pod, carriers in list(self.carried_pods.items()):
+            if len(carriers) >= 2:
+                partner_names = ", ".join(c.name for c in carriers)
+                info = (
+                    f"Coordination: you and {partner_names} are carrying "
+                    f"{pod.name}. Tell each other the direction to "
+                    "move so you stay together."
+                )
+                for c in carriers:
+                    c.get_component(Communication_Policy).start_conversation(
+                        carriers, self, info=info
+                    )
+                for speaker in carriers:
+                    recipients = [c for c in carriers if c is not speaker]
+                    message = speaker.get_component(
+                        Communication_Policy
+                    ).send_message(recipients, self, info=info)
+                    self.message_log.append({
+                        "step": next_step,
+                        "turn": 0,
+                        "speaker": speaker.name,
+                        "text": str(message),
+                    })
+                    self.render_state.emit(
+                        "speech", entity=speaker, text=str(message),
+                        turn=0, step=next_step,
+                    )
+                    for recipient in recipients:
+                        recipient.get_component(
+                            Communication_Policy
+                        ).receive_message(message, speaker, self)
+                for c in carriers:
+                    c.get_component(Communication_Policy).end_conversation(
+                        carriers, self, info=info
+                    )
 
     # ------------------------------------------------------------------ end of step
 
@@ -663,7 +718,6 @@ class Waystation_Env(Simple_2D_Grid_World):
         self, action_selections: list[Action_Selection]
     ) -> None:
         # Reset step-local tracking
-        self.deliveries_this_step = {}
         self._conversation_held_this_step = False
         self._new_main_deliveries = 0
         self._new_secondary_deliveries = 0
@@ -723,95 +777,53 @@ class Waystation_Env(Simple_2D_Grid_World):
                     step=self.cur_step + 1,
                 )
 
-        # 3) Process Deliver_Pod actions.
-        # Group delivery attempts by (pod, dropzone_position).
-        delivery_attempts: dict[tuple[Entity, tuple], list[str]] = {}
-        for actor, (pod, pos) in getattr(self, "deliveries_this_step", {}).items():
-            key = (pod, pos)
-            if key not in delivery_attempts:
-                delivery_attempts[key] = []
-            delivery_attempts[key].append(actor.name)
+        # 3) Process pending delivery intents.
+        for pod in list(self.pending_deliveries.keys()):
+            if pod not in self.carried_pods:
+                del self.pending_deliveries[pod]
 
-        for (pod, pos), deliverers in delivery_attempts.items():
-            if len(deliverers) < 2:
-                continue
-            # Determine which dropzone this is.
-            if pos == (self.main_dropzone.position.x,
-                       self.main_dropzone.position.y):
-                zone = "main"
-                self.main_deliveries += 1
-                self._new_main_deliveries += 1
-            elif pos == (self.secondary_dropzone.position.x,
-                         self.secondary_dropzone.position.y):
-                zone = "secondary"
-                self.secondary_deliveries += 1
-                self._new_secondary_deliveries += 1
-            else:
-                continue
+        for pod, entry in list(self.pending_deliveries.items()):
+            if len(entry["deliverers"]) >= 2 and pod in self.carried_pods:
+                zone = entry["zone"]
+                deliverers = entry["deliverers"]
+                if zone == "main":
+                    self.main_deliveries += 1
+                    self._new_main_deliveries += 1
+                    dz_pos = (self.main_dropzone.position.x,
+                              self.main_dropzone.position.y)
+                elif zone == "secondary":
+                    self.secondary_deliveries += 1
+                    self._new_secondary_deliveries += 1
+                    dz_pos = (self.secondary_dropzone.position.x,
+                              self.secondary_dropzone.position.y)
+                else:
+                    continue
 
-            self.delivery_log.append({
-                "step": self.cur_step + 1,
-                "pod": pod.name,
-                "deliverers": deliverers,
-                "zone": zone,
-                "position": pos,
-            })
-            self.render_state.emit(
-                "deliver",
-                pod=pod.name,
-                deliverers=deliverers,
-                zone=zone,
-                step=self.cur_step + 1,
-            )
-
-            # Remove pod from carried state.
-            if pod in self.carried_pods:
-                del self.carried_pods[pod]
-            # Remove pod from the world.
-            if pod in self.state.entities:
-                self.state.entities.remove(pod)
-
-        # 4) Coordination chat for carriers of carried pods.
-        for pod, carriers in list(self.carried_pods.items()):
-            if len(carriers) >= 2:
-                partner_names = ", ".join(c.name for c in carriers)
-                info = (
-                    f"Coordination: you and {partner_names} are carrying "
-                    f"{pod.name}. Agree on which dropzone to deliver to."
+                self.delivery_log.append({
+                    "step": self.cur_step + 1,
+                    "pod": pod.name,
+                    "deliverers": deliverers,
+                    "zone": zone,
+                    "position": dz_pos,
+                })
+                self.render_state.emit(
+                    "deliver",
+                    pod=pod.name,
+                    deliverers=deliverers,
+                    zone=zone,
+                    step=self.cur_step + 1,
                 )
-                for c in carriers:
-                    c.get_component(Communication_Policy).start_conversation(
-                        carriers, self, info=info
-                    )
-                for turn in range(2):
-                    for speaker in carriers:
-                        recipients = [c for c in carriers if c is not speaker]
-                        message = speaker.get_component(
-                            Communication_Policy
-                        ).send_message(
-                            recipients, self,
-                            info=info if turn == 0 else None,
-                        )
-                        self.message_log.append({
-                            "step": self.cur_step + 1,
-                            "turn": turn,
-                            "speaker": speaker.name,
-                            "text": str(message),
-                        })
-                        self.render_state.emit(
-                            "speech", entity=speaker, text=str(message),
-                            turn=turn, step=self.cur_step + 1,
-                        )
-                        for recipient in recipients:
-                            recipient.get_component(
-                                Communication_Policy
-                            ).receive_message(message, speaker, self)
-                for c in carriers:
-                    c.get_component(Communication_Policy).end_conversation(
-                        carriers, self, info=info
-                    )
 
-        # 5) Apply delivery feedback to relevant agents' info dicts.
+                # Remove pod from carried state.
+                if pod in self.carried_pods:
+                    del self.carried_pods[pod]
+                # Remove pod from the world.
+                if pod in self.state.entities:
+                    self.state.entities.remove(pod)
+                # Clean up pending delivery intent.
+                del self.pending_deliveries[pod]
+
+        # 4) Apply delivery feedback to relevant agents' info dicts.
         self._apply_delivery_feedback()
 
         # 6) Check win conditions.
@@ -1240,6 +1252,10 @@ def run_exp(
             None
         ] * len(env.agents)
         action_records: list[dict] = [{} for _ in env.agents]
+
+        # Coordination chat for carriers — messages visible in this step's
+        # observation so agents can act on them.
+        env.run_coordination_chat()
 
         # All agents pick actions in parallel.
         with ThreadPoolExecutor(
