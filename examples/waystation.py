@@ -223,6 +223,15 @@ class At_Dropzone(Action_Validation):
             or actor.position == env.secondary_dropzone.position
         )
 
+
+class Talk_Not_On_Cooldown(Action_Validation):
+    """True if enough steps have passed since the agent last talked."""
+    TALK_COOLDOWN = 4
+
+    def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
+        last = env.last_talk_step.get(actor.name, -self.TALK_COOLDOWN)
+        return (env.cur_step - last) >= self.TALK_COOLDOWN
+
 # ============================================================================
 # CUSTOM ACTIONS
 # ============================================================================
@@ -370,6 +379,7 @@ class Make_Public_Statement(Action):
             validation_rules=[
                 Target_Is_Self(),
                 A_Conversation_Partner_Is_Nearby(),
+                Talk_Not_On_Cooldown(),
             ],
         )
 
@@ -377,6 +387,7 @@ class Make_Public_Statement(Action):
         if getattr(env, "_conversation_held_this_step", False):
             return None
         env._conversation_held_this_step = True
+        env.last_talk_step[actor.name] = env.cur_step
         participants = nearby_conversation_partners(actor, env)
         participants.append(actor)
         info = (
@@ -476,6 +487,9 @@ class Waystation_Env(Simple_2D_Grid_World):
 
         # Message log
         self.message_log: deque = deque(maxlen=MAX_MESSAGE_LOG)
+
+        # Talk cooldown tracking
+        self.last_talk_step: dict[str, int] = {}
 
         # Win state
         self.winner: str | None = None
@@ -837,12 +851,13 @@ CARRIER_SYSTEM_PROMPT_TEMPLATE = (
     "- To deliver, you and the other carrier must BOTH use 'Deliver_Pod' "
     "while standing on a dropzone.\n"
     "- You can MOVE in 4 directions (blocked by walls).\n"
-    "- TALK to nearby players to coordinate.\n"
-    "- You can DROP a pod to release it.\n\n"
+    "- You can DROP a pod to release it.\n"
+    "- TALK to nearby players to coordinate. TALK has a 4-step cooldown "
+    "per player — use it only when necessary.\n\n"
     "COORDINATION CHATS:\n"
     "- When you are carrying a pod, you and your partner will automatically "
-    "have a short coordination chat each turn. Use it to agree on which "
-    "dropzone to head toward.\n\n"
+    "have a short coordination chat each turn (not affected by the TALK "
+    "cooldown). Use it to agree on which dropzone to head toward.\n\n"
     "WIN: Deliver {carrier_win} or more pods to the main dropzone before "
     "time runs out.\n\n"
     "When you choose TALK, write ONE short in-character sentence. "
