@@ -110,13 +110,13 @@ SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
 # GAME CONFIGURATION
 # ============================================================================
 
-NUM_CARRIERS = 4
-NUM_PODS = 4
+NUM_CARRIERS = 3
+NUM_PODS = 2
 ROUTER_WIN_THRESHOLD = 2     # pods at secondary → router wins
 CARRIER_WIN_THRESHOLD = 3    # pods at main → carriers win
 MAX_STEPS = 100
 OBSERVATION_RADIUS = 100     # full map visibility for the router
-CARRIER_OBSERVATION_RADIUS = 4   # limited visibility for carriers
+CARRIER_OBSERVATION_RADIUS = 6   # limited visibility for carriers
 MAX_PARALLEL_WORKERS = 4
 MAX_MESSAGE_LOG = 256
 
@@ -246,7 +246,8 @@ class Carry_Pod(Action):
     def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
         if target_entity not in env.waiting_carriers:
             env.waiting_carriers[target_entity] = []
-        env.waiting_carriers[target_entity].append(actor)
+        if actor not in env.waiting_carriers[target_entity]:
+            env.waiting_carriers[target_entity].append(actor)
         return {"waiting": True, "pod": target_entity.name}
 
     def action_description_text(self, actor, target_entity, env) -> str:
@@ -648,7 +649,6 @@ class Waystation_Env(Simple_2D_Grid_World):
         self, action_selections: list[Action_Selection]
     ) -> None:
         # Reset step-local tracking
-        self.waiting_carriers = {}
         self.deliveries_this_step = {}
         self._conversation_held_this_step = False
         self._new_main_deliveries = 0
@@ -662,6 +662,8 @@ class Waystation_Env(Simple_2D_Grid_World):
             if len(carriers) >= 2 and pod not in self.carried_pods:
                 # All these agents become carriers of this pod.
                 self.carried_pods[pod] = carriers
+                # Remove from waiting so stale entries don't accumulate.
+                del self.waiting_carriers[pod]
                 # Move pod to centroid of carriers immediately.
                 avg_x = sum(c.position.x for c in carriers) // len(carriers)
                 avg_y = sum(c.position.y for c in carriers) // len(carriers)
