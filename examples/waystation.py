@@ -686,7 +686,7 @@ class Waystation_Env(Simple_2D_Grid_World):
             for carrier in carriers:
                 dist = abs(carrier.position.x - pod.position.x) + \
                        abs(carrier.position.y - pod.position.y)
-                if dist > 2:
+                if dist > 3:
                     dropped.append(carrier)
             for carrier in dropped:
                 self.carried_pods[pod].remove(carrier)
@@ -757,10 +757,50 @@ class Waystation_Env(Simple_2D_Grid_World):
             if pod in self.state.entities:
                 self.state.entities.remove(pod)
 
-        # 4) Apply delivery feedback to relevant agents' info dicts.
+        # 4) Coordination chat for carriers of carried pods.
+        for pod, carriers in list(self.carried_pods.items()):
+            if len(carriers) >= 2:
+                partner_names = ", ".join(c.name for c in carriers)
+                info = (
+                    f"Coordination: you and {partner_names} are carrying "
+                    f"{pod.name}. Agree on which dropzone to deliver to."
+                )
+                for c in carriers:
+                    c.get_component(Communication_Policy).start_conversation(
+                        carriers, self, info=info
+                    )
+                for turn in range(2):
+                    for speaker in carriers:
+                        recipients = [c for c in carriers if c is not speaker]
+                        message = speaker.get_component(
+                            Communication_Policy
+                        ).send_message(
+                            recipients, self,
+                            info=info if turn == 0 else None,
+                        )
+                        self.message_log.append({
+                            "step": self.cur_step + 1,
+                            "turn": turn,
+                            "speaker": speaker.name,
+                            "text": str(message),
+                        })
+                        self.render_state.emit(
+                            "speech", entity=speaker, text=str(message),
+                            turn=turn, step=self.cur_step + 1,
+                        )
+                        for recipient in recipients:
+                            recipient.get_component(
+                                Communication_Policy
+                            ).receive_message(message, speaker, self)
+                for c in carriers:
+                    c.get_component(Communication_Policy).end_conversation(
+                        carriers, self, info=info
+                    )
+
+        # 5) Apply delivery feedback to relevant agents' info dicts.
         self._apply_delivery_feedback()
 
-        # 5) Check win conditions.
+        # 6) Check win conditions.
         if self.secondary_deliveries >= ROUTER_WIN_THRESHOLD:
             self.winner = "router"
             self.terminations = [True for _ in self.terminations]
@@ -791,11 +831,18 @@ CARRIER_SYSTEM_PROMPT_TEMPLATE = (
     "RULES:\n"
     "- Pods are heavy: you need ONE other player to carry a pod. Both of you "
     "must use the 'Carry_Pod' action on the same pod to pick it up.\n"
+    "- Once you are carrying a pod, the pod moves with you. Use MOVE actions "
+    "to walk toward the Main_Dropzone. Stay near your partner so you can "
+    "both reach the dropzone together.\n"
     "- To deliver, you and the other carrier must BOTH use 'Deliver_Pod' "
     "while standing on a dropzone.\n"
     "- You can MOVE in 4 directions (blocked by walls).\n"
     "- TALK to nearby players to coordinate.\n"
     "- You can DROP a pod to release it.\n\n"
+    "COORDINATION CHATS:\n"
+    "- When you are carrying a pod, you and your partner will automatically "
+    "have a short coordination chat each turn. Use it to agree on which "
+    "dropzone to head toward.\n\n"
     "WIN: Deliver {carrier_win} or more pods to the main dropzone before "
     "time runs out.\n\n"
     "When you choose TALK, write ONE short in-character sentence. "
