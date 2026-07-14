@@ -110,18 +110,18 @@ SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
 # GAME CONFIGURATION
 # ============================================================================
 
-NUM_CARRIERS = 3
+NUM_CARRIERS = 4
 NUM_PODS = 4
 ROUTER_WIN_THRESHOLD = 2     # pods at secondary → router wins
 CARRIER_WIN_THRESHOLD = 3    # pods at main → carriers win
-MAX_STEPS = 50
+MAX_STEPS = 300
 OBSERVATION_RADIUS = 100     # full map visibility for all agents
 MAX_PARALLEL_WORKERS = 4
 MAX_MESSAGE_LOG = 256
 
 # Carrier names (one of them is secretly the router)
 PLAYER_NAMES: list[str] = [
-    "Alice", "Bob", "Charlie", "Diana",
+    "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Heidi",
 ]
 
 CARRIER_SPRITES: list[str] = [
