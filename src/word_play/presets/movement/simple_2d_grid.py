@@ -54,7 +54,7 @@ class No_Collision_Will_Occur_Up(Action_Validation):
             return True
 
         target_position = deepcopy(actor.position)
-        target_position.y += 1
+        target_position.y -= 1
         return check_for_collision_at_position(target_position, actor, env)
 
 
@@ -64,7 +64,7 @@ class No_Collision_Will_Occur_Down(Action_Validation):
             return True
 
         target_position = deepcopy(actor.position)
-        target_position.y -= 1
+        target_position.y += 1
         return check_for_collision_at_position(target_position, actor, env)
 
 
@@ -95,7 +95,7 @@ class Move_Up(Action):
         super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Up()])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
-        actor.position.y += 1
+        actor.position.y -= 1
 
     def action_description_text(self, actor: Entity, target_entity: Entity, env: Environment) -> str:
         return "Move up."
@@ -106,7 +106,7 @@ class Move_Down(Action):
         super().__init__(validation_rules=[Target_Is_Self(), No_Collision_Will_Occur_Down()])
 
     def exec_action(self, actor: Entity, target_entity: Entity, env: Environment, kwargs: dict | None) -> dict | None:
-        actor.position.y -= 1
+        actor.position.y += 1
 
     def action_description_text(self, actor: Entity, target_entity: Entity, env: Environment) -> str:
         return "Move down."
