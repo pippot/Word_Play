@@ -281,10 +281,17 @@ class SGLang_Model(Model):
 
         params["extra_body"] = extra_body
 
+        built_messages = self._build_messages(messages)
+        if self.verbosity > 0:
+            print("\n========== LLM REQUEST ==========")
+            for msg in built_messages:
+                print(f"\n--- [{msg['role']}] ---\n{msg['content']}")
+            print("=================================\n")
+
         # Hit the server.
         response = self._get_client().chat.completions.create(
             model=self.model_name,
-            messages=self._build_messages(messages),
+            messages=built_messages,
             **params,
         )
 
@@ -295,15 +302,23 @@ class SGLang_Model(Model):
         # handle both shapes defensively.
         content = response.choices[0].message.content
         if content is None:
-            return ""
-        if isinstance(content, str):
-            return content.strip()
-        if isinstance(content, list):
-            return "".join(
+            result = ""
+        elif isinstance(content, str):
+            result = content.strip()
+        elif isinstance(content, list):
+            result = "".join(
                 part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
                 for part in content
             ).strip()
-        return str(content).strip()
+        else:
+            result = str(content).strip()
+
+        if self.verbosity > 0:
+            print("---------- LLM RESPONSE ----------")
+            print(result)
+            print("==================================\n")
+
+        return result
 
 
 def register_sglang_model(
