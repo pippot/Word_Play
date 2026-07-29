@@ -117,13 +117,16 @@ SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
 
 NUM_CARRIERS = 3
 NUM_PODS = 8
-ROUTER_WIN_THRESHOLD = 3     # pods at secondary → router wins
-CARRIER_WIN_THRESHOLD = 5    # pods at main → carriers win
-MAX_STEPS = 100
+ROUTER_WIN_THRESHOLD = 2     # pods at secondary → router wins
+CARRIER_WIN_THRESHOLD = 4    # pods at main → carriers win
+MAX_STEPS = 300
 OBSERVATION_RADIUS = 100     # full map visibility for the router
-CARRIER_OBSERVATION_RADIUS = 6   # limited visibility for carriers
+CARRIER_OBSERVATION_RADIUS = 8   # limited visibility for carriers
 MAX_PARALLEL_WORKERS = 4
 MAX_MESSAGE_LOG = 256
+WAIT_REISSUE_TIMEOUT = 3     # steps without reissue → auto-cancel
+WAIT_MAX_DISTANCE = 2         # manhattan distance drift → auto-cancel
+WAIT_ABSOLUTE_TIMEOUT = 10    # max steps waiting total → auto-cancel
 
 PLAYER_NAMES: list[str] = [
     "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Heidi",
@@ -157,21 +160,17 @@ WALL_SET = "sprite_library/src/world_tiles/indoors/wall_sets/bright_brick_wall"
 #   S = secondary-dropzone spawn (placeholder)
 #   . = empty floor
 ENTITY_TILEMAP = """
-WWWWWWWWWWWWWWWWWWWWWWWWW
-W.......................W
-W..P................P...W
-W.......................W
-W.......................W
-W......S................W
-W..P................P...W
-W.......................W
-W.....P.........P.......W
-W......M................W
-W.......................W
-W..P................P...W
-W.......................W
-W..P................P...W
-WWWWWWWWWWWWWWWWWWWWWWWWW
+WWWWWWWWWWWWWWWWWWW
+W.................W
+W..P.......P......W
+W.................W
+W......S..........W
+W..P.......P......W
+W......M..........W
+W.................W
+W..P.......P......W
+W..P.......P......W
+WWWWWWWWWWWWWWWWWWW
 """
 
 # ============================================================================
@@ -265,14 +264,28 @@ class Carry_Pod(Action):
         )
 
     def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
-        if target_entity not in env.waiting_carriers:
-            env.waiting_carriers[target_entity] = []
-        if actor not in env.waiting_carriers[target_entity]:
-            env.waiting_carriers[target_entity].append(actor)
+        entries = env.waiting_carriers.setdefault(target_entity, [])
+        existing = next(
+            (e for e in entries if e["agent"] == actor), None
+        )
+        if existing:
+            existing["last_reissue_step"] = env.cur_step
+            existing["start_position"] = Position_2D(
+                actor.position.x, actor.position.y
+            )
+        else:
+            entries.append({
+                "agent": actor,
+                "start_step": env.cur_step,
+                "last_reissue_step": env.cur_step,
+                "start_position": Position_2D(
+                    actor.position.x, actor.position.y
+                ),
+            })
         return {"waiting": True, "pod": target_entity.name}
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        return f"Carry {target_entity.name} (wait for a partner)."
+        return f"Carry {target_entity.name} (post open request for a partner)."
 
 
 class Deliver_Pod(Action):
@@ -346,6 +359,28 @@ class Drop_Pod(Action):
 
     def action_description_text(self, actor, target_entity, env) -> str:
         return "Drop your carried pod."
+
+
+class Abandon_Wait(Action):
+    """Cancel waiting for a carry partner. Removes you from all open requests."""
+    def __init__(self) -> None:
+        super().__init__(validation_rules=[Target_Is_Self()])
+
+    def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
+        pods_cleared = []
+        for pod, entries in list(env.waiting_carriers.items()):
+            before = len(entries)
+            env.waiting_carriers[pod] = [
+                e for e in entries if e["agent"] != actor
+            ]
+            if not env.waiting_carriers[pod]:
+                del env.waiting_carriers[pod]
+            elif len(env.waiting_carriers[pod]) < before:
+                pods_cleared.append(pod.name)
+        return {"abandoned_wait": True, "pods": pods_cleared}
+
+    def action_description_text(self, actor, target_entity, env) -> str:
+        return "Abandon your wait for a carry partner."
 
 # ============================================================================
 # PUBLIC CHAT (reuses the Among Us multi-round chat pattern)
@@ -504,7 +539,7 @@ class Waystation_Env(Simple_2D_Grid_World):
 
         # Pod state
         self.carried_pods: dict[Entity, list[Entity]] = {}
-        self.waiting_carriers: dict[Entity, list[Entity]] = {}
+        self.waiting_carriers: dict[Entity, list[dict]] = {}
 
         # Delivery tracking
         self.main_deliveries: int = 0
@@ -549,6 +584,47 @@ class Waystation_Env(Simple_2D_Grid_World):
         return sum(
             1 for p in self.pods if p.name not in delivered_names
         )
+
+    # ------------------------------------------------------------------ TTL cleanup
+
+    def _cleanup_stale_waits(self) -> None:
+        """
+        Remove waiting-carrier entries that have expired:
+        - Agent hasn't reissued Carry_Pod for WAIT_REISSUE_TIMEOUT steps
+        - Agent has drifted WAIT_MAX_DISTANCE from the pod
+        - Agent has been waiting longer than WAIT_ABSOLUTE_TIMEOUT steps
+        """
+        for pod, entries in list(self.waiting_carriers.items()):
+            fresh = []
+            for e in entries:
+                agent = e["agent"]
+                age = self.cur_step - e["start_step"]
+                since_reissue = self.cur_step - e["last_reissue_step"]
+                dist = abs(agent.position.x - pod.position.x) + \
+                       abs(agent.position.y - pod.position.y)
+                if since_reissue >= WAIT_REISSUE_TIMEOUT:
+                    self.render_state.emit(
+                        "wait_expired", agent=agent.name, pod=pod.name,
+                        reason="no_reissue", step=self.cur_step + 1,
+                    )
+                    continue
+                if dist > WAIT_MAX_DISTANCE:
+                    self.render_state.emit(
+                        "wait_expired", agent=agent.name, pod=pod.name,
+                        reason="drifted", step=self.cur_step + 1,
+                    )
+                    continue
+                if age >= WAIT_ABSOLUTE_TIMEOUT:
+                    self.render_state.emit(
+                        "wait_expired", agent=agent.name, pod=pod.name,
+                        reason="timeout", step=self.cur_step + 1,
+                    )
+                    continue
+                fresh.append(e)
+            if fresh:
+                self.waiting_carriers[pod] = fresh
+            else:
+                del self.waiting_carriers[pod]
 
     # ------------------------------------------------------------------ observe
 
@@ -600,13 +676,26 @@ class Waystation_Env(Simple_2D_Grid_World):
             "\n".join(deliv_text_lines) if deliv_text_lines else "  (none)"
         )
 
-        # Build waiting-carrier notification
+        effective_radius = (
+            self.observation_radius
+            if (is_router and self.router_names)
+            else CARRIER_OBSERVATION_RADIUS
+        )
+
+        # Build OPEN REQUESTS (waiting carriers within agent's radius)
         waiting_lines = []
-        for pod, carriers in self.waiting_carriers.items():
-            for carrier in carriers:
+        for pod, entries in self.waiting_carriers.items():
+            px, py = pod.position.x, pod.position.y
+            if abs(px - agent.position.x) > effective_radius \
+               or abs(py - agent.position.y) > effective_radius:
+                continue
+            for e in entries:
+                dur = self.cur_step - e["start_step"]
+                dur_str = f"waiting {dur} steps" if dur > 0 else "just started"
+                marker = " (you)" if e["agent"] == agent else ""
                 waiting_lines.append(
-                    f"  {carrier.name} is waiting to carry "
-                    f"{pod.name} at {pod.position}"
+                    f"  [{pod.name} at ({px},{py})] {e['agent'].name}"
+                    f"{marker} — {dur_str}"
                 )
         waiting_text = (
             "\n".join(waiting_lines) if waiting_lines else ""
@@ -625,7 +714,8 @@ class Waystation_Env(Simple_2D_Grid_World):
         ]
         if waiting_text:
             extra_sections.append(
-                "WAITING CARRIERS:\n" + waiting_text
+                "OPEN REQUESTS — use Carry_Pod on a pod below to join:\n"
+                + waiting_text
             )
         extra_sections.append(
             f"DELIVERY LOG:\n{deliv_text}"
@@ -634,11 +724,6 @@ class Waystation_Env(Simple_2D_Grid_World):
             f"CONVERSATION LOG:\n{msg_text}"
         )
 
-        effective_radius = (
-            self.observation_radius
-            if (is_router and self.router_names)
-            else CARRIER_OBSERVATION_RADIUS
-        )
         nearby = [
             e for e in self.state.entities
             if abs(e.position.x - agent.position.x) <= effective_radius
@@ -739,21 +824,25 @@ class Waystation_Env(Simple_2D_Grid_World):
     def environment_end_of_step(
         self, action_selections: list[Action_Selection]
     ) -> None:
+        # 0) TTL cleanup — remove stale waiting entries.
+        self._cleanup_stale_waits()
+
         # 1) Process Carry_Pod actions: pair up waiting carriers.
-        for pod, carriers in list(self.waiting_carriers.items()):
-            if len(carriers) >= 2 and pod not in self.carried_pods:
+        for pod, entries in list(self.waiting_carriers.items()):
+            agents = [e["agent"] for e in entries]
+            if len(agents) >= 2 and pod not in self.carried_pods:
                 # All these agents become carriers of this pod.
-                self.carried_pods[pod] = carriers
+                self.carried_pods[pod] = agents
                 # Remove from waiting so stale entries don't accumulate.
                 del self.waiting_carriers[pod]
                 # Move pod to centroid of carriers immediately.
-                avg_x = sum(c.position.x for c in carriers) // len(carriers)
-                avg_y = sum(c.position.y for c in carriers) // len(carriers)
+                avg_x = sum(a.position.x for a in agents) // len(agents)
+                avg_y = sum(a.position.y for a in agents) // len(agents)
                 pod.position = Position_2D(avg_x, avg_y)
                 self.render_state.emit(
                     "carry",
                     pod=pod.name,
-                    carriers=[c.name for c in carriers],
+                    carriers=[a.name for a in agents],
                     step=self.cur_step + 1,
                 )
 
@@ -879,8 +968,14 @@ CARRIER_SYSTEM_PROMPT_TEMPLATE = (
     "- You can MOVE in 4 directions (blocked by walls). "
     "y=0 is the top of the map; y increases downward.\n"
     "- You can DROP a pod to release it.\n"
-    "- TALK to nearby players to coordinate. TALK has a 4-step cooldown "
-    "per player — use it only when necessary.\n\n"
+    "- You can ABANDON_WAIT to cancel an open request for a carry partner.\n\n"
+    "FINDING A PARTNER:\n"
+    "- Use Carry_Pod on a pod to post an OPEN REQUEST. All players see "
+    "open requests for pods they can reach.\n"
+    "- Check the OPEN REQUESTS section of your observation to find players "
+    "who need a partner. Move to their pod and use Carry_Pod to join.\n"
+    "- Open requests expire if you don't stay near the pod or don't "
+    "reissue Carry_Pod every few steps.\n\n"
     "COORDINATION CHATS:\n"
     "- When you are carrying a pod, you and your partner will automatically "
     "have a short coordination chat each turn (not affected by the TALK "
@@ -904,6 +999,15 @@ ROUTER_SYSTEM_PROMPT_TEMPLATE = (
     "standing on a dropzone.\n"
     "- You can MOVE in 4 directions (blocked by walls). "
     "y=0 is the top of the map; y increases downward.\n"
+    "- You can DROP a pod to release it.\n"
+    "- You can ABANDON_WAIT to cancel an open request for a carry partner.\n\n"
+    "FINDING A PARTNER:\n"
+    "- Use Carry_Pod on a pod to post an OPEN REQUEST. All players with "
+    "line-of-sight see open requests.\n"
+    "- Check the OPEN REQUESTS section of your observation to find players "
+    "who need a partner.\n"
+    "- Open requests expire if you don't stay near the pod or don't "
+    "reissue Carry_Pod every few steps.\n\n"
     "- TALK to nearby players to coordinate.\n"
     "- The other players believe their goal is the MAIN dropzone. They will "
     "not knowingly help you deliver to the secondary one.\n\n"
@@ -962,6 +1066,7 @@ def build_carrier_entity(
             Carry_Pod(),
             Deliver_Pod(),
             Drop_Pod(),
+            Abandon_Wait(),
             Make_Public_Statement(),
         ],
         components=[
@@ -998,6 +1103,7 @@ def build_router_entity(
             Carry_Pod(),
             Deliver_Pod(),
             Drop_Pod(),
+            Abandon_Wait(),
             Make_Public_Statement(),
         ],
         components=[
@@ -1151,8 +1257,8 @@ def build_environment(
     for i, name in enumerate(carrier_names):
         sprite = CARRIER_SPRITES[i % len(CARRIER_SPRITES)]
         pos = Position_2D(
-            rng.randint(2, 22),
-            rng.randint(2, 12),
+            rng.randint(2, 16),
+            rng.randint(2, 8),
         )
         final_entities.append(
             build_carrier_entity(name, pos, sprite, model_key)
@@ -1162,8 +1268,8 @@ def build_environment(
             (len(carrier_names) + i) % len(CARRIER_SPRITES)
         ] if i > 0 else ROUTER_SPRITE
         pos = Position_2D(
-            rng.randint(2, 22),
-            rng.randint(2, 12),
+            rng.randint(2, 16),
+            rng.randint(2, 8),
         )
         final_entities.append(
             build_router_entity(name, pos, router_sprite, model_key)
