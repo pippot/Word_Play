@@ -119,11 +119,11 @@ NUM_CARRIERS = 3
 NUM_PODS = 8
 ROUTER_WIN_THRESHOLD = 2     # pods at secondary → router wins
 CARRIER_WIN_THRESHOLD = 4    # pods at main → carriers win
-MAX_STEPS = 300
+MAX_STEPS = 100
 OBSERVATION_RADIUS = 100     # full map visibility for the router
-CARRIER_OBSERVATION_RADIUS = 8   # limited visibility for carriers
+CARRIER_OBSERVATION_RADIUS = 4   # limited visibility for carriers
 MAX_PARALLEL_WORKERS = 4
-MAX_MESSAGE_LOG = 256
+MAX_MESSAGE_LOG = 1024
 WAIT_REISSUE_TIMEOUT = 3     # steps without reissue → auto-cancel
 WAIT_MAX_DISTANCE = 2         # manhattan distance drift → auto-cancel
 WAIT_ABSOLUTE_TIMEOUT = 10    # max steps waiting total → auto-cancel
@@ -653,7 +653,7 @@ class Waystation_Env(Simple_2D_Grid_World):
             )
 
         # Build conversation log
-        recent_msgs = list(self.message_log)[-12:]
+        recent_msgs = list(self.message_log)[-48:]
         msg_text_lines = []
         for m in recent_msgs:
             msg_text_lines.append(
@@ -1046,6 +1046,11 @@ MESSAGE_GENERATION_CONFIG: dict = {
     "max_tokens": 96,
 }
 
+REASONING_GENERATION_CONFIG: dict = {
+    **_BASE_GENERATION_CONFIG,
+    "max_tokens": 384,
+}
+
 # ============================================================================
 # ENTITY BUILDERS
 # ============================================================================
@@ -1080,6 +1085,13 @@ def build_carrier_entity(
                 message_generation_config=MESSAGE_GENERATION_CONFIG,
                 action_max_new_tokens=512,
                 message_max_new_tokens=128,
+                use_chain_of_thought=True,
+                reasoning_generation_config=REASONING_GENERATION_CONFIG,
+                reasoning_max_new_tokens=384,
+                observation_memory_window=8,
+                conversation_memory_window=24,
+                max_stored_observation_chars=6000,
+                max_stored_message_chars=640,
             ),
             Collidable(collidable_tags=["wall"]),
             Renderable(sprite_path=sprite, z_index=10),
@@ -1117,6 +1129,13 @@ def build_router_entity(
                 message_generation_config=MESSAGE_GENERATION_CONFIG,
                 action_max_new_tokens=512,
                 message_max_new_tokens=128,
+                use_chain_of_thought=True,
+                reasoning_generation_config=REASONING_GENERATION_CONFIG,
+                reasoning_max_new_tokens=384,
+                observation_memory_window=8,
+                conversation_memory_window=24,
+                max_stored_observation_chars=6000,
+                max_stored_message_chars=640,
             ),
             Collidable(collidable_tags=["wall"]),
             Renderable(sprite_path=sprite, z_index=10),
