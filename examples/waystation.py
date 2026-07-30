@@ -119,7 +119,7 @@ NUM_CARRIERS = 3
 NUM_PODS = 8
 ROUTER_WIN_THRESHOLD = 2     # pods at secondary → router wins
 CARRIER_WIN_THRESHOLD = 4    # pods at main → carriers win
-MAX_STEPS = 100
+MAX_STEPS = 300
 OBSERVATION_RADIUS = 100     # full map visibility for the router
 CARRIER_OBSERVATION_RADIUS = 4   # limited visibility for carriers
 MAX_PARALLEL_WORKERS = 4
@@ -140,12 +140,11 @@ CARRIER_SPRITES: list[str] = [
     "sprite_library/src/characters/humanoids/human/scientist.png",
 ]
 
-ROUTER_SPRITE = (
-    "sprite_library/src/characters/humanoids/human/merchant.png"
-)
+ROUTER_SPRITE = "sprite_library/src/characters/humanoids/human/knight_red.png"
 
 POD_SPRITE = "sprite_library/src/world_tiles/indoors/stations/crate.png"
 DROPZONE_SPRITE = "sprite_library/src/items/materials/misc/checkpoint.png"
+SECONDARY_DROPZONE_SPRITE = "sprite_library/src/world_tiles/indoors/stations/delivery_window.png"
 
 WALL_SPRITE = (
     "sprite_library/src/world_tiles/indoors/wall_sets/"
@@ -160,17 +159,21 @@ WALL_SET = "sprite_library/src/world_tiles/indoors/wall_sets/bright_brick_wall"
 #   S = secondary-dropzone spawn (placeholder)
 #   . = empty floor
 ENTITY_TILEMAP = """
-WWWWWWWWWWWWWWWWWWW
-W.................W
-W..P.......P......W
-W.................W
-W......S..........W
-W..P.......P......W
-W......M..........W
-W.................W
-W..P.......P......W
-W..P.......P......W
-WWWWWWWWWWWWWWWWWWW
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+W...........................W
+W..P.........P............W
+W...........................W
+W..........M................W
+W..P.........P............W
+W...........................W
+W...........................W
+W..P.........P............W
+W...........................W
+W..........S................W
+W..P.........P............W
+W...........................W
+W..P.........P............W
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWW
 """
 
 # ============================================================================
@@ -1268,7 +1271,7 @@ def build_environment(
 
     secondary_dz_pos = secondary_dz_placeholders[0].position
     secondary_dropzone = build_dropzone_entity(
-        "Secondary_Dropzone", secondary_dz_pos, DROPZONE_SPRITE
+        "Secondary_Dropzone", secondary_dz_pos, SECONDARY_DROPZONE_SPRITE
     )
     final_entities.append(secondary_dropzone)
 
@@ -1276,8 +1279,8 @@ def build_environment(
     for i, name in enumerate(carrier_names):
         sprite = CARRIER_SPRITES[i % len(CARRIER_SPRITES)]
         pos = Position_2D(
-            rng.randint(2, 16),
-            rng.randint(2, 8),
+            rng.randint(1, 25),
+            rng.randint(1, 13),
         )
         final_entities.append(
             build_carrier_entity(name, pos, sprite, model_key)
@@ -1287,8 +1290,8 @@ def build_environment(
             (len(carrier_names) + i) % len(CARRIER_SPRITES)
         ] if i > 0 else ROUTER_SPRITE
         pos = Position_2D(
-            rng.randint(2, 16),
-            rng.randint(2, 8),
+            rng.randint(1, 25),
+            rng.randint(1, 13),
         )
         final_entities.append(
             build_router_entity(name, pos, router_sprite, model_key)
