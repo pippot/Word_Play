@@ -107,6 +107,16 @@ class SGLang_Model(Model):
     default_headers : Mapping[str, str], optional
         Extra HTTP headers to attach to every request. Useful when
         running behind a reverse proxy that requires custom auth headers.
+    timeout : float, optional
+        Per-request timeout (seconds) passed to the OpenAI client.
+        ``None`` (the default) keeps the client's own default (600s).
+        Raise this if a busy local SGLang server routinely queues
+        requests longer than that (e.g. many concurrent calls from
+        ``generate_chat_batch`` hitting a single-GPU server).
+    max_retries : int, optional
+        Number of retries the OpenAI client performs on transient
+        errors (timeouts, connection errors, 5xx) before raising.
+        Defaults to 2, matching the OpenAI client's own default.
     verbosity : int, optional
         Verbosity flag forwarded to the base ``Model`` class.
     """
@@ -119,7 +129,7 @@ class SGLang_Model(Model):
     # second ``SGLang_Model`` pointing at the same server can share the
     # same client.
     # ------------------------------------------------------------------
-    _CLIENT_CACHE: dict[tuple[str, str, tuple[tuple[str, str], ...]], Any] = {}
+    _CLIENT_CACHE: dict[tuple[str, str, tuple[tuple[str, str], ...], float | None, int], Any] = {}
 
     def __init__(
         self,
@@ -129,6 +139,8 @@ class SGLang_Model(Model):
         base_url: str = "http://localhost:30000/v1",
         api_key_env: str | None = "SGLANG_API_KEY",
         default_headers: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        max_retries: int = 2,
         verbosity: int = 0,
     ):
         # Initialize the base Model so ``self.verbosity`` is set, exactly
@@ -155,6 +167,11 @@ class SGLang_Model(Model):
         # Optional custom headers (e.g. for reverse proxies).
         self._headers: dict[str, str] = dict(default_headers or {})
 
+        # Per-request timeout and retry budget forwarded to the OpenAI
+        # client. ``None`` keeps the client's own default (600s).
+        self.timeout = timeout
+        self.max_retries = max_retries
+
     def _get_client(self):
         """
         Lazily build (and cache) the OpenAI client pointed at the
@@ -165,6 +182,8 @@ class SGLang_Model(Model):
             self.base_url,
             self.api_key_env or "",
             tuple(sorted(self._headers.items())),
+            self.timeout,
+            self.max_retries,
         )
         if cache_key in self._CLIENT_CACHE:
             return self._CLIENT_CACHE[cache_key]
@@ -192,11 +211,19 @@ class SGLang_Model(Model):
 
         # Build the client. ``base_url`` is what tells the OpenAI client
         # to talk to SGLang instead of api.openai.com.
-        client = OpenAI(
-            api_key=api_key,
-            base_url=self.base_url,
-            default_headers=self._headers or None,
-        )
+        # ``OpenAI(timeout=None, ...)`` means "no timeout" (infinite), which
+        # is different from omitting the argument (the client's own 600s
+        # default). Only pass it through when the caller set one.
+        client_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "base_url": self.base_url,
+            "default_headers": self._headers or None,
+            "max_retries": self.max_retries,
+        }
+        if self.timeout is not None:
+            client_kwargs["timeout"] = self.timeout
+
+        client = OpenAI(**client_kwargs)
 
         # Cache and return.
         self._CLIENT_CACHE[cache_key] = client
@@ -330,6 +357,8 @@ def register_sglang_model(
     base_url: str = "http://localhost:30000/v1",
     api_key_env: str | None = "SGLANG_API_KEY",
     default_headers: Mapping[str, str] | None = None,
+    timeout: float | None = None,
+    max_retries: int = 2,
     verbosity: int = 0,
     registry: Model_Registry | None = None,
     replace: bool = False,
@@ -367,6 +396,12 @@ def register_sglang_model(
         ``None`` to skip the lookup.
     default_headers : Mapping[str, str], optional
         Extra HTTP headers to attach to every request.
+    timeout : float, optional
+        Per-request timeout (seconds) forwarded to the OpenAI client.
+        ``None`` (the default) keeps the client's own default (600s).
+    max_retries : int, optional
+        Number of retries the OpenAI client performs on transient
+        errors before raising. Defaults to 2.
     verbosity : int, optional
         Verbosity flag forwarded to the model.
     registry : Model_Registry, optional
@@ -399,5 +434,7 @@ def register_sglang_model(
         base_url=base_url,
         api_key_env=api_key_env,
         default_headers=default_headers,
+        timeout=timeout,
+        max_retries=max_retries,
         verbosity=verbosity,
     )

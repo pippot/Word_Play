@@ -28,6 +28,7 @@ from .config import (
     SGLANG_API_KEY_ENV,
     SGLANG_BASE_URL,
     SGLANG_MODEL_NAME,
+    SGLANG_TIMEOUT,
     STEPS_PER_DAY,
     ZONE_QUOTAS,
 )
@@ -218,6 +219,7 @@ def run_experiment(
             generation_config=_BASE_GENERATION_CONFIG,
             base_url=SGLANG_BASE_URL,
             api_key_env=SGLANG_API_KEY_ENV,
+            timeout=SGLANG_TIMEOUT,
             verbosity=1 if verbose else 0,
         )
 
