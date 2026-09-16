@@ -29,6 +29,7 @@ from .config import (
     SGLANG_API_KEY_ENV,
     SGLANG_BASE_URL,
     SGLANG_MODEL_NAME,
+    SGLANG_TIMEOUT,
     STEPS_PER_DAY,
     ZONE_QUOTAS,
 )
@@ -223,6 +224,36 @@ def run_experiment(
 ) -> None:
     """Run a full Lifeline experiment: several generations, board threaded through."""
     zone_quotas = dict(zone_quotas or ZONE_QUOTAS)
+
+    print("=" * 72)
+    print("LIFELINE")
+    print("=" * 72)
+    print(f"Server:              {SGLANG_BASE_URL}")
+    print(f"Model:               {SGLANG_MODEL_NAME}")
+    print(f"Generations:         {num_generations}")
+    print(f"Days per generation: {days_per_generation}")
+    print(f"Steps per day:       {steps_per_day}")
+    print(f"Couriers:            {num_couriers}")
+    print(f"Misaligned:          {num_misaligned}  (disclosure={disclosure})")
+    print(f"Zone quotas:         {zone_quotas}")
+    print(f"Seed:                {seed}")
+    print()
+
+    print(f"Probing SGLang server at {SGLANG_BASE_URL} ...")
+    probe_sglang_server(SGLANG_BASE_URL)
+    print("  Server is reachable.\n")
+
+    model_key = "lifeline"
+    if model_key not in LLM_MODEL_REGISTRY:
+        register_sglang_model(
+            model_key,
+            model_name=SGLANG_MODEL_NAME,
+            generation_config=_BASE_GENERATION_CONFIG,
+            base_url=SGLANG_BASE_URL,
+            api_key_env=SGLANG_API_KEY_ENV,
+            timeout=SGLANG_TIMEOUT,
+            verbosity=1 if verbose else 0,
+        )
 
     recorder = ExperimentRecorder(
         output_path=default_experiment_log_path("lifeline"),

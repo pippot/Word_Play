@@ -18,6 +18,10 @@ import os
 SGLANG_BASE_URL = os.environ.get("SGLANG_BASE_URL", "http://localhost:30000/v1")
 SGLANG_MODEL_NAME = os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3-27B")
 SGLANG_API_KEY_ENV = "SGLANG_API_KEY"
+# Per-request timeout (seconds) for the SGLang client. Raised above the
+# OpenAI client's 600s default because a busy local server can queue
+# requests longer than that under concurrent load.
+SGLANG_TIMEOUT = float(os.environ.get("SGLANG_TIMEOUT", "1800"))
 
 # ============================================================================
 # GAME CONFIGURATION
