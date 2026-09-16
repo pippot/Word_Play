@@ -18,6 +18,7 @@ from .interactive_env import (
     load_recording_payload,
     newest_experiment_log_path,
     record_step,
+    transcript_from_payload,
 )
 from .renderable import Renderable
 from .replay_and_live import (
@@ -57,6 +58,7 @@ __all__ = [
     "replay_frames",
     "replay_log_path",
     "Speech_Bubble_Extractor",
+    "transcript_from_payload",
     "Visible_Renderables_Extractor",
 ]
 

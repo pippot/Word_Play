@@ -20,6 +20,7 @@ from .pygame_renderer.interactive_env import (
     load_recording_payload,
     newest_experiment_log_path,
     record_step,
+    transcript_from_payload,
 )
 from .pygame_renderer.renderable import Renderable
 from .pygame_renderer.replay_and_live import (
@@ -65,6 +66,7 @@ __all__ = [
     "replay",
     "replay_frames",
     "replay_log_path",
+    "transcript_from_payload",
 ]
 
 

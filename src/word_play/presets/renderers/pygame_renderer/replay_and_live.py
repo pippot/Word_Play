@@ -233,6 +233,7 @@ def replay_frames(
     *,
     autoplay: bool = False,
     step_delay: float = 0.28,
+    show_speech: bool = True,
 ) -> None:
     """Display serialized replay frames in pygame."""
     import pygame
@@ -256,6 +257,8 @@ def replay_frames(
         replay_env = ReplayFrameEnvironment(dict(frames[viewing_index]))
         view.selected_entity = _remap_replay_entity(view.selected_entity, replay_env)
         view.camera_focus_entity = _remap_replay_entity(view.camera_focus_entity, replay_env)
+        if not show_speech:
+            replay_env.render_state.frame["ui.speech_bubbles_visible"] = False
         render_environment(renderer, replay_env)
 
         for event in pygame.event.get():
@@ -324,6 +327,7 @@ def replay(
     *,
     autoplay: bool = False,
     step_delay: float = 0.28,
+    show_speech: bool = True,
 ) -> None:
     """Load a recording file and replay it."""
     from .renderer import Pygame_Renderer
@@ -345,4 +349,5 @@ def replay(
         payload.get("frames", []),
         autoplay=autoplay,
         step_delay=step_delay,
+        show_speech=show_speech,
     )

@@ -299,3 +299,55 @@ def load_recording_payload(log_path: str | Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise TypeError("Replay payload must be a dictionary.")
     return payload
+
+
+def _format_replay_event(event: dict[str, Any]) -> str | None:
+    kind = event.get("kind")
+    payload = event.get("payload") or {}
+    if kind == "deliver":
+        tag = " [CONTAMINATED]" if payload.get("corrupted") else ""
+        return f"  *** DELIVERY: {payload.get('agent')} -> {payload.get('zone')}{tag} ***"
+    if kind == "discard":
+        return f"  {payload.get('agent')} discarded {payload.get('pod')}"
+    if kind == "board_post":
+        return f"  [BOARD] {payload.get('agent')}: \"{payload.get('text')}\""
+    if kind == "speech":
+        speaker = payload.get("speaker") or payload.get("agent")
+        text = payload.get("text")
+        if speaker and text:
+            return f"  {speaker} says: \"{text}\""
+    return None
+
+
+def transcript_from_payload(payload: dict[str, Any]) -> str:
+    """Render a recorded log back into a readable step-by-step transcript.
+
+    Reconstructs (from selected_actions and render_state_events) roughly what
+    run_generation would have printed live: per-step chosen actions,
+    deliveries, discards, and board posts. Raw model responses aren't part of
+    a recorded frame, so they can't be recovered this way -- only future runs
+    that use the Transcript writer capture those.
+    """
+    lines: list[str] = [f"Transcript reconstructed from recording: {payload.get('title', '')}"]
+    metadata = payload.get("metadata") or {}
+    if metadata:
+        lines.append(f"Metadata: {metadata}")
+    lines.append("")
+
+    last_subtitle: str | None = None
+    for frame in payload.get("frames", []):
+        subtitle = (frame.get("render_state_frame") or {}).get("ui.subtitle")
+        if subtitle and subtitle != last_subtitle:
+            lines.append(f"--- {subtitle} ---")
+            last_subtitle = subtitle
+
+        lines.append(f"[step {frame.get('cur_step')}]")
+        for action in frame.get("selected_actions") or []:
+            lines.append(f"  {action.get('actor_name')}: {action.get('label')}")
+
+        for event in frame.get("render_state_events") or []:
+            formatted = _format_replay_event(event)
+            if formatted:
+                lines.append(formatted)
+
+    return "\n".join(lines) + "\n"

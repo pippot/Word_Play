@@ -1141,6 +1141,8 @@ def speech_step_is_visible(current_step: int, visible_step: Any) -> bool:
 
 def collect_speech_bubbles(scene: Any) -> list[dict[str, Any]]:
     """Collect speech bubble payloads published into the renderer state."""
+    if not scene_metadata(scene, "ui.speech_bubbles_visible", True):
+        return []
     current_step = int(scene_metadata(scene, "simulation.step", 0))
     bubbles = []
     for bubble in scene.layers.get("ui.speech_bubbles", []):
