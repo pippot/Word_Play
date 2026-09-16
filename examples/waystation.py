@@ -58,6 +58,8 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+LOGS_DIR = Path(__file__).resolve().parent / "waystation_logs"
+
 from word_play.core import (
     Action,
     Action_Selection,
@@ -1402,7 +1404,7 @@ def run_exp(
 
     # ------------------------------------------------------------------ recorder
     recorder = ExperimentRecorder(
-        output_path=default_experiment_log_path("waystation"),
+        output_path=default_experiment_log_path("waystation", root_dir=LOGS_DIR),
         title="waystation",
         metadata={
             "model": SGLANG_MODEL_NAME,
@@ -1531,7 +1533,7 @@ def run_exp(
     print("To replay this game visually:")
     print(
         "  python -c \"from word_play.presets.renderers import replay; "
-        "replay('waystation')\""
+        f"replay(r'{recorder.newest_output_path}')\""
     )
     print()
     print()

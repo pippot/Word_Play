@@ -267,7 +267,8 @@ The pipeline has three stages:
       full payload to both {slug}_{timestamp}.pkl and {slug}_newest.pkl.
 
   The convenience function record_step(env, title=...) creates or reuses a
-  default recorder and calls record() for you. Files go to experiments/logs/.
+  default recorder and calls record() for you. Files go to
+  huggingface_local_model_logs/, alongside this script.
 
   Stage 3:  Replay (replay_and_live.py)
   ---------
@@ -311,6 +312,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
+
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "huggingface_local_model_logs")
 
 # ===========================================================================
 # IMPORTS
@@ -413,7 +416,7 @@ from word_play.presets.systems.do_nothing import Do_Nothing
 # state and appends it to an ExperimentRecorder pickle file.
 #
 # default_experiment_log_path returns the file path where recordings are
-# saved (experiments/logs/{title}_{timestamp}.pkl).
+# saved (huggingface_local_model_logs/{title}_{timestamp}.pkl).
 #
 # replay loads a recording pickle and opens an interactive pygame viewer.
 
@@ -422,6 +425,7 @@ from word_play.presets.renderers import (
     Pygame_Renderer,
     Renderable,
     default_experiment_log_path,
+    newest_experiment_log_path,
     record_step,
     replay,
 )
@@ -717,7 +721,7 @@ def run_exp():
     print(f"Max steps: 10")
     print(f"Agent:     Explorer at (1, 0), Goal at (4, 0)")
     print(f"Chain-of-thought: enabled")
-    print(f"Recording to: {default_experiment_log_path('huggingface_goal_seeking')}")
+    print(f"Recording to: {default_experiment_log_path('huggingface_goal_seeking', root_dir=LOGS_DIR)}")
     print()
 
     # =========================================================================
@@ -810,8 +814,12 @@ def run_exp():
         #     so they can be resolved during replay.
         #
         # The frame is appended to an ExperimentRecorder and the full payload
-        # is pickle-dumped to experiments/logs/huggingface_goal_seeking_*.pkl.
-        record_step(env, title="huggingface_goal_seeking")
+        # is pickle-dumped to huggingface_local_model_logs/huggingface_goal_seeking_*.pkl.
+        record_step(
+            env,
+            title="huggingface_goal_seeking",
+            output_path=default_experiment_log_path("huggingface_goal_seeking", root_dir=LOGS_DIR),
+        )
 
         reward = env.last_rewards[explorer_id]
         cumulative_reward += reward
@@ -880,7 +888,7 @@ def run_exp():
     # results.
 
     print("\nYour episode has been recorded to:")
-    print(f"  {default_experiment_log_path('huggingface_goal_seeking')}")
+    print(f"  {default_experiment_log_path('huggingface_goal_seeking', root_dir=LOGS_DIR)}")
 
     # =========================================================================
     # STEP 7: REPLAY THE RECORDED EPISODE
@@ -891,8 +899,8 @@ def run_exp():
     # How replay() works:
     #
     #   1. It resolves the log path. If the path ends in .pkl it uses it
-    #      directly; otherwise it looks for {title}_newest.pkl in the
-    #      experiments/logs/ directory.
+    #      directly; otherwise it looks for {title}_newest.pkl (here we pass
+    #      the resolved path explicitly, pointing at huggingface_local_model_logs/).
     #
     #   2. It loads the pickle via load_recording_payload().
     #
@@ -922,7 +930,7 @@ def run_exp():
         tile_size=56,
         default_floor_sprite="sprite_library/src/world_tiles/indoors/floors/day_grass_floor_c.png",
     )
-    replay("huggingface_goal_seeking", renderer)
+    replay(newest_experiment_log_path("huggingface_goal_seeking", root_dir=LOGS_DIR), renderer)
 
     print("\nDone.")
 
@@ -946,7 +954,7 @@ if __name__ == "__main__":
 #     Max steps: 10
 #     Agent:     Explorer at (1, 0), Goal at (4, 0)
 #     Chain-of-thought: enabled
-#     Recording to: experiments/logs/huggingface_goal_seeking_20260707_120000.pkl
+#     Recording to: huggingface_local_model_logs/huggingface_goal_seeking_20260707_120000.pkl
 #
 #     Step-by-step trace:
 #     ------------------------------------------------------------------------
@@ -964,7 +972,7 @@ if __name__ == "__main__":
 #       Cumulative reward: 0.85
 #
 #     Your episode has been recorded to:
-#       experiments/logs/huggingface_goal_seeking_20260707_120000.pkl
+#       huggingface_local_model_logs/huggingface_goal_seeking_20260707_120000.pkl
 #
 #     Opening replay viewer...
 #       SPACE: play/pause    LEFT/RIGHT: step    HOME/END: jump    ESC: exit
@@ -986,4 +994,4 @@ if __name__ == "__main__":
 # 6. Add Start_Public_Conversation / Start_Private_Conversation for
 #    multi-agent communication.
 # 7. Load a previously recorded pickle with:
-#        python -c "from word_play.presets.renderers import replay; replay('experiments/logs/huggingface_goal_seeking_newest.pkl')"
+#        python -c "from word_play.presets.renderers import replay; replay('examples/huggingface_local_model_logs/huggingface_goal_seeking_newest.pkl')"

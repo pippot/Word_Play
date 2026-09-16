@@ -56,6 +56,8 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+LOGS_DIR = Path(__file__).resolve().parent / "antline_logs"
+
 from word_play.core import (
     Action,
     Action_Selection,
@@ -843,7 +845,7 @@ def run_exp(
 
     # ------------------------------------------------------------------ recorder
     recorder = ExperimentRecorder(
-        output_path=default_experiment_log_path("antline"),
+        output_path=default_experiment_log_path("antline", root_dir=LOGS_DIR),
         title="antline",
         metadata={
             "model": SGLANG_MODEL_NAME,
@@ -960,7 +962,7 @@ def run_exp(
     print("To replay this game visually:")
     print(
         "  python -c \"from word_play.presets.renderers import replay; "
-        "replay('antline')\""
+        f"replay(r'{recorder.newest_output_path}')\""
     )
     print()
     print("Use arrow keys to step, SPACE to autoplay, ESC to quit.")

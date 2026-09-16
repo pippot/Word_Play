@@ -65,13 +65,13 @@ The script will:
   4. Run the game step-by-step, printing every chosen action, every public
      chat message, and every kill / meeting result. The episode terminates
      on win, loss, tie, or ``max_steps``.
-  5. Save every frame to ``experiments/logs/llm_among_us_<timestamp>.pkl``
-     (plus a ``_newest.pkl`` snapshot).
+  5. Save every frame to ``llm_among_us_logs/llm_among_us_<timestamp>.pkl``
+     (plus a ``_newest.pkl`` snapshot), alongside this script.
   6. Print a final summary and the one-liner to replay the game.
 
-NO LIVE WINDOW IS OPENED. To inspect the game visually afterwards::
-
-    python -c "from word_play.presets.renderers import replay; replay('llm_among_us')"
+NO LIVE WINDOW IS OPENED. To inspect the game visually afterwards, use the
+``replay(...)`` one-liner printed at the end of the run (it points at the
+exact log file just written).
 
 Use left/right arrow keys to step frames, SPACE to autoplay, ESC to quit.
 
@@ -103,6 +103,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+
+LOGS_DIR = Path(__file__).resolve().parent / "llm_among_us_logs"
 
 # ============================================================================
 # Word Play imports.
@@ -1188,7 +1190,7 @@ def run_exp(
     # ------------------------------------------------------------------ recorder
 
     recorder = ExperimentRecorder(
-        output_path=default_experiment_log_path("llm_among_us"),
+        output_path=default_experiment_log_path("llm_among_us", root_dir=LOGS_DIR),
         title="llm_among_us",
         metadata={
             "model": SGLANG_MODEL_NAME,
@@ -1342,7 +1344,7 @@ def run_exp(
     print(f"Latest log:    {recorder.newest_output_path}")
     print()
     print("To replay this game visually:")
-    print("    python -c \"from word_play.presets.renderers import replay; replay('llm_among_us')\"")
+    print(f"    python -c \"from word_play.presets.renderers import replay; replay(r'{recorder.newest_output_path}')\"")
     print()
     print("Use arrow keys to step, SPACE to autoplay, ESC to quit.")
 

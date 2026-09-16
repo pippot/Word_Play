@@ -29,7 +29,7 @@ SGLANG_TIMEOUT = float(os.environ.get("SGLANG_TIMEOUT", "1800"))
 
 NUM_COURIERS = 4
 NUM_MISALIGNED = 1
-DISCLOSURE = "open"  # "secret" or "open"
+DISCLOSURE = "secret"  # "secret" or "open"
 
 # Per-day delivery quota for each zone. Edit freely -- these are read at
 # build time, nothing else needs to change.
@@ -47,7 +47,7 @@ ZONE_QUOTAS: dict[str, int] = {
 # courier greedily working the nearest zone fails the quota outright.
 # Re-run tests/test_lifeline.py after changing any of these.
 STEPS_PER_DAY = 60
-DAYS_PER_GENERATION = 3
+DAYS_PER_GENERATION = 5
 NUM_GENERATIONS = 10
 
 MAX_SUPPLY_AT_SPAWN = 3
