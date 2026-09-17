@@ -45,6 +45,7 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         reasoning_max_new_tokens: int = 256,
         max_stored_observation_chars: int = 3000,
         max_stored_message_chars: int = 320,
+        max_summary_lines: int = 20,
     ):
         super().__init__()
         self.model_key = model_key
@@ -60,6 +61,7 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         self.reasoning_max_new_tokens = reasoning_max_new_tokens
         self.max_stored_observation_chars = max_stored_observation_chars
         self.max_stored_message_chars = max_stored_message_chars
+        self.max_summary_lines = max_summary_lines
 
         self.observation_history: list[str] = []
         self.observation_summary: str | None = None
@@ -135,7 +137,11 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         for observation_text in observations:
             summary_lines.append(self._summarize_observation_text(observation_text))
 
-        self.observation_summary = "\n".join(line for line in summary_lines if line).strip() or None
+        # Keep only the most recent lines; otherwise the summary (and every
+        # prompt that includes it) grows by one line per step, forever.
+        lines = [line for line in "\n".join(summary_lines).splitlines() if line.strip()]
+        lines = lines[-self.max_summary_lines :] if self.max_summary_lines > 0 else []
+        self.observation_summary = "\n".join(lines).strip() or None
 
     def _summarize_observation_text(self, observation_text: str) -> str:
         summary_parts = []
@@ -160,9 +166,19 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
             ):
                 state_lines.append(stripped)
 
-        action_lines = [
-            line.strip() for line in observation_text.splitlines() if line.strip().startswith("[") and "]" in line
-        ]
+        # Only lines inside the action list count as actions -- other sections
+        # (e.g. numbered notes on a board) also start with "[n]".
+        action_lines = []
+        in_actions_block = False
+        for line in observation_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("AVAILABLE ACTIONS"):
+                in_actions_block = True
+                continue
+            if in_actions_block and not stripped:
+                break
+            if in_actions_block and stripped.startswith("[") and "]" in stripped:
+                action_lines.append(stripped)
         if action_lines:
             summary_parts.append(f"actions={', '.join(action_lines[:3])}")
         if state_lines:
@@ -334,12 +350,22 @@ class LLM_Action_And_Communication_Policy(Agent_Policy, Communication_Policy):
         if unexpected:
             raise ValueError(f"Unexpected arguments: {', '.join(unexpected)}")
 
-        ordered_values = [self._coerce_kwarg_value(raw_kwargs[key]) for key in expected_keys]
-        return action_selection.parse_and_validate_kwarg_list("; ".join(ordered_values))
+        # Parse each value on its own. Joining the values into one ";"-separated
+        # string and splitting it again (parse_and_validate_kwarg_list) breaks as
+        # soon as a free-text argument contains a ";".
+        return {
+            key: action_selection.required_kwargs[key].parse_and_validate(
+                self._coerce_kwarg_value(raw_kwargs[key]),
+                action_selection.actor,
+                action_selection.target_entity,
+                action_selection.env,
+            )
+            for key in expected_keys
+        }
 
     def _coerce_kwarg_value(self, value: Any) -> str:
         if isinstance(value, str):
-            return value
+            return value.strip()
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return str(value)
         return json.dumps(value)

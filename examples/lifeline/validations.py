@@ -16,7 +16,7 @@ class Is_Adjacent_To(Action_Validation):
 
 
 class Target_Is_Supply(Action_Validation):
-    """True if the target entity is an unclaimed supply unit."""
+    """True if the target entity is a supply unit (see Supply_Not_Carried for availability)."""
     def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
         return "supply" in target_entity.tags
 

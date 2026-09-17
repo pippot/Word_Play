@@ -1,15 +1,24 @@
 """
-Everything an agent can do: move supply, write to the board.
+Everything an agent can do: move, pick up / deliver / discard supply, write to
+the board.
 
-Move_* and Do_Nothing come from the engine unchanged; only the
-Lifeline-specific actions live here.
+Do_Nothing comes from the engine unchanged. The four moves are the engine's
+Move_* actions with one change: their description names the tile they lead
+to, so an agent weighing "is that tile contaminated?" doesn't have to do the
+coordinate arithmetic itself.
 """
 
 from __future__ import annotations
 
-from word_play.core import Action, Target_Is_Self
+from word_play.core import Action, Action_Selection, Target_Is_Self
 from word_play.presets.action_args import Int_Range_Arg, String_Arg
-from word_play.presets.movement.simple_2d_grid import Position_2D
+from word_play.presets.movement.simple_2d_grid import (
+    Move_Down,
+    Move_Left,
+    Move_Right,
+    Move_Up,
+    Position_2D,
+)
 
 from .config import MAX_BOARD_SLOTS, MAX_BOARD_TEXT_CHARS
 from .validations import (
@@ -21,6 +30,27 @@ from .validations import (
     Supply_Not_Carried,
     Target_Is_Supply,
 )
+
+
+class Lifeline_Move_Up(Move_Up):
+    def action_description_text(self, actor, target_entity, env) -> str:
+        return f"Move up to ({actor.position.x}, {actor.position.y - 1})."
+
+
+class Lifeline_Move_Down(Move_Down):
+    def action_description_text(self, actor, target_entity, env) -> str:
+        return f"Move down to ({actor.position.x}, {actor.position.y + 1})."
+
+
+class Lifeline_Move_Left(Move_Left):
+    def action_description_text(self, actor, target_entity, env) -> str:
+        return f"Move left to ({actor.position.x - 1}, {actor.position.y})."
+
+
+class Lifeline_Move_Right(Move_Right):
+    def action_description_text(self, actor, target_entity, env) -> str:
+        return f"Move right to ({actor.position.x + 1}, {actor.position.y})."
+
 
 class Pickup_Supply(Action):
     """Pick up an unclaimed, adjacent supply unit. Carries at most one at a time."""
@@ -99,7 +129,7 @@ class Deliver_Supply(Action):
         return {"delivered": True, "zone": zone_name, "corrupted": corrupted}
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        return "Deliver your carried supply."
+        return "Deliver your carried supply to the zone you are standing on."
 
 
 class Drop_Supply(Action):
@@ -123,7 +153,7 @@ class Drop_Supply(Action):
         return {"discarded": supply.name}
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        return "Discard your carried supply (e.g. if you suspect it's contaminated)."
+        return "Discard your carried supply."
 
 
 class Board_Text_Arg(String_Arg):
@@ -131,7 +161,7 @@ class Board_Text_Arg(String_Arg):
         super().__init__(validators=[lambda arg, actor, target, env: bool(arg.strip())])
 
     def arg_description(self, actor, target_entity, env) -> str:
-        return f"a short note, <= {MAX_BOARD_TEXT_CHARS} chars"
+        return f"your note, at most {MAX_BOARD_TEXT_CHARS} characters"
 
 
 class Board_Slot_Arg(Int_Range_Arg):
@@ -159,10 +189,11 @@ class Write_Board(Action):
 
     def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
         slot = kwargs["slot"]
-        text = (kwargs or {}).get("text", "").strip()[:MAX_BOARD_TEXT_CHARS]
-        index = slot - 1
-        overwritten = env.board_slots[index] is not None
-        env.board_slots[index] = {
+        full_text = kwargs["text"].strip()
+        text = full_text[:MAX_BOARD_TEXT_CHARS]
+        previous = env.board_slots[slot - 1]
+        previous = dict(previous) if previous is not None else None
+        env.board_slots[slot - 1] = {
             "generation": env.generation_index,
             "day": env.current_day,
             "step": env.cur_step + 1,
@@ -172,9 +203,33 @@ class Write_Board(Action):
         env.board_version += 1
         env.render_state.emit(
             "board_post", agent=actor.name, text=text, slot=slot,
-            overwritten=overwritten, step=env.cur_step + 1,
+            overwritten=previous is not None, step=env.cur_step + 1,
         )
-        return {"posted": text, "slot": slot, "overwritten": overwritten}
+        return {
+            "posted": text,
+            "slot": slot,
+            "overwritten": previous is not None,
+            "previous": previous,
+            "truncated": len(full_text) > MAX_BOARD_TEXT_CHARS,
+        }
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        return "Write a note into one of the board's slots (persists across generations)."
+        return (
+            f"Write a note on the shared board (needs slot 1-{MAX_BOARD_SLOTS} "
+            f"and text up to {MAX_BOARD_TEXT_CHARS} characters)."
+        )
+
+
+def describe_selection(selection: Action_Selection) -> str:
+    """
+    One-line, human-readable description of a chosen action, including its
+    arguments. Used for the agent's own action memory, LAST ACTION feedback
+    and the event log. Call it BEFORE the step executes: move descriptions
+    are computed from the actor's current position.
+    """
+    if isinstance(selection.action, Write_Board) and selection.action_kwargs:
+        text = str(selection.action_kwargs.get("text", "")).strip()
+        if len(text) > 80:
+            text = text[:77] + "..."
+        return f'Write to board slot {selection.action_kwargs.get("slot")}: "{text}"'
+    return str(selection).rstrip(".")

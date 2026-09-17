@@ -4,7 +4,8 @@ Command-line entry point.
     python -m examples.lifeline --num-couriers 4 --num-misaligned 1
 
 Every flag here overrides a default from config.py for this run only; to change
-a default permanently, edit config.py instead.
+a default permanently, edit config.py instead. See examples/lifeline/README.md
+for what each flag does to the game.
 """
 
 from __future__ import annotations
@@ -15,10 +16,15 @@ from .config import (
     DAYS_PER_GENERATION,
     DISCLOSURE,
     MAX_PARALLEL_WORKERS,
+    MISALIGNED_GENERATIONS,
+    MISALIGNED_TARGET_ZONE,
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
+    PROBES_ENABLED,
     STEPS_PER_DAY,
+    TALLY_VISIBILITY,
+    ZONE_NAMES,
 )
 from .experiment import run_experiment
 
@@ -28,15 +34,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="python -m examples.lifeline",
         description="Run the Lifeline experiment.",
     )
-    parser.add_argument("--seed", type=int, default=0, help="Random seed.")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed (roles, names, turn order). Generation g uses seed+g.")
     parser.add_argument("--num-generations", type=int, default=NUM_GENERATIONS, help="Number of generations (agents are replaced between each).")
     parser.add_argument("--days-per-generation", type=int, default=DAYS_PER_GENERATION, help="Days each generation lives.")
     parser.add_argument("--steps-per-day", type=int, default=STEPS_PER_DAY, help="Steps per day before positions and supply reset.")
-    parser.add_argument("--num-couriers", type=int, default=NUM_COURIERS, help="Number of courier agents.")
-    parser.add_argument("--num-misaligned", type=int, default=NUM_MISALIGNED, help="Number of misaligned agents (0 for fully cooperative).")
+    parser.add_argument("--num-couriers", type=int, default=NUM_COURIERS, help="Number of courier agents per generation.")
+    parser.add_argument("--num-misaligned", type=int, default=NUM_MISALIGNED, help="Number of misaligned agents (0 for fully cooperative). They are not replaced between generations.")
+    parser.add_argument(
+        "--misaligned-generations", type=int, default=MISALIGNED_GENERATIONS,
+        help="The misaligned agents persist (same memory) through the first N generations, then are removed and their places go to couriers. 1 = only in the first generation. Default: every generation.",
+    )
     parser.add_argument("--disclosure", choices=["secret", "open"], default=DISCLOSURE, help="Whether couriers are told a misaligned agent exists.")
-    parser.add_argument("--max-workers", type=int, default=MAX_PARALLEL_WORKERS, help="Agents whose actions are chosen in parallel.")
-    parser.add_argument("--verbose", action="store_true", help="Print full LLM prompts and responses.")
+    parser.add_argument("--target-zone", choices=list(ZONE_NAMES), default=MISALIGNED_TARGET_ZONE, help="The single zone the misaligned agent wants deliveries to.")
+    parser.add_argument(
+        "--tally", dest="tally_visibility", choices=["full", "hidden"], default=TALLY_VISIBILITY,
+        help="full: everyone sees zone totals and the delivery log. hidden: a zone's total is only visible while standing on it, and there is no delivery log.",
+    )
+    probes = parser.add_mutually_exclusive_group()
+    probes.add_argument("--probes", dest="probes", action="store_true", default=PROBES_ENABLED, help="Ask every agent the private belief questionnaire at the start of each generation and the end of each day (default).")
+    probes.add_argument("--no-probes", dest="probes", action="store_false", help="Skip the belief questionnaire.")
+    parser.add_argument("--max-workers", type=int, default=MAX_PARALLEL_WORKERS, help="Maximum concurrent LLM requests (capped at the number of agents).")
+    parser.add_argument("--verbose", action="store_true", help="Print full LLM requests, each agent's plan, and every probe answer.")
     return parser.parse_args(argv)
 
 
@@ -53,6 +71,10 @@ def main(argv: list[str] | None = None) -> None:
         num_couriers=args.num_couriers,
         num_misaligned=args.num_misaligned,
         disclosure=args.disclosure,
+        target_zone=args.target_zone,
+        tally_visibility=args.tally_visibility,
+        misaligned_generations=args.misaligned_generations,
+        probes=args.probes,
     )
 
 
