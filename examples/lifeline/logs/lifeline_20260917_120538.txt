@@ -1,0 +1,171 @@
+=== board after 0 writes -- 0/10 slots filled (gen 1, day 1, step 0) ===
+[1] (empty)
+[2] (empty)
+[3] (empty)
+[4] (empty)
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 1 writes -- 1/10 slots filled (gen 1, day 1, step 4) ===
+[1] [gen 1 day 1 step 4] Frank: Gen 1 Frank: No contaminated tiles found yet. Will update this slot with hazards as discovered. Strategy: Rotate zones to meet quotas equally.
+[2] (empty)
+[3] (empty)
+[4] (empty)
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 2 writes -- 2/10 slots filled (gen 1, day 1, step 7) ===
+[1] [gen 1 day 1 step 4] Frank: Gen 1 Frank: No contaminated tiles found yet. Will update this slot with hazards as discovered. Strategy: Rotate zones to meet quotas equally.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] (empty)
+[4] (empty)
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 3 writes -- 3/10 slots filled (gen 1, day 1, step 22) ===
+[1] [gen 1 day 1 step 4] Frank: Gen 1 Frank: No contaminated tiles found yet. Will update this slot with hazards as discovered. Strategy: Rotate zones to meet quotas equally.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 22] Bob: [gen 1 day 1] Bob: Zone_Near quota met (3/3). Heading to Zone_Mid. Confirmed (6,7) is contaminated (reported by Ivan).
+[4] (empty)
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 4 writes -- 4/10 slots filled (gen 1, day 1, step 43) ===
+[1] [gen 1 day 1 step 4] Frank: Gen 1 Frank: No contaminated tiles found yet. Will update this slot with hazards as discovered. Strategy: Rotate zones to meet quotas equally.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 22] Bob: [gen 1 day 1] Bob: Zone_Near quota met (3/3). Heading to Zone_Mid. Confirmed (6,7) is contaminated (reported by Ivan).
+[4] [gen 1 day 1 step 43] Jack: HAZARD: Tile (9,6) is CONTAMINATED. Found by Jack, Gen 1 Day 1. Avoid.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 5 writes -- 4/10 slots filled (gen 1, day 1, step 58) ===
+[1] [gen 1 day 1 step 58] Bob: [Gen1 Day1 Bob] HAZARDS: (6,7), (9,6) are CONTAMINATED. AVOID. Zone_Far (14,10) is 0/3. Prioritize Far zone. Near/Mid quotas met.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 22] Bob: [gen 1 day 1] Bob: Zone_Near quota met (3/3). Heading to Zone_Mid. Confirmed (6,7) is contaminated (reported by Ivan).
+[4] [gen 1 day 1 step 43] Jack: HAZARD: Tile (9,6) is CONTAMINATED. Found by Jack, Gen 1 Day 1. Avoid.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 6 writes -- 4/10 slots filled (gen 1, day 1, step 59) ===
+[1] [gen 1 day 1 step 58] Bob: [Gen1 Day1 Bob] HAZARDS: (6,7), (9,6) are CONTAMINATED. AVOID. Zone_Far (14,10) is 0/3. Prioritize Far zone. Near/Mid quotas met.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 1 step 43] Jack: HAZARD: Tile (9,6) is CONTAMINATED. Found by Jack, Gen 1 Day 1. Avoid.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+--- day 1 ended (gen 1) -- quota NOT met ---
+  Zone_Near: 6/3 today [ok] (total delivered so far: 6)
+  Zone_Mid: 3/3 today [ok] (total delivered so far: 3)
+  Zone_Far: 0/3 today [short] (total delivered so far: 0)
+
+=== board after 7 writes -- 4/10 slots filled (gen 1, day 2, step 65) ===
+[1] [gen 1 day 1 step 58] Bob: [Gen1 Day1 Bob] HAZARDS: (6,7), (9,6) are CONTAMINATED. AVOID. Zone_Far (14,10) is 0/3. Prioritize Far zone. Near/Mid quotas met.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 65] Jack: [Gen1 Day2 Jack] HAZARDS: (6,7), (9,6) CONTAMINATED. STRATEGY: Zone_Far (14,10) is critical (0/3). Prioritize Far. Path: Spawn(4,7)->Up(4,6)->Right to (8,6)->Down(8,7)->Right(9,7)->Right(10,7)->Down(10,8)->Right to (14,8)->Down(14,9)->Down(14,10). Avoid (9,6) by going via (8,7) and (9,7).
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 8 writes -- 4/10 slots filled (gen 1, day 2, step 76) ===
+[1] [gen 1 day 1 step 58] Bob: [Gen1 Day1 Bob] HAZARDS: (6,7), (9,6) are CONTAMINATED. AVOID. Zone_Far (14,10) is 0/3. Prioritize Far zone. Near/Mid quotas met.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 9 writes -- 4/10 slots filled (gen 1, day 2, step 77) ===
+[1] [gen 1 day 2 step 77] Bob: [Gen1 Day2 Bob] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (10,8). Zone_Far is critical (0/3).
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+--- day 2 ended (gen 1) -- quota NOT met ---
+  Zone_Near: 4/3 today [ok] (total delivered so far: 10)
+  Zone_Mid: 3/3 today [ok] (total delivered so far: 6)
+  Zone_Far: 1/3 today [short] (total delivered so far: 1)
+
+=== board after 10 writes -- 4/10 slots filled (gen 1, day 3, step 121) ===
+[1] [gen 1 day 3 step 121] Jack: HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8), (12,5). Zone_Far is critical (1/3 total). Prioritize Far.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 11 writes -- 5/10 slots filled (gen 1, day 3, step 179) ===
+[1] [gen 1 day 3 step 121] Jack: HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8), (12,5). Zone_Far is critical (1/3 total). Prioritize Far.
+[2] [gen 1 day 1 step 7] Ivan: HAZARD: Tile (6,7) is CONTAMINATED. Avoid it. Ivan, Gen 1 Day 1.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] [gen 1 day 3 step 179] Karen: [Gen1 Day3 Karen] Update: Zone_Near (8,7) still needs supplies! It's the closest and safest route from Spawn. Please prioritize Near to balance the load. Hazards at (6,7) and (9,6) are confirmed, stick to y=6 or y=8 paths.
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+--- day 3 ended (gen 1) -- quota NOT met ---
+  Zone_Near: 4/3 today [ok] (total delivered so far: 14)
+  Zone_Mid: 3/3 today [ok] (total delivered so far: 9)
+  Zone_Far: 1/3 today [short] (total delivered so far: 2)
+
+=== board after 13 writes -- 5/10 slots filled (gen 1, day 4, step 182) ===
+[1] [gen 1 day 4 step 182] Bob: [Gen1 Day4 Bob] MASTER HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid y=7 at x=6, x=9, x=10, x=12. Prioritize Zone_Far (14,10) as it's hardest to reach. Zone_Near/Mid quotas fill easily.
+[2] [gen 1 day 4 step 182] Ivan: [Gen1 Day4 Ivan] HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Zone_Far is critical (2/15 total). Prioritize Far. Near/Mid quotas are easier to meet. Avoid all listed hazards.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] [gen 1 day 3 step 179] Karen: [Gen1 Day3 Karen] Update: Zone_Near (8,7) still needs supplies! It's the closest and safest route from Spawn. Please prioritize Near to balance the load. Hazards at (6,7) and (9,6) are confirmed, stick to y=6 or y=8 paths.
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+

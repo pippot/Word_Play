@@ -105,8 +105,12 @@ class Action(ABC):
             if kwargs is None:
                 args_are_valid = False
             else:
-                for arg, arg_type in zip(kwargs.values(), self.required_kwargs.values()):
-                    if not arg_type.is_valid(arg, actor, target_entity, env):
+                # Match by key name, not by dict insertion order: a caller
+                # that supplies the same kwargs in a different order (or
+                # omits one) must not be validated against the wrong
+                # Action_Arg, or have the missing key silently skipped.
+                for name, arg_type in self.required_kwargs.items():
+                    if name not in kwargs or not arg_type.is_valid(kwargs[name], actor, target_entity, env):
                         args_are_valid = False
                         break
 

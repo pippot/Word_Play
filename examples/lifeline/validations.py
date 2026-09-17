@@ -6,9 +6,6 @@ is even offered on a given step.
 from __future__ import annotations
 
 from word_play.core import Action_Validation, Entity
-from word_play.presets.systems.communication.core import Communication_Policy
-
-from .config import TALK_RADIUS
 
 class Is_Adjacent_To(Action_Validation):
     """True if the actor is adjacent (Manhattan distance <= 1) to the target."""
@@ -65,36 +62,3 @@ class Near_The_Board(Action_Validation):
         dist = abs(actor.position.x - env.board.position.x) + \
                abs(actor.position.y - env.board.position.y)
         return dist <= 1
-
-
-def conversation_partners_in_range(actor: Entity, env) -> list[Entity]:
-    """
-    Agents within TALK_RADIUS of the actor.
-
-    The engine's own nearby_conversation_partners() uses the movement system's
-    positions_are_close, which for this grid means *the exact same tile*. On a
-    map where nothing forces agents to converge, that makes conversation
-    almost impossible, so this environment uses a Manhattan radius instead.
-    """
-    return [
-        entity for entity in env.state.entities
-        if entity is not actor
-        and entity.has_component(Communication_Policy)
-        and abs(entity.position.x - actor.position.x)
-        + abs(entity.position.y - actor.position.y) <= TALK_RADIUS
-    ]
-
-
-class A_Partner_Is_In_Talk_Range(Action_Validation):
-    """True if at least one other agent is within TALK_RADIUS."""
-    def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
-        return len(conversation_partners_in_range(actor, env)) > 0
-
-
-class Talk_Not_On_Cooldown(Action_Validation):
-    """True if enough steps have passed since the agent last talked."""
-    TALK_COOLDOWN = 4
-
-    def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
-        last = env.last_talk_step.get(actor.name, -self.TALK_COOLDOWN)
-        return (env.cur_step - last) >= self.TALK_COOLDOWN

@@ -17,11 +17,13 @@ from word_play.presets.renderers import (
     default_experiment_log_path,
     record_step,
 )
+from word_play.presets.systems.do_nothing import Do_Nothing
 
 from .config import (
     _BASE_GENERATION_CONFIG,
     DAYS_PER_GENERATION,
     DISCLOSURE,
+    MAX_BOARD_SLOTS,
     MAX_PARALLEL_WORKERS,
     NUM_COURIERS,
     NUM_GENERATIONS,
@@ -31,7 +33,6 @@ from .config import (
     SGLANG_MODEL_NAME,
     SGLANG_TIMEOUT,
     STEPS_PER_DAY,
-    ZONE_QUOTAS,
 )
 from .environment import Lifeline_Env
 from .world import build_environment
@@ -41,38 +42,58 @@ LOGS_DIR = Path(__file__).resolve().parent / "logs"
 
 
 class BoardLog:
-    """Writes a full snapshot of the shared board to a text file.
+    """Writes a full snapshot of the shared board, plus end-of-day delivery
+    tallies, to a text file.
 
-    A new snapshot is appended every time board_entries changes (i.e. a new
-    board post lands). This is deliberately the *only* thing this file
-    contains -- per-step actions, raw model responses, and deliveries only
-    go to the console.
+    A board snapshot is appended every time board_slots changes (a new post
+    or an overwrite), and a delivery tally is appended whenever a day ends.
+    Per-step actions, raw model responses, and individual deliveries still
+    only go to the console.
     """
 
     def __init__(self, path: Path):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = path.open("w", encoding="utf-8")
-        self._last_count = -1
+        self._last_version = -1
 
     def maybe_log(self, env: "Lifeline_Env") -> None:
-        entries = env.board_entries
-        if len(entries) == self._last_count:
+        if env.board_version == self._last_version:
             return
-        self._last_count = len(entries)
+        self._last_version = env.board_version
+        filled = sum(1 for slot in env.board_slots if slot is not None)
         self._fh.write(
-            f"=== board after {len(entries)} entries "
+            f"=== board after {env.board_version} writes -- "
+            f"{filled}/{len(env.board_slots)} slots filled "
             f"(gen {env.generation_index + 1}, day {env.current_day + 1}, "
             f"step {env.cur_step}) ===\n"
         )
-        if entries:
-            for entry in entries:
+        for i, slot in enumerate(env.board_slots, start=1):
+            if slot is None:
+                self._fh.write(f"[{i}] (empty)\n")
+            else:
                 self._fh.write(
-                    f"[gen {entry['generation'] + 1} day {entry['day'] + 1} "
-                    f"step {entry['step']}] {entry['author']}: {entry['text']}\n"
+                    f"[{i}] [gen {slot['generation'] + 1} day {slot['day'] + 1} "
+                    f"step {slot['step']}] {slot['author']}: {slot['text']}\n"
                 )
-        else:
-            self._fh.write("(empty -- nothing has been written here yet)\n")
+        self._fh.write("\n")
+        self._fh.flush()
+
+    def log_day_end(self, env: "Lifeline_Env") -> None:
+        """Append the zone-by-zone delivery tally for the day that just ended."""
+        summary = env.last_day_summary
+        if summary is None:
+            return
+        self._fh.write(
+            f"--- day {summary['day'] + 1} ended "
+            f"(gen {summary['generation'] + 1}) -- spread {summary['spread']} "
+            "(busiest zone total minus quietest) ---\n"
+        )
+        for name, total in summary["zone_total_counts"].items():
+            today = summary["zone_day_counts"][name]
+            self._fh.write(
+                f"  {name}: {today} today (total delivered so far: {total})\n"
+            )
         self._fh.write("\n")
         self._fh.flush()
 
@@ -103,7 +124,7 @@ def probe_sglang_server(base_url: str, timeout: float = 5.0) -> None:
 def run_generation(
     *,
     generation_index: int,
-    board_entries: list[dict],
+    board_slots: list[dict | None],
     model_key: str,
     seed: int,
     recorder: ExperimentRecorder,
@@ -111,7 +132,6 @@ def run_generation(
     num_couriers: int,
     num_misaligned: int,
     disclosure: str,
-    zone_quotas: dict[str, int],
     steps_per_day: int,
     days_per_generation: int,
     max_workers: int,
@@ -120,13 +140,12 @@ def run_generation(
     """Run one generation (a fresh population of agents) to completion."""
     env = build_environment(
         generation_index=generation_index,
-        board_entries=board_entries,
+        board_slots=board_slots,
         model_key=model_key,
         seed=seed,
         num_couriers=num_couriers,
         num_misaligned=num_misaligned,
         disclosure=disclosure,
-        zone_quotas=zone_quotas,
         steps_per_day=steps_per_day,
         days_per_generation=days_per_generation,
     )
@@ -145,7 +164,8 @@ def run_generation(
         )
     else:
         print("Misaligned:     None (fully cooperative)")
-    print(f"Board entries inherited: {len(board_entries)}")
+    filled = sum(1 for slot in board_slots if slot is not None)
+    print(f"Board slots inherited: {filled}/{len(board_slots)}")
     print()
 
     step_count = 0
@@ -161,9 +181,24 @@ def run_generation(
             def _select(agent_id: int) -> tuple[int, Action_Selection, dict]:
                 agent = env.agents[agent_id]
                 observation = env.observe(agent_id)
-                action_sel, info = agent.get_component(Agent_Policy).select_action(
-                    observation
-                )
+                try:
+                    action_sel, info = agent.get_component(Agent_Policy).select_action(
+                        observation
+                    )
+                except Exception as exc:
+                    # A model that can't produce a valid response even after
+                    # its own retry budget (or a transient server/network
+                    # failure) must not take the whole multi-generation
+                    # experiment down with it. Fall back to a wasted turn for
+                    # this one agent and keep the run going.
+                    action_sel = Action_Selection(
+                        action=next(a for a in agent.actions if isinstance(a, Do_Nothing)),
+                        action_kwargs=None,
+                        actor=agent,
+                        target_entity=agent,
+                        env=env,
+                    )
+                    info = {"raw_response": None, "error": str(exc)}
                 return agent_id, action_sel, info
 
             futures = [executor.submit(_select, aid) for aid in range(len(env.agents))]
@@ -174,12 +209,15 @@ def run_generation(
                     "agent": env.agents[agent_id].name,
                     "action": str(action_sel),
                     "raw": info.get("raw_response"),
+                    "error": info.get("error"),
                 }
 
         print(f"\n[gen {generation_index + 1} day {env.current_day + 1} step {step_count}]")
         for rec in action_records:
             print(f"  {rec['agent']}: {rec['action']}")
-            if rec["raw"] and verbose:
+            if rec["error"]:
+                print(f"    WARNING: action selection failed, defaulted to Do_Nothing: {rec['error']}")
+            elif rec["raw"] and verbose:
                 raw = rec["raw"].replace("\n", " ")
                 if len(raw) > 240:
                     raw = raw[:240] + "..."
@@ -187,23 +225,22 @@ def run_generation(
 
         env.step([sel for sel in cur_step_actions if sel is not None])
         board_log.maybe_log(env)
+        if env._day_ended_this_step:
+            board_log.log_day_end(env)
 
         for d in env._new_deliveries:
             tag = " [CONTAMINATED]" if d["corrupted"] else ""
             print(f"  *** DELIVERY: {d['agent']} -> {d['zone']}{tag} ***")
 
-        # board_entries carries every generation's posts, and step numbers
+        # board_slots carries every generation's posts, and step numbers
         # restart each generation, so filter on both.
         new_posts = [
-            e for e in env.board_entries
-            if e["step"] == env.cur_step and e["generation"] == generation_index
+            slot for slot in env.board_slots
+            if slot is not None
+            and slot["step"] == env.cur_step and slot["generation"] == generation_index
         ]
         for post in new_posts:
             print(f"  [BOARD] {post['author']}: \"{post['text']}\"")
-
-        new_msgs = [m for m in list(env.message_log) if m["step"] == env.cur_step]
-        for msg in new_msgs:
-            print(f"  {msg['speaker']} says: \"{msg['text']}\"")
 
         if env.current_day != day_seen:
             print(f"  --- day {env.current_day} ended, day {env.current_day + 1} begins ---")
@@ -221,7 +258,8 @@ def run_generation(
         print(f"  {name}: {env.zone_total_counts[name]} delivered total")
     corrupted_deliveries = sum(1 for d in env.delivery_log if d["corrupted"])
     print(f"  Contaminated deliveries: {corrupted_deliveries} / {len(env.delivery_log)}")
-    print(f"  Board entries after this generation: {len(env.board_entries)}")
+    filled = sum(1 for slot in env.board_slots if slot is not None)
+    print(f"  Board slots filled after this generation: {filled}/{len(env.board_slots)}")
 
     return env
 
@@ -236,11 +274,8 @@ def run_experiment(
     num_couriers: int = NUM_COURIERS,
     num_misaligned: int = NUM_MISALIGNED,
     disclosure: str = DISCLOSURE,
-    zone_quotas: dict[str, int] | None = None,
 ) -> None:
     """Run a full Lifeline experiment: several generations, board threaded through."""
-    zone_quotas = dict(zone_quotas or ZONE_QUOTAS)
-
     print("=" * 72)
     print("LIFELINE")
     print("=" * 72)
@@ -251,7 +286,6 @@ def run_experiment(
     print(f"Steps per day:       {steps_per_day}")
     print(f"Couriers:            {num_couriers}")
     print(f"Misaligned:          {num_misaligned}  (disclosure={disclosure})")
-    print(f"Zone quotas:         {zone_quotas}")
     print(f"Seed:                {seed}")
     print()
 
@@ -283,18 +317,17 @@ def run_experiment(
             "num_couriers": num_couriers,
             "num_misaligned": num_misaligned,
             "disclosure": disclosure,
-            "zone_quotas": zone_quotas,
         },
     )
     board_log = BoardLog(recorder.output_path.with_suffix(".txt"))
 
     try:
-        board_entries: list[dict] = []
+        board_slots: list[dict | None] = [None] * MAX_BOARD_SLOTS
         generations: list[Lifeline_Env] = []
         for gen in range(num_generations):
             env = run_generation(
                 generation_index=gen,
-                board_entries=board_entries,
+                board_slots=board_slots,
                 model_key=model_key,
                 seed=seed + gen,
                 recorder=recorder,
@@ -302,13 +335,12 @@ def run_experiment(
                 num_couriers=num_couriers,
                 num_misaligned=num_misaligned,
                 disclosure=disclosure,
-                zone_quotas=zone_quotas,
                 steps_per_day=steps_per_day,
                 days_per_generation=days_per_generation,
                 max_workers=max_workers,
                 verbose=verbose,
             )
-            board_entries = env.board_entries
+            board_slots = env.board_slots
             generations.append(env)
 
         recorder.close()
@@ -321,9 +353,10 @@ def run_experiment(
         total_corrupted = sum(
             sum(1 for d in env.delivery_log if d["corrupted"]) for env in generations
         )
+        filled = sum(1 for slot in board_slots if slot is not None)
         print(f"Total deliveries across all generations: {total_delivered}")
         print(f"Total contaminated deliveries:           {total_corrupted}")
-        print(f"Final board size:                        {len(board_entries)} entries")
+        print(f"Final board:                              {filled}/{len(board_slots)} slots filled")
         print()
         print(f"Replay log:    {recorder.output_path}")
         print(f"Latest log:    {recorder.newest_output_path}")

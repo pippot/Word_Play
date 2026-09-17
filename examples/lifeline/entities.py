@@ -24,13 +24,11 @@ from word_play.presets.systems.do_nothing import Do_Nothing
 from .actions import (
     Deliver_Supply,
     Drop_Supply,
-    Make_Public_Statement,
     Pickup_Supply,
     Write_Board,
 )
 from .config import (
     ACTION_GENERATION_CONFIG,
-    MESSAGE_GENERATION_CONFIG,
     REASONING_GENERATION_CONFIG,
 )
 
@@ -51,23 +49,21 @@ def build_agent_entity(
             Deliver_Supply(),
             Drop_Supply(),
             Write_Board(),
-            Make_Public_Statement(),
         ],
         components=[
+            # The board is the only communication channel in Lifeline, so the
+            # Communication_Policy half of this component is unused -- no
+            # chat-specific config is passed.
             LLM_Action_And_Communication_Policy(
                 model_key=model_key,
                 system_prompt=system_prompt,
                 action_generation_config=ACTION_GENERATION_CONFIG,
-                message_generation_config=MESSAGE_GENERATION_CONFIG,
                 action_max_new_tokens=512,
-                message_max_new_tokens=128,
                 use_chain_of_thought=True,
                 reasoning_generation_config=REASONING_GENERATION_CONFIG,
                 reasoning_max_new_tokens=384,
                 observation_memory_window=8,
-                conversation_memory_window=24,
                 max_stored_observation_chars=6000,
-                max_stored_message_chars=640,
             ),
             Collidable(collidable_tags=["wall"]),
             Renderable(sprite_path=sprite, z_index=10),
