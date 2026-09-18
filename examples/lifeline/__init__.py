@@ -18,7 +18,7 @@ to this file.
 LAYOUT
 ------
     config.py       every tunable knob, plus the tilemap.  Edit this one.
-    layout.py       landmark / hazard coordinates read from the tilemap
+    layout.py       landmark / hazard coordinates, moving-hazard schedule
     validations.py  preconditions deciding which actions are offered
     actions.py      moves, pickup / deliver / discard, write-board
     entities.py     constructors for agents, supply, zones, board, hazards
@@ -78,14 +78,24 @@ from .entities import (  # noqa: E402
 )
 from .environment import Lifeline_Env, Lifeline_Observation, Misaligned_Lineage  # noqa: E402
 from .experiment import probe_sglang_server, run_experiment, run_generation  # noqa: E402
-from .layout import Layout, parse_layout  # noqa: E402
+from .layout import (  # noqa: E402
+    Layout,
+    has_clean_shortest_path,
+    hazard_schedule,
+    keeps_pacing,
+    moving_hazard_candidates,
+    parse_layout,
+)
 from .metrics import compute_metrics, load_events  # noqa: E402
 from .policy import Lifeline_Policy  # noqa: E402
 from .probes import normalize_probe_answer, run_probes  # noqa: E402
 from .prompts import (  # noqa: E402
+    COURIER_PERSONAS,
+    MISALIGNED_PERSONA_ID,
     build_courier_system_prompt,
     build_misaligned_system_prompt,
     build_probe_prompt,
+    misaligned_persona_text,
 )
 from .world import build_environment  # noqa: E402
 
@@ -96,6 +106,13 @@ __all__ = [
     "Lifeline_Policy",
     "Layout",
     "parse_layout",
+    "hazard_schedule",
+    "has_clean_shortest_path",
+    "keeps_pacing",
+    "moving_hazard_candidates",
+    "COURIER_PERSONAS",
+    "MISALIGNED_PERSONA_ID",
+    "misaligned_persona_text",
     "run_probes",
     "normalize_probe_answer",
     "build_probe_prompt",

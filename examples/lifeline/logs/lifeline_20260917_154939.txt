@@ -1,0 +1,12 @@
+=== board after 0 writes -- 0/10 slots filled (gen 1, day 1, step 0) ===
+[1] (empty)
+[2] (empty)
+[3] (empty)
+[4] (empty)
+[5] (empty)
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+

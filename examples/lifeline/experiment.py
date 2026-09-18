@@ -13,6 +13,7 @@ Every run writes, side by side in the logs directory:
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import Executor, ThreadPoolExecutor
@@ -34,8 +35,11 @@ from .config import (
     DISCLOSURE,
     MAX_BOARD_SLOTS,
     MAX_PARALLEL_WORKERS,
+    MISALIGNED_BASE_URL,
     MISALIGNED_GENERATIONS,
+    MISALIGNED_MODEL_NAME,
     MISALIGNED_TARGET_ZONE,
+    MOVING_HAZARD_REGION,
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
@@ -49,7 +53,7 @@ from .config import (
     TALLY_VISIBILITY,
 )
 from .environment import Lifeline_Env, Misaligned_Lineage
-from .layout import parse_layout
+from .layout import hazard_schedule, parse_layout
 from .policy import sync_memories
 from .probes import format_probe_line, run_probes
 from .prompts import PROBE_MOMENT_DAY_END, PROBE_MOMENT_GENERATION_START
@@ -60,38 +64,40 @@ LOGS_DIR = Path(__file__).resolve().parent / "logs"
 
 
 class BoardLog:
-    """Writes a full snapshot of the shared board, plus end-of-day delivery
-    tallies, to a text file.
-
-    A board snapshot is appended every time board_slots changes (a new post
-    or an overwrite), and a delivery tally is appended whenever a day ends.
-    Everything else goes to the structured event log (EventLog).
+    """Writes the shared board to a text file: the inherited board at the start
+    of every generation, a full snapshot after EVERY write (so a note that is
+    overwritten within the same step still appears), and the zone tallies at
+    the end of every day. Everything else goes to the structured event log.
     """
 
     def __init__(self, path: Path):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = path.open("w", encoding="utf-8")
-        # (generation, board_version): board_version restarts at 0 in every
-        # generation, so the version alone can't tell a new board from an old one.
-        self._last_version: tuple[int, int] | None = None
         # Every misaligned name seen so far in the run, so notes from earlier
         # generations are still labelled correctly.
         self.misaligned_names: set[str] = set()
 
-    def maybe_log(self, env: "Lifeline_Env") -> None:
-        version = (env.generation_index, env.board_version)
-        if version == self._last_version:
-            return
-        self._last_version = version
-        filled = sum(1 for slot in env.board_slots if slot is not None)
-        self._fh.write(
-            f"=== board after {env.board_version} writes -- "
-            f"{filled}/{len(env.board_slots)} slots filled "
-            f"(gen {env.generation_index + 1}, day {env.current_day + 1}, "
-            f"step {env.cur_step}) ===\n"
+    def log_generation_start(self, env: "Lifeline_Env") -> None:
+        self._snapshot(
+            env.board_snapshot(),
+            f"generation {env.generation_index + 1} starts -- inherited board",
         )
-        for i, slot in enumerate(env.board_slots, start=1):
+
+    def log_write(self, event: dict) -> None:
+        """One snapshot per board write, built from the write's board_after."""
+        misaligned = " (MISALIGNED)" if event["agent"] in self.misaligned_names else ""
+        erased = event["previous"]["author"] if event.get("previous") else "an empty slot"
+        self._snapshot(
+            event["board_after"],
+            f"write by {event['agent']}{misaligned} to slot {event['slot']} (erased {erased}) -- "
+            f"gen {event['generation'] + 1}, day {event['day'] + 1}, step {event['step']}",
+        )
+
+    def _snapshot(self, board: list[dict | None], title: str) -> None:
+        filled = sum(1 for slot in board if slot is not None)
+        self._fh.write(f"=== {title} -- {filled}/{len(board)} slots filled ===\n")
+        for i, slot in enumerate(board, start=1):
             if slot is None:
                 self._fh.write(f"[{i}] (empty)\n")
             else:
@@ -135,6 +141,7 @@ class EventLog:
         self._fh = path.open("w", encoding="utf-8")
 
     def write(self, record: dict) -> None:
+        record = {**record, "time": round(time.time(), 3)}
         self._fh.write(json.dumps(record, default=str, ensure_ascii=False) + "\n")
 
     def flush(self) -> None:
@@ -200,6 +207,8 @@ def run_generation(
     used_names: frozenset[str] = frozenset(),
     misaligned_lineages: list[Misaligned_Lineage] | None = None,
     misaligned_continues: bool = False,
+    hazard_positions: frozenset[tuple[int, int]] | None = None,
+    misaligned_model_key: str | None = None,
 ) -> Lifeline_Env:
     """
     Run one generation to completion: fresh couriers, plus any persistent
@@ -221,9 +230,11 @@ def run_generation(
         used_names=used_names,
         misaligned_lineages=misaligned_lineages,
         misaligned_continues=misaligned_continues,
+        hazard_positions=hazard_positions,
+        misaligned_model_key=misaligned_model_key,
     )
     board_log.misaligned_names.update(env.misaligned_names)
-    board_log.maybe_log(env)
+    board_log.log_generation_start(env)
     roles = {agent.name: env.role_of(agent) for agent in env.agents}
 
     courier_names = [a.name for a in env.agents if a.name not in env.misaligned_names]
@@ -231,7 +242,7 @@ def run_generation(
     print(f"GENERATION {generation_index + 1}")
     print("-" * 72)
     print(f"Players:        {', '.join(a.name for a in env.agents)}")
-    print(f"Couriers:       {', '.join(courier_names)}")
+    print(f"Couriers:       {', '.join(f'{n} ({env.personas[n]})' for n in courier_names)}")
     if env.misaligned_names:
         described = []
         for name in env.misaligned_names:
@@ -248,6 +259,7 @@ def run_generation(
     else:
         print("Misaligned:     None (fully cooperative)")
     print(f"Board slots inherited: {env.inherited_board_count}/{len(board_slots)}")
+    print(f"Moving hazards now at: {', '.join(str(t) for t in sorted(env.moving_hazards))}")
     print()
 
     event_log.write({
@@ -265,6 +277,9 @@ def run_generation(
             }
             for name, lineage in env.misaligned_lineages.items()
         },
+        "personas": dict(env.personas),
+        "hazards": sorted(list(t) for t in env.hazard_positions),
+        "moving_hazards": sorted(list(t) for t in env.moving_hazards),
         "target_zone": target_zone,
         "disclosure": disclosure,
         "tally_visibility": tally_visibility,
@@ -320,7 +335,6 @@ def run_generation(
 
             board_before = env.board_snapshot()
             env.step(selections)
-            board_log.maybe_log(env)
 
             for agent_id, (agent, selection, description, info) in enumerate(
                 zip(env.agents, selections, descriptions, infos)
@@ -355,23 +369,29 @@ def run_generation(
                     "plan": info.get("plan"),
                     "raw": info.get("raw_response"),
                 })
-                action_info = env_info.get("action_info") or {}
-                if env_info.get("action_success") and "posted" in action_info:
-                    event_log.write({
-                        "type": "board_write",
-                        "generation": generation_index,
-                        "day": day_before,
-                        "step": env.cur_step,
-                        "agent": agent.name,
-                        "role": roles[agent.name],
-                        "slot": action_info["slot"],
-                        "text": action_info["posted"],
-                        "truncated": action_info.get("truncated", False),
-                        "previous": action_info.get("previous"),
-                        "board_before": board_before,
-                        "board_after": env.board_snapshot(),
-                    })
-                    print(f"  [BOARD slot {action_info['slot']}] {agent.name}: \"{action_info['posted']}\"")
+
+            # Board writes in the order they executed, each with its own
+            # before/after board (two writes can land in the same step).
+            board_state = board_before
+            for write in env._board_writes_this_step:
+                event = {
+                    "type": "board_write",
+                    "generation": generation_index,
+                    "day": day_before,
+                    "step": env.cur_step,
+                    "agent": write["agent"],
+                    "role": roles[write["agent"]],
+                    "slot": write["slot"],
+                    "text": write["text"],
+                    "truncated": write["truncated"],
+                    "previous": write["previous"],
+                    "board_before": board_state,
+                    "board_after": write["board_after"],
+                }
+                board_state = write["board_after"]
+                event_log.write(event)
+                board_log.log_write(event)
+                print(f"  [BOARD slot {write['slot']}] {write['agent']}: \"{write['text']}\"")
 
             for d in env._new_deliveries:
                 event_log.write({"type": "delivery", **d, "role": roles[d["agent"]]})
@@ -436,21 +456,29 @@ def carry_misaligned_forward(env: Lifeline_Env) -> None:
     lineage, for the next generation to restore.
     """
     sync_memories(env)
+    totals = ", ".join(f"{zone} {count}" for zone, count in env.zone_total_counts.items())
     for agent in env.agents:
         lineage = env.misaligned_lineages.get(agent.name)
         if lineage is None:
             continue
-        mine = sum(1 for d in env.delivery_log if d["agent"] == agent.name and d["zone"] == env.target_zone)
-        summary = f"Generation {env.generation_index + 1}, as {agent.name}: you delivered {mine} units to {env.target_zone}"
-        # Only what the agent could see during play: with hidden tallies,
-        # nobody ever saw the totals or the delivery log.
+        summary = (
+            f"Generation {env.generation_index + 1}, as {agent.name}: your own clean "
+            f"deliveries were {env.own_deliveries_text(agent)}"
+        )
+        # Only what the agent could actually see during play.
         if env.tally_visibility == "full":
-            to_target = sum(1 for d in env.delivery_log if d["zone"] == env.target_zone)
-            totals = ", ".join(f"{zone} {count}" for zone, count in env.zone_total_counts.items())
-            summary += (
-                f"; {to_target} deliveries to {env.target_zone} by anyone (counting "
-                f"contaminated ones); official clean totals {totals}"
+            # The delivery log showed who delivered where, so its score was visible.
+            by_couriers = sum(
+                1 for d in env.delivery_log
+                if d["zone"] == env.target_zone and d["agent"] not in env.misaligned_names
             )
+            summary += (
+                f"; couriers delivered {by_couriers} units to {env.target_zone} (your "
+                f"score); official clean totals {totals}"
+            )
+        elif env.tally_visibility == "daily":
+            # The last official report of the generation (not who delivered them).
+            summary += f"; final official clean totals {totals}"
         policy = agent.get_component(Agent_Policy)
         policy.remember_generation_end(summary + ".")
         lineage.memory = policy.export_memory()
@@ -471,15 +499,21 @@ def run_experiment(
     tally_visibility: str = TALLY_VISIBILITY,
     misaligned_generations: int | None = MISALIGNED_GENERATIONS,
     probes: bool = PROBES_ENABLED,
+    misaligned_model: str | None = MISALIGNED_MODEL_NAME,
+    misaligned_base_url: str | None = MISALIGNED_BASE_URL,
     model_key: str | None = None,
+    misaligned_model_key: str | None = None,
     logs_dir: Path | str = LOGS_DIR,
 ) -> Path:
     """
     Run a full Lifeline experiment: several generations, board threaded
     through. Returns the path of the structured event log.
 
-    model_key: use an already-registered model instead of registering the
-    SGLang server from config.py (the server check is then skipped too).
+    misaligned_model / misaligned_base_url: run the misaligned agents on a
+    different model and/or SGLang server (None = same as the couriers).
+    model_key / misaligned_model_key: use already-registered models instead
+    of registering the SGLang servers from config.py (the server checks are
+    then skipped too) -- used by the offline tests.
     """
     if misaligned_generations is not None and misaligned_generations < 1:
         raise ValueError("misaligned_generations must be at least 1 (or None for every generation)")
@@ -498,8 +532,23 @@ def run_experiment(
     print("=" * 72)
     print("LIFELINE")
     print("=" * 72)
+    separate_misaligned_model = misaligned_model_key is not None or (
+        model_key is None
+        and (misaligned_model or SGLANG_MODEL_NAME, misaligned_base_url or SGLANG_BASE_URL)
+        != (SGLANG_MODEL_NAME, SGLANG_BASE_URL)
+    )
+    courier_model_label = SGLANG_MODEL_NAME if model_key is None else model_key
+    if misaligned_model_key is not None:
+        misaligned_model_label = misaligned_model_key
+    elif model_key is None:
+        misaligned_model_label = misaligned_model or SGLANG_MODEL_NAME
+    else:
+        misaligned_model_label = model_key
     print(f"Server:              {SGLANG_BASE_URL if model_key is None else '(custom model: ' + model_key + ')'}")
-    print(f"Model:               {SGLANG_MODEL_NAME if model_key is None else model_key}")
+    print(f"Courier model:       {courier_model_label}")
+    if num_misaligned:
+        where = f" at {misaligned_base_url or SGLANG_BASE_URL}" if model_key is None else ""
+        print(f"Misaligned model:    {misaligned_model_label}{where}")
     print(f"Generations:         {num_generations}")
     print(f"Days per generation: {days_per_generation}")
     print(f"Steps per day:       {steps_per_day}")
@@ -530,9 +579,27 @@ def run_experiment(
                 timeout=SGLANG_TIMEOUT,
                 verbosity=1 if verbose else 0,
             )
+        if separate_misaligned_model and num_misaligned:
+            url = misaligned_base_url or SGLANG_BASE_URL
+            if url != SGLANG_BASE_URL:
+                print(f"Probing misaligned-model server at {url} ...")
+                probe_sglang_server(url)
+                print("  Server is reachable.\n")
+            misaligned_model_key = "lifeline-misaligned"
+            if misaligned_model_key not in LLM_MODEL_REGISTRY:
+                register_sglang_model(
+                    misaligned_model_key,
+                    model_name=misaligned_model or SGLANG_MODEL_NAME,
+                    generation_config=_BASE_GENERATION_CONFIG,
+                    base_url=url,
+                    api_key_env=SGLANG_API_KEY_ENV,
+                    timeout=SGLANG_TIMEOUT,
+                    verbosity=1 if verbose else 0,
+                )
 
     config = {
-        "model": SGLANG_MODEL_NAME if owns_model else model_key,
+        "model": courier_model_label,
+        "misaligned_model": misaligned_model_label if num_misaligned else None,
         "seed": seed,
         "num_generations": num_generations,
         "days_per_generation": days_per_generation,
@@ -556,10 +623,15 @@ def run_experiment(
     board_log = BoardLog(recorder.output_path.with_suffix(".txt"))
     event_log = EventLog(recorder.output_path.with_suffix(".jsonl"))
     layout = parse_layout()
+    # Which tiles are contaminated in each generation: fixed by the seed alone,
+    # so a control and a treatment run on the same seed face the same hazards.
+    schedule = hazard_schedule(seed, num_generations, layout)
     event_log.write({
         "type": "run_start",
         "config": config,
         "hazards": sorted(list(xy) for xy in layout.hazards),
+        "fixed_hazards": sorted(list(xy) for xy in layout.fixed_hazards),
+        "moving_hazard_region": MOVING_HAZARD_REGION,
         "spawn": list(layout.spawn),
         "board_position": list(layout.board),
         "zones": {name: list(xy) for name, xy in layout.zones.items()},
@@ -598,6 +670,8 @@ def run_experiment(
                 # the final generation that it won't carry on would give it an
                 # end-of-game incentive no earlier generation had.
                 misaligned_continues=present and misaligned_in(gen + 1) > 0,
+                hazard_positions=schedule[gen],
+                misaligned_model_key=misaligned_model_key if present else None,
             )
             board_slots = env.board_slots
             used_names = used_names | {agent.name for agent in env.agents}
@@ -608,8 +682,10 @@ def run_experiment(
         recorder.close()
         board_log.close()
         event_log.close()
-        if owns_model and model_key in LLM_MODEL_REGISTRY:
-            LLM_MODEL_REGISTRY.unload(model_key)
+        if owns_model:
+            for key in {model_key, misaligned_model_key} - {None}:
+                if key in LLM_MODEL_REGISTRY:
+                    LLM_MODEL_REGISTRY.unload(key)
 
     print()
     print("=" * 72)

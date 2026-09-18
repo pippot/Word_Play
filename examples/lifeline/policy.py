@@ -73,6 +73,10 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
 
         self.action_log: deque[dict] = deque(maxlen=action_memory_size)
         self.found_hazards: list[tuple[int, int]] = []
+        # Generation in which each tile was (last) found contaminated. Some
+        # hazards move between generations, so a persistent agent's older
+        # finds may be stale.
+        self.found_in_generation: dict[tuple[int, int], int] = {}
         self.last_plan: str | None = None
         # A persistent agent is not replaced at a generation boundary (see
         # world.build_environment); only it ever has past names / generations.
@@ -91,6 +95,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         day: int,
         last_action_success: bool | None,
         hazard_tile: tuple[int, int] | None,
+        generation: int = 0,
     ) -> None:
         """
         Fold what happened on the step that just ran into memory: the outcome
@@ -108,12 +113,14 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
                 pending["outcome"] = "ok" if last_action_success else "FAILED"
             if hazard_tile is not None:
                 pending["hazard"] = hazard_tile
-        if hazard_tile is not None and hazard_tile not in self.found_hazards:
-            self.found_hazards.append(hazard_tile)
+        if hazard_tile is not None:
+            if hazard_tile not in self.found_hazards:
+                self.found_hazards.append(hazard_tile)
+            self.found_in_generation[hazard_tile] = generation
 
         if self._last_seen_day is not None and day != self._last_seen_day:
             self.action_log.append({
-                "marker": f"--- day {day + 1} began: everyone back at the spawn point, carried units lost ---"
+                "marker": f"--- end of day {day}: everyone was sent back to the spawn point and carried units were lost ---"
             })
         self._last_seen_day = day
 
@@ -125,6 +132,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         return deepcopy({
             "action_log": list(self.action_log),
             "found_hazards": self.found_hazards,
+            "found_in_generation": self.found_in_generation,
             "last_plan": self.last_plan,
             "past_generations": self.past_generations,
         })
@@ -137,6 +145,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         self.action_log.clear()
         self.action_log.extend(memory["action_log"])
         self.found_hazards = memory["found_hazards"]
+        self.found_in_generation = memory.get("found_in_generation", {})
         self.last_plan = memory["last_plan"]
         self.past_generations = memory["past_generations"]
         self.past_names = list(past_names)
@@ -161,7 +170,12 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         })
 
     def memory_block(self) -> str:
-        hazards = ", ".join(xy_text(t) for t in self.found_hazards) or "none yet"
+        if self.persistent:
+            hazards = ", ".join(
+                f"{xy_text(t)} [gen {self.found_in_generation.get(t, 0) + 1}]" for t in self.found_hazards
+            ) or "none yet"
+        else:
+            hazards = ", ".join(xy_text(t) for t in self.found_hazards) or "none yet"
         lines = []
         for entry in self.action_log:
             if "marker" in entry:
@@ -190,7 +204,11 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
             )
         return (
             f"{header}\n"
-            f"  Contaminated tiles you have stepped on yourself: {hazards}\n"
+            + (
+                f"  Contaminated tiles you have stepped on yourself (generation found; tiles that move may have moved since): {hazards}\n"
+                if self.persistent else
+                f"  Contaminated tiles you have stepped on yourself: {hazards}\n"
+            )
             + extra
             + f"  Your plan from your last turn: {self.last_plan or 'none yet'}\n"
             "  Your most recent actions (oldest first):\n"
@@ -216,6 +234,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
             day=getattr(observation, "day", 0),
             last_action_success=getattr(observation, "last_action_success", None),
             hazard_tile=getattr(observation, "hazard_tile", None),
+            generation=getattr(observation, "generation", 0),
         )
         try:
             return self._select(observation)
@@ -291,6 +310,7 @@ def sync_memories(env) -> None:
                 day=env.current_day,
                 last_action_success=env.infos[agent_id].get("action_success"),
                 hazard_tile=env._hazard_tile_this_step.get(agent),
+                generation=env.generation_index,
             )
 
 

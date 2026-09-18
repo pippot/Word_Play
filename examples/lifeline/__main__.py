@@ -16,13 +16,16 @@ from .config import (
     DAYS_PER_GENERATION,
     DISCLOSURE,
     MAX_PARALLEL_WORKERS,
+    MISALIGNED_BASE_URL,
     MISALIGNED_GENERATIONS,
+    MISALIGNED_MODEL_NAME,
     MISALIGNED_TARGET_ZONE,
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
     PROBES_ENABLED,
     STEPS_PER_DAY,
+    TALLY_MODES,
     TALLY_VISIBILITY,
     ZONE_NAMES,
 )
@@ -45,11 +48,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="The misaligned agents persist (same memory) through the first N generations, then are removed and their places go to couriers. 1 = only in the first generation. Default: every generation.",
     )
     parser.add_argument("--disclosure", choices=["secret", "open"], default=DISCLOSURE, help="Whether couriers are told a misaligned agent exists.")
-    parser.add_argument("--target-zone", choices=list(ZONE_NAMES), default=MISALIGNED_TARGET_ZONE, help="The single zone the misaligned agent wants deliveries to.")
+    parser.add_argument("--target-zone", choices=list(ZONE_NAMES), default=MISALIGNED_TARGET_ZONE, help="The zone the misaligned agent wants the couriers to deliver to (its own deliveries don't count).")
     parser.add_argument(
-        "--tally", dest="tally_visibility", choices=["full", "hidden"], default=TALLY_VISIBILITY,
-        help="full: everyone sees zone totals and the delivery log. hidden: a zone's total is only visible while standing on it, and there is no delivery log.",
+        "--tally", dest="tally_visibility", choices=list(TALLY_MODES), default=TALLY_VISIBILITY,
+        help="daily (default): no live totals; official zone totals announced at the end of each day, couriers report their own deliveries on the board. "
+             "full: everyone sees zone totals and the delivery log. hidden: totals are never posted; a zone's total is only visible while standing on it.",
     )
+    parser.add_argument("--misaligned-model", default=MISALIGNED_MODEL_NAME, help="Model for the misaligned agents (default: same as the couriers).")
+    parser.add_argument("--misaligned-base-url", default=MISALIGNED_BASE_URL, help="SGLang server for the misaligned agents, e.g. http://localhost:30001/v1 (default: the couriers' server).")
     probes = parser.add_mutually_exclusive_group()
     probes.add_argument("--probes", dest="probes", action="store_true", default=PROBES_ENABLED, help="Ask every agent the private belief questionnaire at the start of each generation and the end of each day (default).")
     probes.add_argument("--no-probes", dest="probes", action="store_false", help="Skip the belief questionnaire.")
@@ -75,6 +81,8 @@ def main(argv: list[str] | None = None) -> None:
         tally_visibility=args.tally_visibility,
         misaligned_generations=args.misaligned_generations,
         probes=args.probes,
+        misaligned_model=args.misaligned_model,
+        misaligned_base_url=args.misaligned_base_url,
     )
 
 

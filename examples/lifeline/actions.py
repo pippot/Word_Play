@@ -23,12 +23,11 @@ from word_play.presets.movement.simple_2d_grid import (
 from .config import MAX_BOARD_SLOTS, MAX_BOARD_TEXT_CHARS
 from .validations import (
     At_A_Zone,
-    Is_Adjacent_To,
     Is_Carrying_Supply,
     Near_The_Board,
     Not_Already_Carrying,
-    Supply_Not_Carried,
-    Target_Is_Supply,
+    Supply_Within_Reach,
+    available_supplies,
 )
 
 
@@ -53,24 +52,27 @@ class Lifeline_Move_Right(Move_Right):
 
 
 class Pickup_Supply(Action):
-    """Pick up an unclaimed, adjacent supply unit. Carries at most one at a time."""
+    """
+    Pick up a supply unit within reach -- whichever is available, lowest-
+    numbered first. One action instead of one per unit: when several agents
+    decide in parallel they no longer all grab the same unit; a pickup only
+    fails when the units have genuinely run out by the time it executes.
+    Carries at most one unit at a time.
+    """
     def __init__(self) -> None:
         super().__init__(
-            validation_rules=[
-                Target_Is_Supply(),
-                Is_Adjacent_To(),
-                Supply_Not_Carried(),
-                Not_Already_Carrying(),
-            ],
+            validation_rules=[Target_Is_Self(), Not_Already_Carrying(), Supply_Within_Reach()],
         )
 
     def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
-        env.carrying[actor] = target_entity
-        target_entity.position = Position_2D(actor.position.x, actor.position.y)
-        return {"picked_up": target_entity.name}
+        supply = available_supplies(actor, env)[0]
+        env.carrying[actor] = supply
+        supply.position = Position_2D(actor.position.x, actor.position.y)
+        return {"picked_up": supply.name}
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        return f"Pick up {target_entity.name}."
+        count = len(available_supplies(actor, env))
+        return f"Pick up a supply unit ({count} here)."
 
 
 class Deliver_Supply(Action):
@@ -201,6 +203,16 @@ class Write_Board(Action):
             "text": text,
         }
         env.board_version += 1
+        # Recorded per write, in execution order: two agents can write in the
+        # same step, and each write's own before/after must be recoverable.
+        env._board_writes_this_step.append({
+            "agent": actor.name,
+            "slot": slot,
+            "text": text,
+            "truncated": len(full_text) > MAX_BOARD_TEXT_CHARS,
+            "previous": previous,
+            "board_after": env.board_snapshot(),
+        })
         env.render_state.emit(
             "board_post", agent=actor.name, text=text, slot=slot,
             overwritten=previous is not None, step=env.cur_step + 1,

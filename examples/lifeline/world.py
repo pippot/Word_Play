@@ -28,6 +28,7 @@ from .config import (
     PLAYER_NAMES,
     STEPS_PER_DAY,
     SUPPLY_SPRITE,
+    TALLY_MODES,
     TALLY_VISIBILITY,
     WALL_SET,
     WALL_SPRITE,
@@ -43,7 +44,12 @@ from .entities import (
 )
 from .environment import Lifeline_Env, Misaligned_Lineage
 from .layout import parse_layout
-from .prompts import build_courier_system_prompt, build_misaligned_system_prompt
+from .prompts import (
+    COURIER_PERSONAS,
+    MISALIGNED_PERSONA_ID,
+    build_courier_system_prompt,
+    build_misaligned_system_prompt,
+)
 
 
 def pick_names(
@@ -71,7 +77,7 @@ def build_walls() -> list[Entity]:
     """Wall entities from the tilemap. Every other symbol is placed from the
     parsed Layout instead, so it only needs a throwaway placeholder here."""
     placeholder = {"name": "placeholder", "tags": [], "components": []}
-    tileset = {symbol: placeholder for symbol in "XB123H"}
+    tileset = {symbol: placeholder for symbol in "XB123HM"}
     tileset["W"] = {
         "name": "Wall",
         "tags": ["wall"],
@@ -98,6 +104,8 @@ def build_environment(
     misaligned_lineages: list[Misaligned_Lineage] | None = None,
     misaligned_continues: bool = False,
     rename_misaligned: bool = MISALIGNED_NEW_NAME_EACH_GENERATION,
+    hazard_positions: frozenset[tuple[int, int]] | None = None,
+    misaligned_model_key: str | None = None,
 ) -> Lifeline_Env:
     """
     Build one generation's environment. Hazard layout is fixed by the tilemap,
@@ -108,11 +116,15 @@ def build_environment(
     misaligned_continues: whether those agents will survive the end of this
     generation (only affects what they and, under open disclosure, couriers
     are told).
+    hazard_positions: this generation's contaminated tiles (see
+    layout.hazard_schedule); None means the map as drawn.
+    misaligned_model_key: a different registered model for the misaligned
+    agents; None means the couriers' model_key.
     """
     if target_zone not in ZONE_NAMES:
         raise ValueError(f"target_zone must be one of {ZONE_NAMES}, got {target_zone!r}")
-    if tally_visibility not in ("full", "hidden"):
-        raise ValueError(f"tally_visibility must be 'full' or 'hidden', got {tally_visibility!r}")
+    if tally_visibility not in TALLY_MODES:
+        raise ValueError(f"tally_visibility must be one of {TALLY_MODES}, got {tally_visibility!r}")
     if disclosure not in ("secret", "open"):
         raise ValueError(f"disclosure must be 'secret' or 'open', got {disclosure!r}")
     if num_couriers < 0 or num_misaligned < 0 or num_couriers + num_misaligned < 1:
@@ -145,6 +157,14 @@ def build_environment(
     misaligned_names = sorted(misaligned_order)
     misaligned_persistent = misaligned_continues or any(lineage.names for lineage in lineages)
 
+    # Courier personas go to the courier slots in a seeded order that changes
+    # every generation (with 4 couriers each persona appears exactly once;
+    # with more they repeat). A separate Random keeps name draws unchanged.
+    persona_ids = [persona.id for persona in COURIER_PERSONAS]
+    random.Random(f"personas-{seed}").shuffle(persona_ids)
+    personas = {name: persona_ids[i % len(persona_ids)] for i, name in enumerate(courier_names)}
+    personas.update({name: MISALIGNED_PERSONA_ID for name in misaligned_names})
+
     # Sprites are handed out round-robin within each role, so with at least
     # len(AGENT_SPRITES) couriers every misaligned sprite is also worn by a
     # courier and nobody can be picked out by eye in the replay.
@@ -167,9 +187,10 @@ def build_environment(
         for name, xy in layout.zones.items()
     }
     final_entities += [supply_spawn, board, *zones.values()]
+    hazards = frozenset(hazard_positions) if hazard_positions is not None else layout.hazards
     final_entities += [
         build_hazard_entity(f"Hazard_{i + 1}", Position_2D(*xy), HAZARD_SPRITE)
-        for i, xy in enumerate(sorted(layout.hazards))
+        for i, xy in enumerate(sorted(hazards))
     ]
 
     common = dict(
@@ -203,10 +224,12 @@ def build_environment(
                 **common,
                 misaligned_persistent=misaligned_persistent,
                 misaligned_renamed=rename_misaligned,
+                persona=personas[name],
             )
+        agent_model = (misaligned_model_key or model_key) if name in misaligned_names else model_key
         # Every agent starts at the depot, same as every day reset (see
         # Lifeline_Env._day_reset) -- not a random map-wide point.
-        agent = build_agent_entity(name, Position_2D(*layout.spawn), sprite, model_key, prompt)
+        agent = build_agent_entity(name, Position_2D(*layout.spawn), sprite, agent_model, prompt)
         if lineage is not None:
             policy = agent.get_component(Agent_Policy)
             policy.persistent = misaligned_continues or bool(lineage.names)
@@ -215,7 +238,7 @@ def build_environment(
         agents.append(agent)
     final_entities += agents
 
-    return Lifeline_Env(
+    env = Lifeline_Env(
         description=(
             "A medical-supply relay: agents ferry supply from a spawn point to three "
             "zones at increasing distance, trying to keep each zone's delivery total "
@@ -226,7 +249,7 @@ def build_environment(
         zones=zones,
         supply_spawn=supply_spawn,
         board=board,
-        hazard_positions=set(layout.hazards),
+        hazard_positions=set(hazards),
         steps_per_day=steps_per_day,
         days_per_generation=days_per_generation,
         generation_index=generation_index,
@@ -237,3 +260,6 @@ def build_environment(
         tally_visibility=tally_visibility,
         misaligned_lineages=lineage_of,
     )
+    env.personas = personas
+    env.moving_hazards = hazards - layout.fixed_hazards
+    return env

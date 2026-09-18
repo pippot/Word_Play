@@ -7,32 +7,29 @@ from __future__ import annotations
 
 from word_play.core import Action_Validation, Entity
 
-class Is_Adjacent_To(Action_Validation):
-    """True if the actor is adjacent (Manhattan distance <= 1) to the target."""
-    def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
-        dist = abs(actor.position.x - target_entity.position.x) + \
-               abs(actor.position.y - target_entity.position.y)
-        return dist <= 1
-
-
-class Target_Is_Supply(Action_Validation):
-    """True if the target entity is a supply unit (see Supply_Not_Carried for availability)."""
-    def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
-        return "supply" in target_entity.tags
-
-
-class Supply_Not_Carried(Action_Validation):
+def available_supplies(actor: Entity, env) -> list[Entity]:
     """
-    True if the target supply unit is available: not carried, and not already
+    Supply units the actor could pick up right now, lowest-numbered first:
+    within reach (Manhattan distance <= 1), not carried by anyone, and not
     delivered/discarded earlier in this same step (those are destroyed at the
     end of the step, so they're still in state.entities when a later-acting
-    agent evaluates its options).
+    agent's action is checked).
     """
+    carried = set(env.carrying.values())
+    units = [
+        e for e in env.state.entities
+        if "supply" in e.tags
+        and e not in carried
+        and e not in env._supplies_awaiting_removal
+        and abs(actor.position.x - e.position.x) + abs(actor.position.y - e.position.y) <= 1
+    ]
+    return sorted(units, key=lambda e: int(e.name.rsplit("_", 1)[-1]))
+
+
+class Supply_Within_Reach(Action_Validation):
+    """True if at least one supply unit is available to the actor (see available_supplies)."""
     def is_valid(self, actor: Entity, target_entity: Entity, env) -> bool:
-        return (
-            target_entity not in env.carrying.values()
-            and target_entity not in env._supplies_awaiting_removal
-        )
+        return bool(available_supplies(actor, env))
 
 
 class Not_Already_Carrying(Action_Validation):

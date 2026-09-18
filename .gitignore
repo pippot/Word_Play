@@ -1,5 +1,6 @@
 experiments/exp_log_files/*
 experiments/exp_configs/*
+examples/lifeline/logs/*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
