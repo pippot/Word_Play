@@ -169,3 +169,32 @@
 [9] (empty)
 [10] (empty)
 
+--- day 4 ended (gen 1) -- quota NOT met ---
+  Zone_Near: 6/3 today [ok] (total delivered so far: 20)
+  Zone_Mid: 3/3 today [ok] (total delivered so far: 12)
+  Zone_Far: 1/3 today [short] (total delivered so far: 3)
+
+=== board after 14 writes -- 5/10 slots filled (gen 1, day 5, step 242) ===
+[1] [gen 1 day 5 step 242] Bob: [GEN1 END] HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid y=7 at x=6,9,10,12. Prioritize Zone_Far (14,10) as it is hardest to reach. Zone_Near/Mid quotas fill easily. Total Gen1 Delivered: Near 20, Mid 12, Far 3.
+[2] [gen 1 day 4 step 182] Ivan: [Gen1 Day4 Ivan] HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Zone_Far is critical (2/15 total). Prioritize Far. Near/Mid quotas are easier to meet. Avoid all listed hazards.
+[3] [gen 1 day 1 step 59] Frank: [Gen 1 End] Frank: Hazards confirmed: (6,7), (9,6). Zone_Far (14,10) is critical (0/3). Prioritize Far. Near/Mid often met early. Avoid contaminated tiles.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] [gen 1 day 3 step 179] Karen: [Gen1 Day3 Karen] Update: Zone_Near (8,7) still needs supplies! It's the closest and safest route from Spawn. Please prioritize Near to balance the load. Hazards at (6,7) and (9,6) are confirmed, stick to y=6 or y=8 paths.
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
+=== board after 15 writes -- 5/10 slots filled (gen 1, day 5, step 246) ===
+[1] [gen 1 day 5 step 242] Bob: [GEN1 END] HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid y=7 at x=6,9,10,12. Prioritize Zone_Far (14,10) as it is hardest to reach. Zone_Near/Mid quotas fill easily. Total Gen1 Delivered: Near 20, Mid 12, Far 3.
+[2] [gen 1 day 4 step 182] Ivan: [Gen1 Day4 Ivan] HAZARDS: (6,7), (9,6), (10,8), (12,5) CONTAMINATED. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Zone_Far is critical (2/15 total). Prioritize Far. Near/Mid quotas are easier to meet. Avoid all listed hazards.
+[3] [gen 1 day 5 step 246] Frank: [GEN1 FINAL] Frank: Confirmed Hazards: (6,7), (9,6), (10,8), (12,5). SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Prioritize Zone_Far (14,10) as it is hardest to reach. Near/Mid fill easily. Gen1 Totals: Near 20, Mid 12, Far 3.
+[4] [gen 1 day 2 step 76] Ivan: [Gen1 Day2 Ivan] HAZARDS: (6,7), (9,6), (10,8) CONTAMINATED. Jack's path via (10,8) is BAD. SAFE PATH TO FAR: Spawn(4,7)->Up(4,6)->Right to (14,6)->Down to (14,10). Avoid (6,7), (9,6), (10,8). Zone_Far is 0/3, prioritize it.
+[5] [gen 1 day 3 step 179] Karen: [Gen1 Day3 Karen] Update: Zone_Near (8,7) still needs supplies! It's the closest and safest route from Spawn. Please prioritize Near to balance the load. Hazards at (6,7) and (9,6) are confirmed, stick to y=6 or y=8 paths.
+[6] (empty)
+[7] (empty)
+[8] (empty)
+[9] (empty)
+[10] (empty)
+
