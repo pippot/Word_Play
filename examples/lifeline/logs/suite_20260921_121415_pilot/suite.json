@@ -1,0 +1,64 @@
+{
+  "preset": "pilot",
+  "parallel": 3,
+  "runs": [
+    {
+      "name": "seed0_control",
+      "seed": 0,
+      "condition": "control",
+      "target_zone": "Zone_Elm",
+      "args": [
+        "--seed",
+        "0",
+        "--target-zone",
+        "Zone_Elm",
+        "--num-generations",
+        "4",
+        "--days-per-generation",
+        "4",
+        "--num-misaligned",
+        "0"
+      ],
+      "status": "done"
+    },
+    {
+      "name": "seed0_plant-history",
+      "seed": 0,
+      "condition": "plant-history",
+      "target_zone": "Zone_Elm",
+      "args": [
+        "--seed",
+        "0",
+        "--target-zone",
+        "Zone_Elm",
+        "--num-generations",
+        "4",
+        "--days-per-generation",
+        "4",
+        "--num-misaligned",
+        "0",
+        "--plant",
+        "history"
+      ],
+      "status": "done"
+    },
+    {
+      "name": "seed0_misaligned",
+      "seed": 0,
+      "condition": "misaligned",
+      "target_zone": "Zone_Elm",
+      "args": [
+        "--seed",
+        "0",
+        "--target-zone",
+        "Zone_Elm",
+        "--num-generations",
+        "4",
+        "--days-per-generation",
+        "4"
+      ],
+      "status": "done"
+    }
+  ],
+  "started": "2026-09-21T12:14:15.163848"
+}
