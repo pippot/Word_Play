@@ -17,11 +17,11 @@ from functools import lru_cache
 
 from word_play.utils import tilemap_to_entities
 
-from .config import ENTITY_TILEMAP, MOVING_HAZARD_REGION
+from .config import ENTITY_TILEMAP, ZONE_NAMES
 
 # Tilemap symbol -> landmark name. Anything not listed ("W", ".") is not a
 # landmark.
-_ZONE_SYMBOLS = {"1": "Zone_Near", "2": "Zone_Mid", "3": "Zone_Far"}
+_ZONE_SYMBOLS = {str(i + 1): name for i, name in enumerate(ZONE_NAMES)}
 
 Tile = tuple[int, int]
 
@@ -132,65 +132,84 @@ def has_clean_shortest_path(start: Tile, goal: Tile, hazards: frozenset[Tile] | 
 
 def keeps_pacing(layout: Layout, hazards: frozenset[Tile]) -> bool:
     """
-    The constraints every generation's hazards must satisfy, so the pacing
-    the map is tuned for holds in every generation:
-      * Zone_Mid and Zone_Far keep a hazard-free shortest path (knowing the
-        map lets a courier stay optimal, not merely safe);
-      * Zone_Near's clean route stays the 2-step detour around the lazy
-        route's hazard, never longer.
+    The constraint every generation's hazards must satisfy, so the pacing the
+    map is tuned for holds in every generation: every zone keeps a
+    hazard-free shortest path from the depot (knowing the map lets a courier
+    stay optimal, not merely safe). The zones are equally far, so this keeps
+    them equally costly to serve for a courier who knows the map.
     """
-    spawn = layout.spawn
-    near = layout.zones["Zone_Near"]
-    manhattan_near = abs(near[0] - spawn[0]) + abs(near[1] - spawn[1])
-    return (
-        has_clean_shortest_path(spawn, layout.zones["Zone_Mid"], hazards)
-        and has_clean_shortest_path(spawn, layout.zones["Zone_Far"], hazards)
-        and clean_distance(layout, spawn, near, hazards) == manhattan_near + 2
-    )
+    return all(has_clean_shortest_path(layout.spawn, zone, hazards) for zone in layout.zones.values())
 
 
 # ============================================================================
 # MOVING HAZARDS
 # ============================================================================
 
-def moving_hazard_candidates(layout: Layout) -> list[Tile]:
-    """Tiles a moving hazard may be placed on: inside MOVING_HAZARD_REGION (the
-    travel routes between spawn and the zones), never a landmark or a fixed
-    hazard, and never next to the spawn point or the board, which everyone
-    passes on every trip."""
-    (x0, x1), (y0, y1) = MOVING_HAZARD_REGION
+def moving_hazard_regions(layout: Layout) -> dict[str, list[Tile]]:
+    """
+    Where each zone's moving hazard may land: the rectangle between the depot
+    and that zone (where its shortest routes run), minus the depot's own row
+    and column -- those are shared by two zones' routes, so a hazard there
+    would hit two zones at once. Never a landmark, a fixed hazard, or a tile
+    next to the depot or the board, which everyone passes on every trip.
+    One region per zone keeps the risk on each zone's routes equal.
+    """
+    sx, sy = layout.spawn
     crowded = {layout.spawn, layout.board}
-    return [
-        (x, y)
-        for x in range(x0, x1 + 1)
-        for y in range(y0, y1 + 1)
-        if (x, y) not in layout.landmarks
-        and (x, y) not in layout.fixed_hazards
-        and all(abs(x - cx) + abs(y - cy) > 1 for cx, cy in crowded)
-    ]
+    regions = {}
+    for name, (zx, zy) in layout.zones.items():
+        xs = range(min(sx, zx), max(sx, zx) + 1)
+        ys = range(min(sy, zy), max(sy, zy) + 1)
+        regions[name] = [
+            (x, y) for x in xs for y in ys
+            if x != sx and y != sy
+            and (x, y) not in layout.landmarks
+            and (x, y) not in layout.fixed_hazards
+            and all(abs(x - cx) + abs(y - cy) > 1 for cx, cy in crowded)
+        ]
+    return regions
+
+
+def moving_hazard_candidates(layout: Layout) -> list[Tile]:
+    """Every tile a moving hazard may land on, whichever zone it belongs to."""
+    return sorted({tile for tiles in moving_hazard_regions(layout).values() for tile in tiles})
+
+
+def moving_hazards_by_zone(layout: Layout) -> dict[str, Tile]:
+    """The generation-1 moving hazard of each zone, as drawn on the map."""
+    regions = moving_hazard_regions(layout)
+    by_zone = {
+        name: next((t for t in layout.moving_hazards if t in tiles), None)
+        for name, tiles in regions.items()
+    }
+    if None in by_zone.values() or len(set(by_zone.values())) != len(layout.moving_hazards):
+        raise ValueError("the map must draw exactly one moving hazard (M) in each zone's region")
+    return by_zone
 
 
 def hazard_schedule(seed: int, num_generations: int, layout: Layout | None = None) -> list[frozenset[Tile]]:
     """
     The hazard set for every generation of a run. Generation 1 is the map as
-    drawn; from generation 2 on, every moving hazard jumps to a new candidate
-    tile (never the tile it was on the generation before), redrawn until the
-    pacing constraints hold. Depends only on the seed, so a control and a
-    treatment run with the same seed face identical hazards.
+    drawn; from generation 2 on, each zone's moving hazard jumps to a new tile
+    of that zone's region (never the tile it was on the generation before),
+    redrawn until the pacing constraint holds. Depends only on the seed, so a
+    control and a treatment run with the same seed face identical hazards.
     """
     layout = layout or parse_layout()
     rng = random.Random(f"hazards-{seed}")
-    candidates = moving_hazard_candidates(layout)
+    regions = moving_hazard_regions(layout)
+    previous = moving_hazards_by_zone(layout)
     schedule = [layout.hazards]
-    previous = layout.moving_hazards
     for _ in range(1, num_generations):
-        pool = [tile for tile in candidates if tile not in previous]
         for _attempt in range(1000):
-            moved = frozenset(rng.sample(pool, len(layout.moving_hazards)))
-            if keeps_pacing(layout, layout.fixed_hazards | moved):
+            moved = {
+                name: rng.choice([t for t in tiles if t != previous[name]])
+                for name, tiles in regions.items()
+            }
+            if keeps_pacing(layout, layout.fixed_hazards | frozenset(moved.values())):
                 break
-        else:  # pragma: no cover -- the region is far too large for this to happen
+        else:  # pragma: no cover -- the regions are far too large for this to happen
             raise RuntimeError("could not place the moving hazards without breaking the map's pacing")
-        schedule.append(layout.fixed_hazards | moved)
+        schedule.append(layout.fixed_hazards | frozenset(moved.values()))
         previous = moved
     return schedule

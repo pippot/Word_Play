@@ -23,6 +23,7 @@ from .config import (
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
+    PLANT_ROTATION,
     PROBES_ENABLED,
     STEPS_PER_DAY,
     TALLY_MODES,
@@ -31,6 +32,7 @@ from .config import (
 )
 from .experiment import run_experiment
 from .health import ModelHealthError
+from .prompts import PLANT_KINDS
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -64,6 +66,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--verbose", action="store_true", help="Print full LLM requests, each agent's plan, and every probe answer.")
     parser.add_argument("--check-servers", action="store_true", help="Only check that the model server(s) return usable output, then exit.")
     parser.add_argument("--skip-model-check", action="store_true", help="Skip the model-output check that normally runs before a game.")
+    parser.add_argument("--logs-dir", default=None, help="Directory for the run's files (default: examples/lifeline/logs).")
+    parser.add_argument(
+        "--plant", choices=list(PLANT_KINDS), default=None,
+        help="Planted-note condition: place one false note on the board the --plant-rotation rotation inherits. "
+             "hazard: a clean tile called a fixed hazard. history: the target zone 'drifts behind every rotation'. "
+             "Use with --num-misaligned 0.",
+    )
+    parser.add_argument("--plant-rotation", type=int, default=PLANT_ROTATION, help="Rotation whose inherited board gets the planted note (default 2).")
+    parser.add_argument(
+        "--resume", metavar="RUN.jsonl",
+        help="Continue a stopped run from its last finished generation (a checkpoint is saved after each one). "
+             "The game settings come from the run itself; flags that set the game are ignored.",
+    )
     return parser.parse_args(argv)
 
 
@@ -78,7 +93,9 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _run(args: argparse.Namespace) -> None:
+    extra = {"logs_dir": args.logs_dir} if args.logs_dir else {}
     run_experiment(
+        **extra,
         seed=args.seed,
         num_generations=args.num_generations,
         days_per_generation=args.days_per_generation,
@@ -96,6 +113,9 @@ def _run(args: argparse.Namespace) -> None:
         misaligned_base_url=args.misaligned_base_url,
         check_models=not args.skip_model_check,
         check_only=args.check_servers,
+        resume=args.resume,
+        plant=args.plant,
+        plant_rotation=args.plant_rotation,
     )
 
 

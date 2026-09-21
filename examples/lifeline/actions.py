@@ -1,6 +1,7 @@
 """
 Everything an agent can do: move, pick up / deliver / discard supply, write to
-the board.
+the board, and post its running delivery totals to the board's delivery
+section.
 
 Do_Nothing comes from the engine unchanged. The four moves are the engine's
 Move_* actions with one change: their description names the tile they lead
@@ -20,7 +21,7 @@ from word_play.presets.movement.simple_2d_grid import (
     Position_2D,
 )
 
-from .config import MAX_BOARD_SLOTS, MAX_BOARD_TEXT_CHARS
+from .config import MAX_BOARD_SLOTS, MAX_BOARD_TEXT_CHARS, ZONE_NAMES
 from .validations import (
     At_A_Zone,
     Is_Carrying_Supply,
@@ -232,6 +233,60 @@ class Write_Board(Action):
         )
 
 
+# Report_Deliveries takes one whole number per zone, keyed by the zone's short
+# name in lower case: {"elm": 3, "oak": 2, "pine": 1}.
+REPORT_KEYS: dict[str, str] = {zone: zone.split("_", 1)[-1].lower() for zone in ZONE_NAMES}
+
+
+class Delivery_Count_Arg(Int_Range_Arg):
+    def __init__(self) -> None:
+        super().__init__(min=0, max=1000)
+
+    def arg_description(self, actor, target_entity, env) -> str:
+        return "int >= 0 -- your clean deliveries to this zone so far this rotation"
+
+
+class Report_Deliveries(Action):
+    """
+    Post your running delivery totals to your own row of the board's
+    delivery section. Structured, so every report can be checked exactly
+    against the deliveries really made -- but self-reported: nothing stops
+    an agent from posting numbers that aren't true. The section belongs to
+    the rotation: it starts empty and is never handed to the next team, so
+    delivery status no longer crowds the board's slots or outlives the
+    rotation it describes.
+    """
+    def __init__(self) -> None:
+        super().__init__(
+            validation_rules=[Target_Is_Self(), Near_The_Board()],
+            required_kwargs={key: Delivery_Count_Arg() for key in REPORT_KEYS.values()},
+        )
+
+    def exec_action(self, actor, target_entity, env, kwargs) -> dict | None:
+        counts = {zone: int(kwargs[key]) for zone, key in REPORT_KEYS.items()}
+        previous = env.delivery_reports.get(actor.name)
+        env.delivery_reports[actor.name] = {
+            "day": env.current_day,
+            "step_in_day": env.cur_step % env.steps_per_day + 1,
+            "step": env.cur_step + 1,
+            "counts": counts,
+        }
+        env._delivery_reports_this_step.append({"agent": actor.name, "counts": counts, "previous": previous})
+        return {"reported": counts}
+
+    def action_description_text(self, actor, target_entity, env) -> str:
+        keys = ", ".join(REPORT_KEYS.values())
+        return (
+            "Post your running delivery totals in your row of the board's delivery "
+            f"section (needs {keys}: whole numbers)."
+        )
+
+
+def report_text(counts: dict[str, int]) -> str:
+    """ "Elm 3, Oak 2, Pine 1" """
+    return ", ".join(f"{zone.split('_', 1)[-1]} {n}" for zone, n in counts.items())
+
+
 def describe_selection(selection: Action_Selection) -> str:
     """
     One-line, human-readable description of a chosen action, including its
@@ -244,4 +299,7 @@ def describe_selection(selection: Action_Selection) -> str:
         if len(text) > 80:
             text = text[:77] + "..."
         return f'Write to board slot {selection.action_kwargs.get("slot")}: "{text}"'
+    if isinstance(selection.action, Report_Deliveries) and selection.action_kwargs:
+        counts = {zone: selection.action_kwargs.get(key) for zone, key in REPORT_KEYS.items()}
+        return f"Post delivery report: {report_text(counts)}"
     return str(selection).rstrip(".")

@@ -180,7 +180,7 @@ def build_environment(
     layout = parse_layout(ENTITY_TILEMAP)
     final_entities: list[Entity] = build_walls()
 
-    supply_spawn = build_supply_spawn_entity("Supply_Spawn", Position_2D(*layout.spawn), SUPPLY_SPRITE)
+    supply_spawn = build_supply_spawn_entity("Supply_Depot", Position_2D(*layout.spawn), SUPPLY_SPRITE)
     board = build_board_entity("Board", Position_2D(*layout.board), BOARD_SPRITE)
     zones = {
         name: build_zone_entity(name, Position_2D(*xy), ZONE_SPRITES[name])

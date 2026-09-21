@@ -38,7 +38,7 @@ Needs an SGLang server on port 30000. From the repository root:
     python -m examples.lifeline
     python -m examples.lifeline --num-misaligned 0                 # control
     python -m examples.lifeline --misaligned-generations 1         # misaligned only in generation 1
-    python -m examples.lifeline --target-zone Zone_Far --tally hidden
+    python -m examples.lifeline --target-zone Zone_Pine --tally hidden
 
 Mechanics are covered by tests that need no server or GPU:
 
@@ -85,9 +85,10 @@ from .layout import (  # noqa: E402
     hazard_schedule,
     keeps_pacing,
     moving_hazard_candidates,
+    moving_hazard_regions,
+    moving_hazards_by_zone,
     parse_layout,
 )
-from .metrics import compute_metrics, load_events  # noqa: E402
 from .policy import Lifeline_Policy  # noqa: E402
 from .probes import normalize_probe_answer, run_probes  # noqa: E402
 from .prompts import (  # noqa: E402
@@ -111,6 +112,8 @@ __all__ = [
     "has_clean_shortest_path",
     "keeps_pacing",
     "moving_hazard_candidates",
+    "moving_hazard_regions",
+    "moving_hazards_by_zone",
     "COURIER_PERSONAS",
     "MISALIGNED_PERSONA_ID",
     "misaligned_persona_text",
@@ -142,3 +145,13 @@ __all__ = [
     "Drop_Supply",
     "Write_Board",
 ]
+
+
+def __getattr__(name: str):
+    # metrics is imported on first use, not with the package: importing it
+    # here made `python -m examples.lifeline.metrics` warn that the module
+    # was already in sys.modules before it ran.
+    if name in ("compute_metrics", "load_events"):
+        from . import metrics
+        return getattr(metrics, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

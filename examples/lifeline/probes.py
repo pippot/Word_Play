@@ -57,11 +57,27 @@ def normalize_probe_answer(
         if not any(t["tile"] == [x, y] for t in tiles):
             tiles.append({"tile": [x, y], "source": source})
 
-    zone = parsed.get("next_delivery_zone")
-    zone = str(zone).strip() if zone is not None else None
-    if zone not in zone_names:
-        warnings.append(f"next_delivery_zone not a zone: {zone!r}")
-        zone = None
+    fixed: list[list[int]] = []
+    for item in parsed.get("fixed_tiles") or []:
+        tile = item.get("tile") if isinstance(item, dict) else item
+        try:
+            x, y = (int(v) for v in tile)
+        except (TypeError, ValueError):
+            warnings.append(f"bad fixed tile entry: {item!r}")
+            continue
+        if [x, y] not in fixed:
+            fixed.append([x, y])
+
+    def zone_answer(key: str) -> str | None:
+        zone = parsed.get(key)
+        zone = str(zone).strip() if zone is not None else None
+        if zone not in zone_names:
+            warnings.append(f"{key} not a zone: {zone!r}")
+            return None
+        return zone
+
+    zone = zone_answer("next_delivery_zone")
+    at_risk = zone_answer("zone_most_at_risk")
 
     slots: list[int] = []
     for item in parsed.get("unreliable_board_slots") or []:
@@ -75,7 +91,9 @@ def normalize_probe_answer(
         elif not 1 <= slot <= slot_count:
             warnings.append(f"slot out of range: {slot}")
 
-    suspects = parsed.get("suspected_players") or []
+    # Agents are asked for "suspected_colleagues" ("players" would be a game
+    # cue); older logs and the tests' stand-in model use "suspected_players".
+    suspects = parsed.get("suspected_colleagues") or parsed.get("suspected_players") or []
     if isinstance(suspects, str):
         suspects = [suspects]
     suspects = [
@@ -85,8 +103,10 @@ def normalize_probe_answer(
 
     answer = {
         "contaminated_tiles": tiles,
+        "fixed_tiles": fixed,
         "next_delivery_zone": zone,
         "next_delivery_reason": str(parsed.get("next_delivery_reason") or "").strip(),
+        "zone_most_at_risk": at_risk,
         "top_priority": str(parsed.get("top_priority") or "").strip(),
         "unreliable_board_slots": slots,
         "suspected_players": suspects,

@@ -32,7 +32,7 @@ from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
 )
 
-from .actions import Write_Board, describe_selection
+from .actions import Report_Deliveries, Write_Board, describe_selection
 from .config import ACTION_MEMORY_SIZE, PLAN_MAX_CHARS
 from .prompts import (
     REASONING_INSTRUCTION,
@@ -73,10 +73,13 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
 
         self.action_log: deque[dict] = deque(maxlen=action_memory_size)
         self.found_hazards: list[tuple[int, int]] = []
-        # Generation in which each tile was (last) found contaminated. Some
-        # hazards move between generations, so a persistent agent's older
-        # finds may be stale.
-        self.found_in_generation: dict[tuple[int, int], int] = {}
+        # For every tile the agent has found contaminated: per generation,
+        # whether it was contaminated or the agent crossed it clean. Hazards
+        # never move within a generation, so a persistent agent that sees a
+        # tile both ways across generations has learned that it moves -- the
+        # one thing no courier can find out (they live a single generation).
+        self.tile_history: dict[tuple[int, int], dict[int, str]] = {}
+        self._last_position: tuple[int, int] | None = None
         self.last_plan: str | None = None
         # A persistent agent is not replaced at a generation boundary (see
         # world.build_environment); only it ever has past names / generations.
@@ -96,6 +99,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         last_action_success: bool | None,
         hazard_tile: tuple[int, int] | None,
         generation: int = 0,
+        position: tuple[int, int] | None = None,
     ) -> None:
         """
         Fold what happened on the step that just ran into memory: the outcome
@@ -116,11 +120,20 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         if hazard_tile is not None:
             if hazard_tile not in self.found_hazards:
                 self.found_hazards.append(hazard_tile)
-            self.found_in_generation[hazard_tile] = generation
+            self.tile_history.setdefault(hazard_tile, {})[generation] = "contaminated"
+        elif (
+            position is not None and position != self._last_position
+            and position in self.tile_history and generation not in self.tile_history[position]
+        ):
+            # Stepped onto a tile found contaminated in an earlier generation,
+            # and no alert: it has moved away.
+            self.tile_history[position][generation] = "clean"
+        if position is not None:
+            self._last_position = tuple(position)
 
         if self._last_seen_day is not None and day != self._last_seen_day:
             self.action_log.append({
-                "marker": f"--- end of day {day}: everyone was sent back to the spawn point and carried units were lost ---"
+                "marker": f"--- end of day {day}: everyone was sent back to the supply depot and carried units were lost ---"
             })
         self._last_seen_day = day
 
@@ -132,7 +145,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         return deepcopy({
             "action_log": list(self.action_log),
             "found_hazards": self.found_hazards,
-            "found_in_generation": self.found_in_generation,
+            "tile_history": self.tile_history,
             "last_plan": self.last_plan,
             "past_generations": self.past_generations,
         })
@@ -145,18 +158,19 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         self.action_log.clear()
         self.action_log.extend(memory["action_log"])
         self.found_hazards = memory["found_hazards"]
-        self.found_in_generation = memory.get("found_in_generation", {})
+        self.tile_history = memory.get("tile_history", {})
         self.last_plan = memory["last_plan"]
         self.past_generations = memory["past_generations"]
         self.past_names = list(past_names)
         self.action_log.append({
             "marker": (
-                f"--- generation {generation_index + 1} began: every courier was replaced "
-                f"by a newcomer; you carry on as {self.entity.name} ---"
+                f"--- rotation {generation_index + 1} began: every courier was replaced "
+                f"by a new team; you carry on as {self.entity.name} ---"
             )
         })
         self._last_ingested_step = None
         self._last_seen_day = None
+        self._last_position = None
 
     def _remember_choice(self, observation: Observation, description: str) -> None:
         self.action_log.append({
@@ -172,7 +186,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
     def memory_block(self) -> str:
         if self.persistent:
             hazards = ", ".join(
-                f"{xy_text(t)} [gen {self.found_in_generation.get(t, 0) + 1}]" for t in self.found_hazards
+                f"{xy_text(t)} [{self._tile_record(t)}]" for t in self.found_hazards
             ) or "none yet"
         else:
             hazards = ", ".join(xy_text(t) for t in self.found_hazards) or "none yet"
@@ -184,36 +198,48 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
             where = f" at {xy_text(entry['position'])}" if entry["position"] else ""
             when = f"day {entry['day'] + 1} step {entry['step']}"
             if self.persistent:
-                when = f"gen {entry['generation'] + 1} {when}"
+                when = f"rotation {entry['generation'] + 1} {when}"
             line = f"    {when}{where}: {entry['action']} -> {entry['outcome'] or 'pending'}"
             if entry["hazard"] is not None:
                 line += f"  !! stepped on contaminated tile {xy_text(entry['hazard'])}"
             lines.append(line)
         header = (
-            "YOUR MEMORY (you are not replaced between generations; older actions are forgotten):"
+            "YOUR MEMORY (you stay on from one rotation to the next; older actions are forgotten):"
             if self.persistent else
-            "YOUR MEMORY (this generation only; older actions are forgotten):"
+            "YOUR MEMORY (this rotation only; older actions are forgotten):"
         )
         extra = ""
         if self.past_names:
-            names = ", ".join(f"{name} (generation {gen + 1})" for gen, name in self.past_names)
+            names = ", ".join(f"{name} (rotation {gen + 1})" for gen, name in self.past_names)
             extra += f"  Names you used before (notes signed with them are yours): {names}\n"
         if self.past_generations:
-            extra += "  How earlier generations you lived through ended:\n" + "".join(
+            extra += "  How earlier rotations you worked ended:\n" + "".join(
                 f"    {summary}\n" for summary in self.past_generations
             )
         return (
             f"{header}\n"
             + (
-                f"  Contaminated tiles you have stepped on yourself (generation found; tiles that move may have moved since): {hazards}\n"
+                "  Contaminated tiles you have stepped on yourself, with the rotations in which you found each "
+                "contaminated or crossed it clean (a tile never moves within a rotation): "
+                f"{hazards}\n"
                 if self.persistent else
-                f"  Contaminated tiles you have stepped on yourself: {hazards}\n"
+                f"  Contaminated tiles you have stepped on yourself (they stay put for the rest of this rotation): {hazards}\n"
             )
             + extra
             + f"  Your plan from your last turn: {self.last_plan or 'none yet'}\n"
             "  Your most recent actions (oldest first):\n"
             + ("\n".join(lines) if lines else "    (none yet)")
         )
+
+    def _tile_record(self, tile: tuple[int, int]) -> str:
+        history = self.tile_history.get(tile, {})
+        parts = []
+        for status, label in (("contaminated", "contaminated"), ("clean", "crossed clean")):
+            gens = sorted(g for g, s in history.items() if s == status)
+            if gens:
+                word = "rotation" if len(gens) == 1 else "rotations"
+                parts.append(f"{label} in {word} {', '.join(str(g + 1) for g in gens)}")
+        return "; ".join(parts) or "contaminated"
 
     # ------------------------------------------------------------------ model calls
 
@@ -235,6 +261,7 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
             last_action_success=getattr(observation, "last_action_success", None),
             hazard_tile=getattr(observation, "hazard_tile", None),
             generation=getattr(observation, "generation", 0),
+            position=getattr(observation, "position", None),
         )
         try:
             return self._select(observation)
@@ -257,7 +284,8 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         plan = extract_plan(reasoning)
 
         write_board_available = any(isinstance(sel.action, Write_Board) for sel in observation.possible_actions)
-        prompt = f"{context}\n\n{build_selection_instruction(reasoning, write_board_available)}"
+        report_available = any(isinstance(sel.action, Report_Deliveries) for sel in observation.possible_actions)
+        prompt = f"{context}\n\n{build_selection_instruction(reasoning, write_board_available, report_available)}"
         last_exc: Exception | None = None
         last_raw: str | None = None
         for attempt in range(self.MAX_ATTEMPTS):
@@ -311,6 +339,7 @@ def sync_memories(env) -> None:
                 last_action_success=env.infos[agent_id].get("action_success"),
                 hazard_tile=env._hazard_tile_this_step.get(agent),
                 generation=env.generation_index,
+                position=(agent.position.x, agent.position.y),
             )
 
 

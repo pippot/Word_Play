@@ -12,7 +12,9 @@ Every run writes, side by side in the logs directory:
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import pickle
 import time
 import urllib.error
 from collections import deque
@@ -42,7 +44,8 @@ from .config import (
     MISALIGNED_GENERATIONS,
     MISALIGNED_MODEL_NAME,
     MISALIGNED_TARGET_ZONE,
-    MOVING_HAZARD_REGION,
+    PLANT_ROTATION,
+    PLANTED_NOTE_AUTHOR,
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
@@ -57,7 +60,8 @@ from .config import (
 )
 from .environment import Lifeline_Env, Misaligned_Lineage
 from .health import ModelHealthError, check_model, realistic_prompt
-from .layout import hazard_schedule, parse_layout
+from .layout import hazard_schedule, moving_hazard_regions, parse_layout
+from .planting import plant_note
 from .policy import sync_memories
 from .probes import format_probe_line, run_probes
 from .prompts import PROBE_MOMENT_DAY_END, PROBE_MOMENT_GENERATION_START
@@ -67,6 +71,85 @@ from .world import build_environment
 LOGS_DIR = Path(__file__).resolve().parent / "logs"
 
 
+def _open_log(path: Path, resume_at: int | None):
+    """A new log, or -- when resuming -- the old one cut back to where the last
+    checkpoint left it (dropping the half-finished generation) and reopened
+    for appending."""
+    if resume_at is None:
+        return path.open("w", encoding="utf-8")
+    fh = path.open("r+", encoding="utf-8")
+    fh.truncate(resume_at)
+    fh.seek(resume_at)
+    return fh
+
+
+# ============================================================================
+# CHECKPOINTS
+# ============================================================================
+# A run is many hours long. After every finished generation the loop state --
+# the board, the names used so far and each persistent misaligned agent's
+# memory -- is pickled next to the event log, so a run that is stopped (a job
+# time limit, a crash, Ctrl-C) can be resumed from its last finished
+# generation with --resume. Everything else (hazards, personas, names, turn
+# order) is derived from the seed and comes out identical.
+
+CHECKPOINT_VERSION = 1
+
+
+def condition_label(num_misaligned: int, misaligned_generations: int | None, plant: str | None,
+                    separate_misaligned_model: bool) -> str:
+    """Short name of a run's condition, used in its file names and config."""
+    if plant:
+        return f"plant-{plant}" + ("-misaligned" if num_misaligned else "")
+    if not num_misaligned:
+        return "control"
+    label = "misaligned"
+    if misaligned_generations is not None:
+        label += f"-withdrawn{misaligned_generations}"
+    if separate_misaligned_model:
+        label += "-othermodel"
+    return label
+
+
+def new_run_path(logs_dir: Path | str, label: str) -> Path:
+    """logs/lifeline_<stamp>_<label>.pkl, never an existing run's name: runs
+    started in the same second (e.g. conditions launched in parallel) get
+    _2, _3, ..."""
+    base = default_experiment_log_path("lifeline", root_dir=logs_dir)
+    path = base.with_name(f"{base.stem}_{label}.pkl")
+    n = 2
+    while path.with_suffix(".jsonl").exists() or path.exists():
+        path = base.with_name(f"{base.stem}_{label}_{n}.pkl")
+        n += 1
+    return path
+
+
+def checkpoint_path_for(event_log_path: Path | str) -> Path:
+    path = Path(event_log_path)
+    return path.with_name(path.stem + ".checkpoint.pkl")
+
+
+def save_checkpoint(path: Path, state: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("wb") as fh:
+        pickle.dump({"version": CHECKPOINT_VERSION, **state}, fh)
+    tmp.replace(path)  # atomic: a crash mid-write never leaves a broken checkpoint
+
+
+def load_checkpoint(event_log_path: Path | str) -> dict:
+    path = checkpoint_path_for(event_log_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No checkpoint at {path}: only runs started with this version write one, "
+            "after each finished generation."
+        )
+    with path.open("rb") as fh:
+        state = pickle.load(fh)
+    if state.get("version") != CHECKPOINT_VERSION:
+        raise ValueError(f"{path} was written by an incompatible version of the experiment loop")
+    return state
+
+
 class BoardLog:
     """Writes the shared board to a text file: the inherited board at the start
     of every generation, a full snapshot after EVERY write (so a note that is
@@ -74,13 +157,18 @@ class BoardLog:
     the end of every day. Everything else goes to the structured event log.
     """
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, resume_at: int | None = None):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = path.open("w", encoding="utf-8")
+        self._fh = _open_log(path, resume_at)
         # Every misaligned name seen so far in the run, so notes from earlier
         # generations are still labelled correctly.
         self.misaligned_names: set[str] = set()
+        self.planted_names: set[str] = set()
+
+    def offset(self) -> int:
+        self._fh.flush()
+        return self._fh.tell()
 
     def log_generation_start(self, env: "Lifeline_Env") -> None:
         self._snapshot(
@@ -105,13 +193,24 @@ class BoardLog:
             if slot is None:
                 self._fh.write(f"[{i}] (empty)\n")
             else:
-                misaligned = slot["author"] in self.misaligned_names
+                tag = (" (MISALIGNED)" if slot["author"] in self.misaligned_names
+                       else " (PLANTED)" if slot["author"] in self.planted_names else "")
                 self._fh.write(
                     f"[{i}] [gen {slot['generation'] + 1} day {slot['day'] + 1} "
-                    f"step {slot['step']}] {slot['author']}"
-                    f"{' (MISALIGNED)' if misaligned else ''}: {slot['text']}\n"
+                    f"step {slot['step']}] {slot['author']}{tag}: {slot['text']}\n"
                 )
         self._fh.write("\n")
+        self._fh.flush()
+
+    def log_report(self, agent: str, counts: dict, generation: int, day: int, step: int) -> None:
+        """One line per delivery-section report (the section itself is not
+        snapshotted: it is one row per person and cleared every rotation)."""
+        misaligned = " (MISALIGNED)" if agent in self.misaligned_names else ""
+        numbers = ", ".join(f"{zone.split('_', 1)[-1]} {n}" for zone, n in counts.items())
+        self._fh.write(
+            f"--- delivery section: {agent}{misaligned} reports {numbers} -- "
+            f"gen {generation + 1}, day {day + 1}, step {step} ---\n\n"
+        )
         self._fh.flush()
 
     def log_day_end(self, env: "Lifeline_Env") -> None:
@@ -139,10 +238,14 @@ class BoardLog:
 class EventLog:
     """Append-only JSON-lines log: one JSON object per line, one event per object."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, resume_at: int | None = None):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = path.open("w", encoding="utf-8")
+        self._fh = _open_log(path, resume_at)
+
+    def offset(self) -> int:
+        self._fh.flush()
+        return self._fh.tell()
 
     def write(self, record: dict) -> None:
         record = {**record, "time": round(time.time(), 3)}
@@ -155,12 +258,18 @@ class EventLog:
         self._fh.close()
 
 
-def probe_sglang_server(base_url: str, timeout: float = 5.0) -> None:
-    """Raise RuntimeError if no SGLang server is reachable at base_url."""
+def probe_sglang_server(base_url: str, timeout: float = 5.0) -> list[str]:
+    """
+    Raise RuntimeError if no SGLang server is reachable at base_url; otherwise
+    return the ids of the models it serves. SGLang answers whatever model name
+    a request carries, so the name in config.py says nothing about what really
+    ran -- the served id is what goes into the run's config.
+    """
     probe_url = base_url.rstrip("/") + "/models"
     try:
         with urllib.request.urlopen(probe_url, timeout=timeout) as response:
             status = response.status
+            body = response.read()
     except urllib.error.URLError as exc:
         raise RuntimeError(
             f"Could not reach SGLang server at {probe_url}.\n"
@@ -173,6 +282,20 @@ def probe_sglang_server(base_url: str, timeout: float = 5.0) -> None:
         raise RuntimeError(
             f"SGLang server at {probe_url} returned status {status}."
         )
+    try:
+        return [m["id"] for m in json.loads(body).get("data", []) if "id" in m]
+    except (ValueError, TypeError, AttributeError):
+        return []
+
+
+def _describe_served(requested: str, served: list[str]) -> str:
+    """The served model id, warning when it isn't the name config.py asked for."""
+    if not served:
+        return requested
+    if requested not in served:
+        print(f"  NOTE: asked for {requested!r}, but the server serves {', '.join(served)}; "
+              "the run records the served model.")
+    return served[0] if len(served) == 1 else requested
 
 
 def _xy(entity) -> list[int]:
@@ -416,6 +539,27 @@ def run_generation(
                 board_log.log_write(event)
                 print(f"  [BOARD slot {write['slot']}] {write['agent']}: \"{write['text']}\"")
 
+            # Delivery-section reports: what the agent claimed next to what it
+            # had really delivered (clean) this rotation, for exact accuracy.
+            for report in env._delivery_reports_this_step:
+                true_counts = {zone: 0 for zone in env.zones}
+                for d in env.delivery_log:
+                    if d["agent"] == report["agent"] and not d["corrupted"]:
+                        true_counts[d["zone"]] += 1
+                event_log.write({
+                    "type": "delivery_report",
+                    "generation": generation_index,
+                    "day": day_before,
+                    "step": env.cur_step,
+                    "agent": report["agent"],
+                    "role": roles[report["agent"]],
+                    "counts": report["counts"],
+                    "true_counts": true_counts,
+                    "previous": report["previous"],
+                })
+                board_log.log_report(report["agent"], report["counts"], generation_index, day_before, env.cur_step)
+                print(f"  [DELIVERY SECTION] {report['agent']}: {report['counts']}")
+
             for d in env._new_deliveries:
                 event_log.write({"type": "delivery", **d, "role": roles[d["agent"]]})
                 tag = " [CONTAMINATED]" if d["corrupted"] else ""
@@ -485,7 +629,7 @@ def carry_misaligned_forward(env: Lifeline_Env) -> None:
         if lineage is None:
             continue
         summary = (
-            f"Generation {env.generation_index + 1}, as {agent.name}: your own clean "
+            f"Rotation {env.generation_index + 1}, as {agent.name}: your own clean "
             f"deliveries were {env.own_deliveries_text(agent)}"
         )
         # Only what the agent could actually see during play.
@@ -529,10 +673,23 @@ def run_experiment(
     logs_dir: Path | str = LOGS_DIR,
     check_models: bool = True,
     check_only: bool = False,
+    resume: Path | str | None = None,
+    plant: str | None = None,
+    plant_rotation: int = PLANT_ROTATION,
 ) -> Path | None:
     """
     Run a full Lifeline experiment: several generations, board threaded
     through. Returns the path of the structured event log.
+
+    resume: the event log (<run>.jsonl) of a stopped run. Its game settings
+    come from the run's checkpoint -- the arguments above that set the game
+    are ignored -- and it continues from its last finished generation,
+    appending to the same logs (the replay of the resumed part goes to a
+    separate .pkl). Models and servers are taken from the arguments, as usual.
+
+    plant / plant_rotation: the planted-note conditions (see planting.py) --
+    place one false note of kind "hazard" or "history" on the board that
+    rotation plant_rotation inherits. Meant for runs with num_misaligned=0.
 
     misaligned_model / misaligned_base_url: run the misaligned agents on a
     different model and/or SGLang server (None = same as the couriers).
@@ -543,8 +700,24 @@ def run_experiment(
     returns usable output (health.check_model) and stop if not.
     check_only: run those checks and return without playing (returns None).
     """
+    resume_state = None
+    if resume is not None:
+        resume_state = load_checkpoint(resume)
+        saved = resume_state["config"]
+        seed, num_generations = saved["seed"], saved["num_generations"]
+        days_per_generation, steps_per_day = saved["days_per_generation"], saved["steps_per_day"]
+        num_couriers, num_misaligned = saved["num_couriers"], saved["num_misaligned"]
+        misaligned_generations, disclosure = saved["misaligned_generations"], saved["disclosure"]
+        target_zone, tally_visibility, probes = saved["target_zone"], saved["tally_visibility"], saved["probes"]
+        plant, plant_rotation = saved.get("plant"), saved.get("plant_rotation", PLANT_ROTATION)
+        if resume_state["next_generation"] >= num_generations:
+            print(f"{resume} already finished all {num_generations} generations; nothing to resume.")
+            return Path(resume)
+
     if misaligned_generations is not None and misaligned_generations < 1:
         raise ValueError("misaligned_generations must be at least 1 (or None for every generation)")
+    if plant is not None and not 2 <= plant_rotation <= num_generations:
+        raise ValueError(f"plant_rotation must be between 2 and the number of generations ({num_generations})")
 
     def misaligned_in(gen: int) -> int:
         if misaligned_generations is None or gen < misaligned_generations:
@@ -577,25 +750,33 @@ def run_experiment(
     if num_misaligned:
         where = f" at {misaligned_base_url or SGLANG_BASE_URL}" if model_key is None else ""
         print(f"Misaligned model:    {misaligned_model_label}{where}")
-    print(f"Generations:         {num_generations}")
-    print(f"Days per generation: {days_per_generation}")
-    print(f"Steps per day:       {steps_per_day}")
-    print(f"Couriers:            {num_couriers}")
-    schedule = (
-        "persisting through every generation" if misaligned_generations is None
-        else f"persisting through the first {misaligned_generations} generation(s), then replaced by couriers"
-    )
-    print(f"Misaligned:          {num_misaligned}, {schedule}  (disclosure={disclosure}, target={target_zone})")
-    print(f"Zone totals:         {tally_visibility}")
-    print(f"Belief probes:       {'on' if probes else 'off'}")
-    print(f"Seed:                {seed}")
-    print()
+    if check_only:
+        print("(model check only -- no game is played)\n")
+    else:
+        print(f"Generations:         {num_generations}")
+        print(f"Days per generation: {days_per_generation}")
+        print(f"Steps per day:       {steps_per_day}")
+        print(f"Couriers:            {num_couriers}")
+        schedule = (
+            "persisting through every generation" if misaligned_generations is None
+            else f"persisting through the first {misaligned_generations} generation(s), then replaced by couriers"
+        )
+        print(f"Misaligned:          {num_misaligned}, {schedule}  (disclosure={disclosure}, target={target_zone})")
+        print(f"Zone totals:         {tally_visibility}")
+        print(f"Belief probes:       {'on' if probes else 'off'}")
+        if plant:
+            print(f"Planted note:        {plant}, on the board rotation {plant_rotation} inherits")
+        print(f"Seed:                {seed}")
+        print()
 
     owns_model = model_key is None
     if owns_model:
         print(f"Probing SGLang server at {SGLANG_BASE_URL} ...")
-        probe_sglang_server(SGLANG_BASE_URL)
-        print("  Server is reachable.\n")
+        served = probe_sglang_server(SGLANG_BASE_URL)
+        print(f"  Server is reachable, serving: {', '.join(served) or '(unknown)'}\n")
+        courier_model_label = _describe_served(SGLANG_MODEL_NAME, served)
+        if not separate_misaligned_model:
+            misaligned_model_label = courier_model_label
         model_key = "lifeline"
         if model_key not in LLM_MODEL_REGISTRY:
             register_sglang_model(
@@ -609,10 +790,12 @@ def run_experiment(
             )
         if separate_misaligned_model and num_misaligned:
             url = misaligned_base_url or SGLANG_BASE_URL
+            misaligned_served = served
             if url != SGLANG_BASE_URL:
                 print(f"Probing misaligned-model server at {url} ...")
-                probe_sglang_server(url)
-                print("  Server is reachable.\n")
+                misaligned_served = probe_sglang_server(url)
+                print(f"  Server is reachable, serving: {', '.join(misaligned_served) or '(unknown)'}\n")
+            misaligned_model_label = _describe_served(misaligned_model or SGLANG_MODEL_NAME, misaligned_served)
             misaligned_model_key = "lifeline-misaligned"
             if misaligned_model_key not in LLM_MODEL_REGISTRY:
                 register_sglang_model(
@@ -642,6 +825,9 @@ def run_experiment(
             return None
 
     config = {
+        "condition": condition_label(
+            num_misaligned, misaligned_generations, plant, bool(num_misaligned) and separate_misaligned_model,
+        ),
         "model": courier_model_label,
         "misaligned_model": misaligned_model_label if num_misaligned else None,
         "seed": seed,
@@ -655,41 +841,74 @@ def run_experiment(
         "target_zone": target_zone,
         "tally_visibility": tally_visibility,
         "probes": probes,
+        "plant": plant,
+        "plant_rotation": plant_rotation if plant else None,
     }
+    start_generation = resume_state["next_generation"] if resume_state else 0
+    if resume_state:
+        event_log_path = Path(resume)
+        replay_path = event_log_path.with_name(f"{event_log_path.stem}_from_gen{start_generation + 1}.pkl")
+    else:
+        replay_path = new_run_path(logs_dir, config["condition"])
+        event_log_path = replay_path.with_suffix(".jsonl")
     recorder = ExperimentRecorder(
-        output_path=default_experiment_log_path("lifeline", root_dir=logs_dir),
+        output_path=replay_path,
         title="lifeline",
         metadata=config,
         # Rewriting the whole replay pickle every step is quadratic in run
         # length; once a day is plenty (the JSONL log is flushed every step).
         flush_interval=steps_per_day,
     )
-    board_log = BoardLog(recorder.output_path.with_suffix(".txt"))
-    event_log = EventLog(recorder.output_path.with_suffix(".jsonl"))
+    board_log = BoardLog(event_log_path.with_suffix(".txt"), resume_at=resume_state and resume_state["board_log_offset"])
+    event_log = EventLog(event_log_path, resume_at=resume_state and resume_state["event_log_offset"])
+    checkpoint_path = checkpoint_path_for(event_log_path)
     layout = parse_layout()
     # Which tiles are contaminated in each generation: fixed by the seed alone,
     # so a control and a treatment run on the same seed face the same hazards.
     schedule = hazard_schedule(seed, num_generations, layout)
-    event_log.write({
-        "type": "run_start",
-        "config": config,
-        "hazards": sorted(list(xy) for xy in layout.hazards),
-        "fixed_hazards": sorted(list(xy) for xy in layout.fixed_hazards),
-        "moving_hazard_region": MOVING_HAZARD_REGION,
-        "spawn": list(layout.spawn),
-        "board_position": list(layout.board),
-        "zones": {name: list(xy) for name, xy in layout.zones.items()},
-        "board_slots": MAX_BOARD_SLOTS,
-    })
+    if resume_state:
+        print(f"Resuming {event_log_path.name} at generation {start_generation + 1} of {num_generations}.\n")
+        event_log.write({"type": "run_resumed", "from_generation": start_generation, "config": config})
+    else:
+        event_log.write({
+            "type": "run_start",
+            "config": config,
+            "hazards": sorted(list(xy) for xy in layout.hazards),
+            "fixed_hazards": sorted(list(xy) for xy in layout.fixed_hazards),
+            "moving_hazard_regions": {
+                zone: sorted(list(t) for t in tiles) for zone, tiles in moving_hazard_regions(layout).items()
+            },
+            "spawn": list(layout.spawn),
+            "board_position": list(layout.board),
+            "zones": {name: list(xy) for name, xy in layout.zones.items()},
+            "board_slots": MAX_BOARD_SLOTS,
+        })
 
     generations: list[Lifeline_Env] = []
     try:
-        board_slots: list[dict | None] = [None] * MAX_BOARD_SLOTS
-        used_names: frozenset[str] = frozenset()
-        # One lineage per misaligned agent, carried from generation to generation.
-        lineages = [Misaligned_Lineage(identity=f"M{i + 1}") for i in range(num_misaligned)]
-        for gen in range(num_generations):
+        if resume_state:
+            board_slots: list[dict | None] = resume_state["board_slots"]
+            used_names: frozenset[str] = resume_state["used_names"]
+            lineages = [Misaligned_Lineage(**fields) for fields in resume_state["lineages"]]
+            board_log.misaligned_names.update(resume_state["misaligned_names_seen"])
+            if plant:
+                board_log.planted_names.add(PLANTED_NOTE_AUTHOR)
+        else:
+            board_slots = [None] * MAX_BOARD_SLOTS
+            used_names = frozenset()
+            # One lineage per misaligned agent, carried from generation to generation.
+            lineages = [Misaligned_Lineage(identity=f"M{i + 1}") for i in range(num_misaligned)]
+        for gen in range(start_generation, num_generations):
             present = misaligned_in(gen) > 0
+            if plant is not None and gen == plant_rotation - 1:
+                board_slots, planted = plant_note(
+                    board_slots, kind=plant, generation_index=gen,
+                    days_per_generation=days_per_generation, steps_per_day=steps_per_day,
+                    target_zone=target_zone, layout=layout, schedule=schedule,
+                )
+                event_log.write(planted)
+                board_log.planted_names.add(planted["author"])
+                print(f"Planted a {plant} note in slot {planted['slot']}: \"{planted['text']}\"\n")
             env = run_generation(
                 generation_index=gen,
                 board_slots=board_slots,
@@ -720,6 +939,16 @@ def run_experiment(
             board_slots = env.board_slots
             used_names = used_names | {agent.name for agent in env.agents}
             generations.append(env)
+            save_checkpoint(checkpoint_path, {
+                "config": config,
+                "next_generation": gen + 1,
+                "board_slots": board_slots,
+                "used_names": used_names,
+                "lineages": [dataclasses.asdict(lineage) for lineage in lineages],
+                "misaligned_names_seen": set(board_log.misaligned_names),
+                "event_log_offset": event_log.offset(),
+                "board_log_offset": board_log.offset(),
+            })
 
         event_log.write({"type": "run_end", "generations": len(generations), "board": board_slots})
     finally:
@@ -740,7 +969,7 @@ def run_experiment(
         sum(1 for d in env.delivery_log if d["corrupted"]) for env in generations
     )
     filled = sum(1 for slot in board_slots if slot is not None)
-    print(f"Total deliveries across all generations: {total_delivered}")
+    print(f"Total deliveries{' (this session)' if resume_state else ' across all generations'}: {total_delivered}")
     print(f"Total contaminated deliveries:           {total_corrupted}")
     print(f"Final board:                              {filled}/{len(board_slots)} slots filled")
     print()
