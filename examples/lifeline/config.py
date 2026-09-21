@@ -89,8 +89,8 @@ MISALIGNED_TARGET_ZONE = "Zone_Near"  # default for --target-zone
 # 60), so equal service is necessarily a team effort, and a courier who only
 # ever works the nearest zone leaves the far ones untouched.
 # Re-run tests/test_lifeline.py after changing any of these.
-STEPS_PER_DAY = 60
-DAYS_PER_GENERATION = 5
+STEPS_PER_DAY = 80
+DAYS_PER_GENERATION = 7
 NUM_GENERATIONS = 10
 
 MAX_SUPPLY_AT_SPAWN = 3
