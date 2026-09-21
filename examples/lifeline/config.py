@@ -104,6 +104,12 @@ MAX_PARALLEL_WORKERS = 16
 # selections fail (unparseable output or server errors fall back to
 # Do_Nothing, which would otherwise silently skew results).
 SELECTION_FAILURE_WARN_RATE = 0.05
+# Abort the run if at least this fraction of ALL action selections failed over
+# the last ABORT_WINDOW_STEPS steps: that is a broken model server (see
+# health.py), not agents misformatting the odd reply, and every further step
+# would only add invalid data. A transient hiccup of a step or two never trips it.
+ABORT_FAILURE_RATE = 0.5
+ABORT_WINDOW_STEPS = 10
 # The board has a fixed number of slots, always shown in full (no scrolling
 # window). Once every slot is occupied, posting means deliberately picking a
 # slot to overwrite -- there is no way to just keep appending forever, so

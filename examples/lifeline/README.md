@@ -23,8 +23,9 @@ Couriers carry medical supply from a spawn point to three delivery zones. Their 
 8. [Belief probes (check-ins)](#belief-probes-check-ins)
 9. [Output files](#output-files)
 10. [Metrics](#metrics)
-11. [Tests](#tests)
-12. [Code layout](#code-layout)
+11. [Troubleshooting: garbled model output](#troubleshooting-garbled-model-output)
+12. [Tests](#tests)
+13. [Code layout](#code-layout)
 
 ---
 
@@ -120,6 +121,8 @@ Each flag overrides a default from `config.py` for that run only.
 | `--probes` / `--no-probes` | on | The private [belief probes](#belief-probes-check-ins) |
 | `--max-workers N` | `16` | Maximum concurrent LLM requests; it is capped at the number of agents |
 | `--verbose` | off | Prints full LLM requests, each agent's plan every step, and every probe answer |
+| `--check-servers` | off | Only checks that the model server(s) return usable output, then exits (see [Troubleshooting](#troubleshooting-garbled-model-output)) |
+| `--skip-model-check` | off | Skips the model-output check that normally runs before a game |
 
 ---
 
@@ -136,6 +139,7 @@ Each flag overrides a default from `config.py` for that run only.
 | `MAX_BOARD_SLOTS` / `MAX_BOARD_TEXT_CHARS` | `10` / `500` | Board size and note length |
 | `ACTION_MEMORY_SIZE` / `PLAN_MAX_CHARS` | `20` / `300` | How much each agent remembers |
 | `SELECTION_FAILURE_WARN_RATE` | `0.05` | Print a warning when an agent's selections fail more often than this |
+| `ABORT_FAILURE_RATE` / `ABORT_WINDOW_STEPS` | `0.5` / `10` | Abort the run when at least half of all action selections failed over the last 10 steps (a broken server, not the odd misformatted reply) |
 | `ACTION_` / `REASONING_` / `PROBE_GENERATION_CONFIG` | temperature 0.7 / 0.7 / 0 | Sampling settings. Probes are greedy so their answers are stable measurements. |
 | `PLAYER_NAMES` | 60 names | Pool of agent names. Two different agents never share a name within a run. |
 | `ENTITY_TILEMAP` | see below | The map |
@@ -453,6 +457,39 @@ Measures from board text are keyword heuristics, and every flagged text is kept 
 
 ---
 
+## Troubleshooting: garbled model output
+
+**Symptom.** Every agent fails with warnings like `No JSON object found in model response` or `Invalid action_choice_idx: None`, followed by punctuation soup:
+
+```
+{ " I_...? (!.  +o-c, toM.,; ,  ,  ,...  [ . (s  :  .,!! (s-: /sT- (...
+```
+
+**What it means.** The model **server** is emitting noise, and JSON mode squeezes the noise into JSON-like shapes. A healthy model that misformats a reply still writes readable words. Lifeline can't fix this, but it now catches it:
+- **Before a real run:** each model gets three requests (plain text, JSON mode, and 5 concurrent requests using a real Lifeline prompt). The run stops with a clear message if any come back as noise.
+- **During a run:** it aborts if at least half of all action selections fail over 10 consecutive steps (`ABORT_FAILURE_RATE`, `ABORT_WINDOW_STEPS`). The logs written up to that point are kept.
+
+**Isolating the cause:**
+
+1. **Check each server directly.** `python -m examples.lifeline --check-servers` (add the `--misaligned-model` / `--misaligned-base-url` flags for condition 3) runs the same checks and exits. By hand:
+
+   ```bash
+   curl -s http://localhost:30000/v1/chat/completions -H "Content-Type: application/json" -d '{"model": "Qwen/Qwen3.6-27B", "messages": [{"role": "user", "content": "Reply with exactly one word: ready"}], "temperature": 0, "max_tokens": 16}'
+   ```
+
+   Repeat on port 30001 for the second server. This shows which server is broken.
+2. **Go back to the last setup that worked,** then change one thing at a time. That's the SGLang version the repo pins (`uv.lock`: sglang 0.5.9), a single server, and your original launch command. Then add:
+   1. the new launch flags (`--mem-fraction-static`, `--max-running-requests`, `--cuda-graph-max-bs`)
+   2. the second server
+   3. the new SGLang version
+3. **If you upgraded SGLang for Qwen3.5:**
+   - **CUDA libraries:** the new build may use a torch/CUDA combination that no longer matches `.env.sglang`, which forces pip's CUDA 12 libraries onto `LD_LIBRARY_PATH`. Check `python -c "import torch; print(torch.__version__, torch.version.cuda)"` in the server environment.
+   - **Separate environments:** consider a separate virtualenv for the 122B server, so the 27B keeps its known-good version.
+4. **Server options to try on the broken server,** one at a time: `--disable-cuda-graph`, `--disable-radix-cache`, `--attention-backend triton`. If single requests are fine but the concurrent check fails, suspect batching: lower `--max-running-requests` and `--cuda-graph-max-bs`.
+5. **If only the 122B GPTQ server is garbled,** its 4-bit kernels may not support the B200 in your SGLang build. Try an NVFP4 build of the same model with `--quantization modelopt_fp4`.
+
+---
+
 ## Tests
 
 No server or GPU is needed. The tests cover:
@@ -464,6 +501,7 @@ No server or GPU is needed. The tests cover:
 - the full experiment loop with a scripted stand-in model
 - a same-step double board write
 - the metrics
+- the model health checks and the abort on a garbled model
 
 ```bash
 python -m unittest tests.test_lifeline
@@ -487,4 +525,5 @@ python -m unittest tests.test_lifeline
 | `world.py` | `build_environment`: names, roles, personas, sprites, hazards, model per role |
 | `experiment.py` | Generation loop, hazard schedule, persistence, logs, both models, metrics |
 | `metrics.py` | Metrics computed from the event log (also a CLI) |
+| `health.py` | Model health checks: the preflight check before a run, and the error used by the mid-run abort |
 | `__main__.py` | The CLI |

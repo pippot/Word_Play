@@ -1482,5 +1482,73 @@ class TestSameStepBoardWrites(unittest.TestCase):
         self.assertIn(f": {later['text']}", text)
 
 
+GARBLED = ('{ " I_...? (!.  +o-c, toM.,; ,  ,  ,...  [ . (s  :  .,!! (s-: /sT- (...,.,  * ":\n'
+           ' [  -4.1  ,     -9,\n  -20.1, [ "   .o,..,, .,[ (.ingb,  . [  : /R ;_... (…, ....,s.  . [ (./s-.,.，-.,')
+
+
+class HealthyModel(Model):
+    def generate_chat(self, messages, generation_config=None, max_new_tokens=None):
+        user = messages[-1]["content"]
+        if "exactly one word" in user:
+            return "Ready."
+        if "ONLY this JSON object" in user:
+            return '{"action_choice_idx": 2, "action_kwargs": {}}'
+        return "I am at the spawn point carrying nothing, so I will pick up a unit first.\nPLAN: pick up and head to Zone_Far"
+
+
+class GarbledModel(Model):
+    def generate_chat(self, messages, generation_config=None, max_new_tokens=None):
+        return GARBLED
+
+
+for _key, _cls in (("lifeline-tests-healthy", HealthyModel), ("lifeline-tests-garbled", GarbledModel)):
+    if _key not in LLM_MODEL_REGISTRY:
+        LLM_MODEL_REGISTRY.register(_key, _cls)
+
+
+class TestModelHealth(unittest.TestCase):
+    def realistic(self, key):
+        from lifeline.health import realistic_prompt
+        return realistic_prompt(build_env(model_key=key), misaligned=False)
+
+    def test_readability_separates_prose_from_noise(self):
+        from lifeline.health import MIN_READABILITY, readability
+        self.assertGreater(readability("I will move right along y=6 to avoid the hazard at (6, 7)."), MIN_READABILITY)
+        self.assertLess(readability(GARBLED), MIN_READABILITY)
+
+    def test_a_healthy_model_passes(self):
+        from lifeline.health import check_model
+        check_model("lifeline-tests-healthy", "courier", realistic=self.realistic("lifeline-tests-healthy"))
+
+    def test_a_garbled_model_is_reported_as_a_server_problem(self):
+        from lifeline.health import ModelHealthError, check_model
+        with self.assertRaises(ModelHealthError) as ctx:
+            check_model("lifeline-tests-garbled", "courier", realistic=self.realistic("lifeline-tests-garbled"))
+        message = str(ctx.exception)
+        self.assertIn("server problem", message)
+        self.assertIn("plain request", message)
+        self.assertIn("JSON-mode request", message)
+        self.assertIn("parallel reasoning replies", message)
+
+    def test_check_only_checks_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            result = L.run_experiment(model_key="lifeline-tests-healthy", logs_dir=tmp, check_only=True)
+            self.assertIsNone(result)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_a_run_on_a_garbled_model_aborts_early_and_keeps_its_logs(self):
+        from lifeline.health import ModelHealthError
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(ModelHealthError) as ctx:
+                L.run_experiment(num_generations=2, days_per_generation=2, steps_per_day=20,
+                                 model_key="lifeline-tests-garbled", logs_dir=tmp, probes=False)
+            (log,) = Path(tmp).glob("*.jsonl")
+            steps = [e for e in L.load_events(log) if e["type"] == "step"]
+        self.assertIn("Aborting", str(ctx.exception))
+        self.assertEqual(len({s["step"] for s in steps}), L.ABORT_WINDOW_STEPS - 1,
+                         "the run stops as soon as the window is full, before playing that step")
+        self.assertTrue(all(s["error"] for s in steps))
+
+
 if __name__ == "__main__":
     unittest.main()

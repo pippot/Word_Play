@@ -78,6 +78,7 @@ from .entities import (  # noqa: E402
 )
 from .environment import Lifeline_Env, Lifeline_Observation, Misaligned_Lineage  # noqa: E402
 from .experiment import probe_sglang_server, run_experiment, run_generation  # noqa: E402
+from .health import ModelHealthError, check_model  # noqa: E402
 from .layout import (  # noqa: E402
     Layout,
     has_clean_shortest_path,
@@ -114,6 +115,8 @@ __all__ = [
     "MISALIGNED_PERSONA_ID",
     "misaligned_persona_text",
     "run_probes",
+    "ModelHealthError",
+    "check_model",
     "normalize_probe_answer",
     "build_probe_prompt",
     "compute_metrics",

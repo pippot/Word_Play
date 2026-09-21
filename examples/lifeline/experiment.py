@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
+from collections import deque
 import urllib.request
 from concurrent.futures import Executor, ThreadPoolExecutor
 from pathlib import Path
@@ -31,6 +32,8 @@ from word_play.presets.systems.do_nothing import Do_Nothing
 from .actions import describe_selection
 from .config import (
     _BASE_GENERATION_CONFIG,
+    ABORT_FAILURE_RATE,
+    ABORT_WINDOW_STEPS,
     DAYS_PER_GENERATION,
     DISCLOSURE,
     MAX_BOARD_SLOTS,
@@ -53,6 +56,7 @@ from .config import (
     TALLY_VISIBILITY,
 )
 from .environment import Lifeline_Env, Misaligned_Lineage
+from .health import ModelHealthError, check_model, realistic_prompt
 from .layout import hazard_schedule, parse_layout
 from .policy import sync_memories
 from .probes import format_probe_line, run_probes
@@ -313,6 +317,7 @@ def run_generation(
                 return fallback, {"raw_response": None, "error": f"{type(exc).__name__}: {exc}"}
 
         step_count = 0
+        recent_failure_rates: deque[float] = deque(maxlen=ABORT_WINDOW_STEPS)
         while not any(env.terminations) and not any(env.truncations):
             step_count += 1
             day_before = env.current_day
@@ -329,9 +334,27 @@ def run_generation(
             for agent, description, info in zip(env.agents, descriptions, infos):
                 print(f"  {agent.name}: {description}")
                 if info.get("error"):
-                    print(f"    WARNING: action selection failed, defaulted to Do_Nothing: {info['error']}")
+                    # Shortened on screen (the event log keeps it all): a broken
+                    # server's reply can be pages of noise.
+                    error = info["error"] if len(info["error"]) <= 300 else info["error"][:300] + " ..."
+                    print(f"    WARNING: action selection failed, defaulted to Do_Nothing: {error}")
                 elif verbose and info.get("plan"):
                     print(f"    plan: {info['plan']}")
+
+            recent_failure_rates.append(sum(1 for info in infos if info.get("error")) / len(infos))
+            if (
+                len(recent_failure_rates) == ABORT_WINDOW_STEPS
+                and sum(recent_failure_rates) / ABORT_WINDOW_STEPS >= ABORT_FAILURE_RATE
+            ):
+                errors = [info["error"] for info in infos if info.get("error")]
+                last_error = errors[-1] if errors else "(see the event log)"
+                raise ModelHealthError(
+                    f"Aborting: {sum(recent_failure_rates) / ABORT_WINDOW_STEPS:.0%} of all action selections "
+                    f"failed over the last {ABORT_WINDOW_STEPS} steps (generation {generation_index + 1}, "
+                    f"step {env.cur_step}). The model server is returning unusable output, so the run "
+                    f"cannot produce valid data. Last error: {last_error[:400]}\n"
+                    "See 'Troubleshooting: garbled model output' in examples/lifeline/README.md."
+                )
 
             board_before = env.board_snapshot()
             env.step(selections)
@@ -504,7 +527,9 @@ def run_experiment(
     model_key: str | None = None,
     misaligned_model_key: str | None = None,
     logs_dir: Path | str = LOGS_DIR,
-) -> Path:
+    check_models: bool = True,
+    check_only: bool = False,
+) -> Path | None:
     """
     Run a full Lifeline experiment: several generations, board threaded
     through. Returns the path of the structured event log.
@@ -514,6 +539,9 @@ def run_experiment(
     model_key / misaligned_model_key: use already-registered models instead
     of registering the SGLang servers from config.py (the server checks are
     then skipped too) -- used by the offline tests.
+    check_models: before a run on real servers, check that every model
+    returns usable output (health.check_model) and stop if not.
+    check_only: run those checks and return without playing (returns None).
     """
     if misaligned_generations is not None and misaligned_generations < 1:
         raise ValueError("misaligned_generations must be at least 1 (or None for every generation)")
@@ -596,6 +624,22 @@ def run_experiment(
                     timeout=SGLANG_TIMEOUT,
                     verbosity=1 if verbose else 0,
                 )
+
+    if check_only or (check_models and owns_model):
+        print("Checking that the models return usable output ...")
+        sample_env = build_environment(
+            generation_index=0, board_slots=[None] * MAX_BOARD_SLOTS, model_key=model_key, seed=seed,
+            num_couriers=max(num_couriers, 1), num_misaligned=num_misaligned, tally_visibility=tally_visibility,
+            target_zone=target_zone, disclosure=disclosure, misaligned_model_key=misaligned_model_key,
+        )
+        check_model(model_key, "courier", realistic=realistic_prompt(sample_env, misaligned=False))
+        print(f"  courier model OK ({courier_model_label})")
+        if num_misaligned and misaligned_model_key not in (None, model_key):
+            check_model(misaligned_model_key, "misaligned", realistic=realistic_prompt(sample_env, misaligned=True))
+            print(f"  misaligned model OK ({misaligned_model_label})")
+        print()
+        if check_only:
+            return None
 
     config = {
         "model": courier_model_label,

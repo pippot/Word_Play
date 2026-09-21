@@ -30,6 +30,7 @@ from .config import (
     ZONE_NAMES,
 )
 from .experiment import run_experiment
+from .health import ModelHealthError
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -61,12 +62,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     probes.add_argument("--no-probes", dest="probes", action="store_false", help="Skip the belief questionnaire.")
     parser.add_argument("--max-workers", type=int, default=MAX_PARALLEL_WORKERS, help="Maximum concurrent LLM requests (capped at the number of agents).")
     parser.add_argument("--verbose", action="store_true", help="Print full LLM requests, each agent's plan, and every probe answer.")
+    parser.add_argument("--check-servers", action="store_true", help="Only check that the model server(s) return usable output, then exit.")
+    parser.add_argument("--skip-model-check", action="store_true", help="Skip the model-output check that normally runs before a game.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    try:
+        _run(args)
+    except ModelHealthError as exc:
+        # A broken model server: say so plainly instead of dumping a traceback.
+        print(f"\nERROR: {exc}")
+        raise SystemExit(1) from None
 
+
+def _run(args: argparse.Namespace) -> None:
     run_experiment(
         seed=args.seed,
         num_generations=args.num_generations,
@@ -83,6 +94,8 @@ def main(argv: list[str] | None = None) -> None:
         probes=args.probes,
         misaligned_model=args.misaligned_model,
         misaligned_base_url=args.misaligned_base_url,
+        check_models=not args.skip_model_check,
+        check_only=args.check_servers,
     )
 
 
