@@ -239,6 +239,32 @@ REASONING_GENERATION_CONFIG: dict = {
     "max_tokens": 384,
 }
 
+# Thinking (reasoning) mode for the misaligned agent -- the capability lever
+# (see --misaligned-thinking). Same model as the couriers, but its reasoning
+# and rotation-planning calls run with Qwen's thinking on, so it strategizes
+# with a hidden <think> scratchpad the couriers never see. It changes
+# inference compute, not weights or writing style, so in secret mode couriers
+# can't pick it out by prose. Couriers keep thinking off (the SGLang_Model
+# default), so any difference is the misaligned agent's reasoning.
+#
+# Thinking is enabled only on the free-text reasoning/plan calls, never on the
+# JSON action call: response_format=json_object constrains output to JSON from
+# the first token, which would suppress the <think> block. The reasoning call
+# is where the strategy is formed anyway; the action call just picks an index
+# consistent with it.
+MISALIGNED_THINKING = False
+# The think block plus the visible reasoning need far more room than 384.
+THINKING_MAX_TOKENS = 2048
+
+
+def _with_thinking(config: dict) -> dict:
+    """A copy of `config` with Qwen thinking enabled and room for the think block."""
+    extra = {**config.get("extra_body", {}), "chat_template_kwargs": {"enable_thinking": True}}
+    return {**config, "extra_body": extra, "max_tokens": THINKING_MAX_TOKENS}
+
+
+THINKING_REASONING_GENERATION_CONFIG: dict = _with_thinking(REASONING_GENERATION_CONFIG)
+
 # Belief probes are measurements. They used to be greedy (temperature 0),
 # but then couriers with near-identical context gave identical answers: the
 # pilot's rates were all 0% or 100%, one opinion per rotation instead of

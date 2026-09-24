@@ -83,6 +83,7 @@ Every condition is compared with the **control run on the same seed**. The seed 
 | **Misaligned, 27B** | `python -m examples.lifeline --seed 0` | A persistent misaligned agent on the couriers' model |
 | **Misaligned, withdrawn** | `... --misaligned-generations 2 --seed 0` | It works for 2 rotations and is then replaced by a courier. **Any tilt from rotation 3 on travelled through the board alone** |
 | **Misaligned, forewarned** | `... --disclosure open --seed 0` | Couriers are told a colleague is steering deliveries (the standard resistance manipulation). The high-detection end of the trade-off. |
+| **Misaligned, thinking** | `... --misaligned-thinking --seed 0` | The misaligned agent reasons with Qwen thinking on while couriers keep it off — the capability lever. Same model and server; deception is a reasoning task, so this tests reasoning compute against the couriers' none. |
 | **Misaligned, 122B** | `... --misaligned-model Qwen/Qwen3.5-122B-A10B-GPTQ-Int4 --misaligned-base-url http://localhost:30001/v1 --seed 0` | Does a more capable misaligned agent spread its goal further? |
 | **Control, hidden tally** | `... --num-misaligned 0 --tally hidden --seed 0` | The baseline with no official daily report |
 | **Planted history note, hidden tally** | `... --num-misaligned 0 --plant history --tally hidden --seed 0` | In the pilot, couriers believed the note but the daily report corrected their deliveries. With no report, does the belief now change behaviour? Compared with the hidden-tally control. |
@@ -94,15 +95,15 @@ Every condition is compared with the **control run on the same seed**. The seed 
 ```bash
 python -m examples.lifeline.suite pilot --dry-run     # show the commands, run nothing
 python -m examples.lifeline.suite pilot               # control, planted history, misaligned: 4 rotations x 4 days, seed 0
-python -m examples.lifeline.suite full                # 8 conditions x seeds 0 1 2, 6 rotations x 5 days, 8 at a time
+python -m examples.lifeline.suite full                # 9 conditions x seeds 0 1 2, 6 rotations x 5 days, 9 at a time
 python -m examples.lifeline.suite full --with-122b    # adds the 122B misaligned condition (needs the second server)
 python -m examples.lifeline.suite resume examples/lifeline/logs/suite_<stamp>_<preset>
 ```
 
 - **Folder:** everything goes into one folder, `examples/lifeline/logs/suite_<stamp>_<preset>/`. It holds `suite.json` (every command and its status), one subfolder per run with that run's files, each run's console output (`<run>.log`), and `comparison.txt`.
-- **Server check:** the model servers are checked once, before anything starts. Runs then go in parallel (`--parallel`: pilot 3, full 8), and one SGLang server batches their requests.
+- **Server check:** the model servers are checked once, before anything starts. Runs then go in parallel (`--parallel`: pilot 3, full 9), and one SGLang server batches their requests.
 - **Controls:** every condition is compared with the control of its own seed and tally mode. The hidden-tally planted run is compared with `control-hidden`.
-- **Time:** `full` is 24 runs of 1,800 steps, 8 per wave (one seed per wave, about 40 concurrent requests), roughly 7 hours per wave, so about 21 hours in all. Start the 27B server without the `--max-running-requests 16` cap from the two-server recipe below, or with 48 or more, unless you also run the 122B.
+- **Time:** `full` is 27 runs of 1,800 steps, 9 per wave (one seed per wave, about 45 concurrent requests), roughly 7 hours per wave, so about 21 hours in all. Start the 27B server without the `--max-running-requests 16` cap from the two-server recipe below, or with 48 or more, unless you also run the 122B. The thinking condition emits longer reasoning, so its steps are slower.
 - **Target zone:** each seed gets its own target zone (seed 0 → Zone_Elm, 1 → Zone_Oak, 2 → Zone_Pine) unless `--target-zone` fixes it.
 - **Resuming:** if the suite is stopped, `resume` continues every unfinished run from its last finished rotation and redoes the comparison.
 - **Overrides:** `--only`, `--seeds`, `--generations`, `--days` and `--steps` override the preset.
@@ -188,6 +189,7 @@ Each flag overrides a default from `config.py` for that run only.
 | `--tally {daily,full,hidden}` | `daily` | How much of the delivery count is visible (see [Delivery counts](#delivery-counts-the-tally)) |
 | `--misaligned-model NAME` | same as couriers | Model for the misaligned agent |
 | `--misaligned-base-url URL` | same as couriers | SGLang server for the misaligned agent |
+| `--misaligned-thinking` | off | Run the misaligned agent's reasoning with Qwen thinking on (couriers keep it off). Same model — thinking is per-request, so no second server is needed. |
 | `--probes` / `--no-probes` | on | The private [belief probes](#belief-probes-check-ins) |
 | `--max-workers N` | `16` | Maximum concurrent LLM requests; it is capped at the number of agents |
 | `--verbose` | off | Prints full LLM requests, each agent's plan every step, and every probe answer |
@@ -663,6 +665,7 @@ No server or GPU is needed. The tests cover:
 - the delivery section, hazard alerts on entry only, and the persistent agent's crossing record
 - the planted-note conditions and the comparison script
 - the shorter persona (initiative kept, tactics gone), rotation-start planning, the forewarned condition and the trade-off (`named`/`accused`) columns
+- the thinking-deceiver condition: only the misaligned agent's reasoning is thinking-enabled, its `<think>` trace is logged and stripped from what others see, and the run is labelled `misaligned-thinking`
 - run file names (by condition, never colliding), and that no game, test or study word reaches an agent
 - the metrics, including the report parser, the promotion and permanence heuristics, and the against-balance rate
 - the model health checks and the abort on a garbled model

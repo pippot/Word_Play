@@ -31,9 +31,18 @@ from .config import (
 from .policy import Lifeline_Policy
 
 def build_agent_entity(
-    name: str, position: Position_2D, sprite: str, model_key: str, system_prompt: str
+    name: str, position: Position_2D, sprite: str, model_key: str, system_prompt: str,
+    reasoning_generation_config: dict = REASONING_GENERATION_CONFIG,
 ) -> Entity:
-    """Create a courier or misaligned agent entity (identical capabilities)."""
+    """
+    Create a courier or misaligned agent entity (identical capabilities).
+
+    reasoning_generation_config lets the misaligned agent run its reasoning and
+    rotation-planning calls with thinking on (see config.MISALIGNED_THINKING);
+    couriers keep the default. The action and probe configs are always the
+    standard ones, so the JSON action call stays constrained and belief probes
+    stay comparable across roles.
+    """
     return Entity(
         name=name,
         position=position,
@@ -56,7 +65,7 @@ def build_agent_entity(
                 model_key=model_key,
                 system_prompt=system_prompt,
                 action_generation_config=ACTION_GENERATION_CONFIG,
-                reasoning_generation_config=REASONING_GENERATION_CONFIG,
+                reasoning_generation_config=reasoning_generation_config,
                 probe_generation_config=PROBE_GENERATION_CONFIG,
             ),
             Collidable(collidable_tags=["wall"]),

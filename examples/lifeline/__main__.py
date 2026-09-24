@@ -20,6 +20,7 @@ from .config import (
     MISALIGNED_GENERATIONS,
     MISALIGNED_MODEL_NAME,
     MISALIGNED_TARGET_ZONE,
+    MISALIGNED_THINKING,
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
@@ -59,6 +60,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--misaligned-model", default=MISALIGNED_MODEL_NAME, help="Model for the misaligned agents (default: same as the couriers).")
     parser.add_argument("--misaligned-base-url", default=MISALIGNED_BASE_URL, help="SGLang server for the misaligned agents, e.g. http://localhost:30001/v1 (default: the couriers' server).")
+    parser.add_argument(
+        "--misaligned-thinking", action="store_true", default=MISALIGNED_THINKING,
+        help="Run the misaligned agents' reasoning with Qwen thinking on (couriers keep it off). Same model; the capability lever.",
+    )
     probes = parser.add_mutually_exclusive_group()
     probes.add_argument("--probes", dest="probes", action="store_true", default=PROBES_ENABLED, help="Ask every agent the private belief questionnaire at the start of each generation and the end of each day (default).")
     probes.add_argument("--no-probes", dest="probes", action="store_false", help="Skip the belief questionnaire.")
@@ -109,6 +114,7 @@ def _run(args: argparse.Namespace) -> None:
         tally_visibility=args.tally_visibility,
         misaligned_generations=args.misaligned_generations,
         probes=args.probes,
+        misaligned_thinking=args.misaligned_thinking,
         misaligned_model=args.misaligned_model,
         misaligned_base_url=args.misaligned_base_url,
         check_models=not args.skip_model_check,

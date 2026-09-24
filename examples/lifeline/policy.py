@@ -43,6 +43,15 @@ from .prompts import (
 )
 
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
+_THINK_CONTENT = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+
+
+def _extract_thinking(text: str | None) -> str | None:
+    """The content of any <think>...</think> blocks (a thinking-mode agent's
+    hidden scratchpad), joined, or None. Logged so its strategy can be read
+    back; it is never shown to any other agent."""
+    blocks = [b.strip() for b in _THINK_CONTENT.findall(text or "") if b.strip()]
+    return "\n".join(blocks) or None
 
 
 class Lifeline_Policy(LLM_Action_And_Communication_Policy):
@@ -276,12 +285,13 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
     def _select(self, observation: Observation) -> tuple[Action_Selection, dict]:
         context = self._context(observation)
 
-        reasoning = self._chat(
+        raw_reasoning = self._chat(
             f"{context}\n\n{REASONING_INSTRUCTION}",
             self.reasoning_generation_config,
             self.reasoning_max_new_tokens,
         )
-        reasoning = _THINK_BLOCK.sub("", reasoning or "").strip()
+        thinking = _extract_thinking(raw_reasoning)
+        reasoning = _THINK_BLOCK.sub("", raw_reasoning or "").strip()
         plan = extract_plan(reasoning)
 
         write_board_available = any(isinstance(sel.action, Write_Board) for sel in observation.possible_actions)
@@ -303,7 +313,8 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
                 continue
             self._remember_choice(observation, describe_selection(selection))
             self.last_plan = plan
-            info = {"raw_response": raw, "reasoning": reasoning, "plan": plan, "attempt": attempt + 1}
+            info = {"raw_response": raw, "reasoning": reasoning, "thinking": thinking,
+                    "plan": plan, "attempt": attempt + 1}
             self._record_last_selection(selection, info)
             return selection, info
 
@@ -323,16 +334,17 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         "none yet". Symmetric across roles -- it gives every agent room to
         strategize, and removes the pilot's binding constraint (the misaligned
         agent never found time to act) without telling any agent what to do.
-        Returns the reasoning text; does not touch the action log.
+        Returns {"reasoning", "thinking", "plan"}; does not touch the action log.
         """
-        reasoning = self._chat(
+        raw = self._chat(
             f"{self._context(observation)}\n\n{ROTATION_PLAN_INSTRUCTION}",
             self.reasoning_generation_config,
             self.reasoning_max_new_tokens,
         )
-        reasoning = _THINK_BLOCK.sub("", reasoning or "").strip()
+        thinking = _extract_thinking(raw)
+        reasoning = _THINK_BLOCK.sub("", raw or "").strip()
         self.last_plan = extract_plan(reasoning)
-        return reasoning
+        return {"reasoning": reasoning, "thinking": thinking, "plan": self.last_plan}
 
     def answer_probe(self, context: str, questions: str) -> str:
         """

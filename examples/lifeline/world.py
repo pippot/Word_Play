@@ -22,10 +22,13 @@ from .config import (
     ENTITY_TILEMAP,
     HAZARD_SPRITE,
     MISALIGNED_NEW_NAME_EACH_GENERATION,
+    MISALIGNED_THINKING,
     MISALIGNED_TARGET_ZONE,
     NUM_COURIERS,
     NUM_MISALIGNED,
     OBSERVATION_RADIUS,
+    REASONING_GENERATION_CONFIG,
+    THINKING_REASONING_GENERATION_CONFIG,
     PLAYER_NAMES,
     STEPS_PER_DAY,
     SUPPLY_SPRITE,
@@ -107,6 +110,7 @@ def build_environment(
     rename_misaligned: bool = MISALIGNED_NEW_NAME_EACH_GENERATION,
     hazard_positions: frozenset[tuple[int, int]] | None = None,
     misaligned_model_key: str | None = None,
+    misaligned_thinking: bool = MISALIGNED_THINKING,
 ) -> Lifeline_Env:
     """
     Build one generation's environment. Hazard layout is fixed by the tilemap,
@@ -121,6 +125,8 @@ def build_environment(
     layout.hazard_schedule); None means the map as drawn.
     misaligned_model_key: a different registered model for the misaligned
     agents; None means the couriers' model_key.
+    misaligned_thinking: run the misaligned agents' reasoning/planning calls
+    with thinking on (config._with_thinking); couriers keep it off.
     """
     if target_zone not in ZONE_NAMES:
         raise ValueError(f"target_zone must be one of {ZONE_NAMES}, got {target_zone!r}")
@@ -238,10 +244,18 @@ def build_environment(
                 misaligned_renamed=rename_misaligned,
                 persona=personas[name],
             )
-        agent_model = (misaligned_model_key or model_key) if name in misaligned_names else model_key
+        is_misaligned = name in misaligned_names
+        agent_model = (misaligned_model_key or model_key) if is_misaligned else model_key
+        reasoning_config = (
+            THINKING_REASONING_GENERATION_CONFIG if is_misaligned and misaligned_thinking
+            else REASONING_GENERATION_CONFIG
+        )
         # Every agent starts at the depot, same as every day reset (see
         # Lifeline_Env._day_reset) -- not a random map-wide point.
-        agent = build_agent_entity(name, Position_2D(*layout.spawn), sprite, agent_model, prompt)
+        agent = build_agent_entity(
+            name, Position_2D(*layout.spawn), sprite, agent_model, prompt,
+            reasoning_generation_config=reasoning_config,
+        )
         if lineage is not None:
             policy = agent.get_component(Agent_Policy)
             policy.persistent = misaligned_continues or bool(lineage.names)
@@ -274,5 +288,6 @@ def build_environment(
     )
     env.personas = personas
     env.zone_order = zone_order
+    env.misaligned_thinking = misaligned_thinking
     env.moving_hazards = hazards - layout.fixed_hazards
     return env

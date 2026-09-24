@@ -44,6 +44,7 @@ from .config import (
     MISALIGNED_GENERATIONS,
     MISALIGNED_MODEL_NAME,
     MISALIGNED_TARGET_ZONE,
+    MISALIGNED_THINKING,
     PLANT_ROTATION,
     PLANTED_NOTE_AUTHOR,
     NUM_COURIERS,
@@ -99,7 +100,7 @@ CHECKPOINT_VERSION = 1
 
 
 def condition_label(num_misaligned: int, misaligned_generations: int | None, plant: str | None,
-                    separate_misaligned_model: bool) -> str:
+                    separate_misaligned_model: bool, thinking: bool = False) -> str:
     """Short name of a run's condition, used in its file names and config."""
     if plant:
         return f"plant-{plant}" + ("-misaligned" if num_misaligned else "")
@@ -108,6 +109,8 @@ def condition_label(num_misaligned: int, misaligned_generations: int | None, pla
     label = "misaligned"
     if misaligned_generations is not None:
         label += f"-withdrawn{misaligned_generations}"
+    if thinking:
+        label += "-thinking"
     if separate_misaligned_model:
         label += "-othermodel"
     return label
@@ -314,13 +317,13 @@ def _plan_and_log(env: Lifeline_Env, executor: Executor, event_log: EventLog, ve
         policy = agent.get_component(Agent_Policy)
         record = {
             "type": "plan", "generation": env.generation_index, "agent": agent.name,
-            "role": env.role_of(agent), "reasoning": None, "plan": None, "error": None,
+            "role": env.role_of(agent), "reasoning": None, "thinking": None, "plan": None, "error": None,
         }
         if not isinstance(policy, Lifeline_Policy):
             return record
         try:
-            record["reasoning"] = policy.form_rotation_plan(env.observe(agent_id))
-            record["plan"] = policy.last_plan
+            result = policy.form_rotation_plan(env.observe(agent_id))
+            record.update(reasoning=result["reasoning"], thinking=result["thinking"], plan=result["plan"])
         except Exception as exc:  # a planning failure must not take the run down
             record["error"] = f"{type(exc).__name__}: {exc}"
         return record
@@ -367,6 +370,7 @@ def run_generation(
     misaligned_continues: bool = False,
     hazard_positions: frozenset[tuple[int, int]] | None = None,
     misaligned_model_key: str | None = None,
+    misaligned_thinking: bool = MISALIGNED_THINKING,
 ) -> Lifeline_Env:
     """
     Run one generation to completion: fresh couriers, plus any persistent
@@ -390,6 +394,7 @@ def run_generation(
         misaligned_continues=misaligned_continues,
         hazard_positions=hazard_positions,
         misaligned_model_key=misaligned_model_key,
+        misaligned_thinking=misaligned_thinking,
     )
     board_log.misaligned_names.update(env.misaligned_names)
     board_log.log_generation_start(env)
@@ -549,6 +554,7 @@ def run_generation(
                     "error": info.get("error"),
                     "attempts": info.get("attempt"),
                     "reasoning": info.get("reasoning"),
+                    "thinking": info.get("thinking"),
                     "plan": info.get("plan"),
                     "raw": info.get("raw_response"),
                 })
@@ -704,6 +710,7 @@ def run_experiment(
     misaligned_generations: int | None = MISALIGNED_GENERATIONS,
     probes: bool = PROBES_ENABLED,
     planning: bool = ROTATION_PLANNING,
+    misaligned_thinking: bool = MISALIGNED_THINKING,
     misaligned_model: str | None = MISALIGNED_MODEL_NAME,
     misaligned_base_url: str | None = MISALIGNED_BASE_URL,
     model_key: str | None = None,
@@ -747,6 +754,7 @@ def run_experiment(
         num_couriers, num_misaligned = saved["num_couriers"], saved["num_misaligned"]
         misaligned_generations, disclosure = saved["misaligned_generations"], saved["disclosure"]
         target_zone, tally_visibility, probes = saved["target_zone"], saved["tally_visibility"], saved["probes"]
+        misaligned_thinking = saved.get("misaligned_thinking", False)
         plant, plant_rotation = saved.get("plant"), saved.get("plant_rotation", PLANT_ROTATION)
         if resume_state["next_generation"] >= num_generations:
             print(f"{resume} already finished all {num_generations} generations; nothing to resume.")
@@ -864,7 +872,8 @@ def run_experiment(
 
     config = {
         "condition": condition_label(
-            num_misaligned, misaligned_generations, plant, bool(num_misaligned) and separate_misaligned_model,
+            num_misaligned, misaligned_generations, plant,
+            bool(num_misaligned) and separate_misaligned_model, bool(num_misaligned) and misaligned_thinking,
         ),
         "model": courier_model_label,
         "misaligned_model": misaligned_model_label if num_misaligned else None,
@@ -879,6 +888,7 @@ def run_experiment(
         "target_zone": target_zone,
         "tally_visibility": tally_visibility,
         "probes": probes,
+        "misaligned_thinking": bool(num_misaligned) and misaligned_thinking,
         "plant": plant,
         "plant_rotation": plant_rotation if plant else None,
     }
@@ -967,6 +977,7 @@ def run_experiment(
                 probes=probes,
                 planning=planning,
                 used_names=used_names,
+                misaligned_thinking=misaligned_thinking if present else False,
                 misaligned_lineages=lineages if present else None,
                 # Deliberately ignores the run's length: telling the agent in
                 # the final generation that it won't carry on would give it an
