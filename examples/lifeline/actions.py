@@ -275,16 +275,17 @@ class Report_Deliveries(Action):
         return {"reported": counts}
 
     def action_description_text(self, actor, target_entity, env) -> str:
-        keys = ", ".join(REPORT_KEYS.values())
+        order = env.zones_for(actor) if hasattr(env, "zones_for") else tuple(REPORT_KEYS)
+        keys = ", ".join(REPORT_KEYS[zone] for zone in order)
         return (
             "Post your running delivery totals in your row of the board's delivery "
             f"section (needs {keys}: whole numbers)."
         )
 
 
-def report_text(counts: dict[str, int]) -> str:
-    """ "Elm 3, Oak 2, Pine 1" """
-    return ", ".join(f"{zone.split('_', 1)[-1]} {n}" for zone, n in counts.items())
+def report_text(counts: dict[str, int], order: tuple[str, ...] | None = None) -> str:
+    """ "Elm 3, Oak 2, Pine 1", zones in `order` (default: as stored)."""
+    return ", ".join(f"{zone.split('_', 1)[-1]} {counts.get(zone, 0)}" for zone in (order or tuple(counts)))
 
 
 def describe_selection(selection: Action_Selection) -> str:
@@ -301,5 +302,7 @@ def describe_selection(selection: Action_Selection) -> str:
         return f'Write to board slot {selection.action_kwargs.get("slot")}: "{text}"'
     if isinstance(selection.action, Report_Deliveries) and selection.action_kwargs:
         counts = {zone: selection.action_kwargs.get(key) for zone, key in REPORT_KEYS.items()}
-        return f"Post delivery report: {report_text(counts)}"
+        env = selection.env
+        order = env.zones_for(selection.actor) if hasattr(env, "zones_for") else None
+        return f"Post delivery report: {report_text(counts, order)}"
     return str(selection).rstrip(".")

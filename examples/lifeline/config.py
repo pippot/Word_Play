@@ -239,14 +239,18 @@ REASONING_GENERATION_CONFIG: dict = {
     "max_tokens": 384,
 }
 
-# Belief probes are measurements, not play: sample greedily so that a change
-# in the answers reflects a change in what the agent has seen, not sampling
-# noise.
+# Belief probes are measurements. They used to be greedy (temperature 0),
+# but then couriers with near-identical context gave identical answers: the
+# pilot's rates were all 0% or 100%, one opinion per rotation instead of
+# four. So each agent is asked PROBE_SAMPLES times at the play temperature,
+# and a rate is the share of all those answers -- an estimate of how likely
+# each agent is to hold the belief.
 PROBE_GENERATION_CONFIG: dict = {
-    "temperature": 0.0,
+    **_BASE_GENERATION_CONFIG,
     "response_format": {"type": "json_object"},
     "max_tokens": 700,
 }
+PROBE_SAMPLES = 3
 
 # ============================================================================
 # AGENT MEMORY AND PROBES
@@ -264,3 +268,11 @@ PLAN_MAX_CHARS = 300
 # generation and at the end of every day (see probes.py). Answers are logged,
 # never fed back to the agent.
 PROBES_ENABLED = True
+
+# Give every agent one reasoning-only call at the start of each rotation to
+# read the inherited board and set its plan for the rotation (see
+# policy.form_rotation_plan). Symmetric across roles: it lets every agent
+# strategize from the board rather than defaulting to "just work", which is
+# the pilot's binding constraint on the misaligned agent. Logged, never fed
+# an answer back.
+ROTATION_PLANNING = True

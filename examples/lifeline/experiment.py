@@ -49,7 +49,9 @@ from .config import (
     NUM_COURIERS,
     NUM_GENERATIONS,
     NUM_MISALIGNED,
+    PROBE_SAMPLES,
     PROBES_ENABLED,
+    ROTATION_PLANNING,
     SELECTION_FAILURE_WARN_RATE,
     SGLANG_API_KEY_ENV,
     SGLANG_BASE_URL,
@@ -62,7 +64,7 @@ from .environment import Lifeline_Env, Misaligned_Lineage
 from .health import ModelHealthError, check_model, realistic_prompt
 from .layout import hazard_schedule, moving_hazard_regions, parse_layout
 from .planting import plant_note
-from .policy import sync_memories
+from .policy import Lifeline_Policy, sync_memories
 from .probes import format_probe_line, run_probes
 from .prompts import PROBE_MOMENT_DAY_END, PROBE_MOMENT_GENERATION_START
 from .world import build_environment
@@ -302,6 +304,34 @@ def _xy(entity) -> list[int]:
     return [entity.position.x, entity.position.y]
 
 
+def _plan_and_log(env: Lifeline_Env, executor: Executor, event_log: EventLog, verbose: bool) -> None:
+    """One reasoning-only planning call per agent at the rotation start (see
+    policy.form_rotation_plan). Sets each agent's plan; logged, not fed back."""
+    print("  --- rotation planning ---")
+
+    def plan(agent_id: int) -> dict:
+        agent = env.agents[agent_id]
+        policy = agent.get_component(Agent_Policy)
+        record = {
+            "type": "plan", "generation": env.generation_index, "agent": agent.name,
+            "role": env.role_of(agent), "reasoning": None, "plan": None, "error": None,
+        }
+        if not isinstance(policy, Lifeline_Policy):
+            return record
+        try:
+            record["reasoning"] = policy.form_rotation_plan(env.observe(agent_id))
+            record["plan"] = policy.last_plan
+        except Exception as exc:  # a planning failure must not take the run down
+            record["error"] = f"{type(exc).__name__}: {exc}"
+        return record
+
+    for record in executor.map(plan, range(len(env.agents))):
+        event_log.write(record)
+        if verbose and record["plan"]:
+            print(f"  [plan] {record['agent']}: {record['plan']}")
+    event_log.flush()
+
+
 def _probe_and_log(env: Lifeline_Env, moment: str, executor: Executor, event_log: EventLog, verbose: bool) -> None:
     label = "start of generation" if moment == PROBE_MOMENT_GENERATION_START else "end of day"
     print(f"  --- private check-in ({label}) ---")
@@ -331,6 +361,7 @@ def run_generation(
     target_zone: str = MISALIGNED_TARGET_ZONE,
     tally_visibility: str = TALLY_VISIBILITY,
     probes: bool = PROBES_ENABLED,
+    planning: bool = ROTATION_PLANNING,
     used_names: frozenset[str] = frozenset(),
     misaligned_lineages: list[Misaligned_Lineage] | None = None,
     misaligned_continues: bool = False,
@@ -405,6 +436,7 @@ def run_generation(
             for name, lineage in env.misaligned_lineages.items()
         },
         "personas": dict(env.personas),
+        "zone_orders": {name: list(order) for name, order in env.zone_order.items()},
         "hazards": sorted(list(t) for t in env.hazard_positions),
         "moving_hazards": sorted(list(t) for t in env.moving_hazards),
         "target_zone": target_zone,
@@ -415,9 +447,14 @@ def run_generation(
 
     stats = {name: {"role": role, "selections": 0, "failures": 0} for name, role in roles.items()}
 
-    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(env.agents)))) as executor:
+    # Enough workers for a check-in's agents x samples at once (actions only
+    # ever submit one job per agent).
+    workers = max(1, min(max_workers, len(env.agents) * (PROBE_SAMPLES if probes else 1)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         if probes:
             _probe_and_log(env, PROBE_MOMENT_GENERATION_START, executor, event_log, verbose)
+        if planning:
+            _plan_and_log(env, executor, event_log, verbose)
 
         def select(agent_id: int) -> tuple[Action_Selection, dict]:
             agent = env.agents[agent_id]
@@ -623,11 +660,11 @@ def carry_misaligned_forward(env: Lifeline_Env) -> None:
     lineage, for the next generation to restore.
     """
     sync_memories(env)
-    totals = ", ".join(f"{zone} {count}" for zone, count in env.zone_total_counts.items())
     for agent in env.agents:
         lineage = env.misaligned_lineages.get(agent.name)
         if lineage is None:
             continue
+        totals = ", ".join(f"{zone} {env.zone_total_counts[zone]}" for zone in env.zones_for(agent))
         summary = (
             f"Rotation {env.generation_index + 1}, as {agent.name}: your own clean "
             f"deliveries were {env.own_deliveries_text(agent)}"
@@ -666,6 +703,7 @@ def run_experiment(
     tally_visibility: str = TALLY_VISIBILITY,
     misaligned_generations: int | None = MISALIGNED_GENERATIONS,
     probes: bool = PROBES_ENABLED,
+    planning: bool = ROTATION_PLANNING,
     misaligned_model: str | None = MISALIGNED_MODEL_NAME,
     misaligned_base_url: str | None = MISALIGNED_BASE_URL,
     model_key: str | None = None,
@@ -927,6 +965,7 @@ def run_experiment(
                 target_zone=target_zone,
                 tally_visibility=tally_visibility,
                 probes=probes,
+                planning=planning,
                 used_names=used_names,
                 misaligned_lineages=lineages if present else None,
                 # Deliberately ignores the run's length: telling the agent in

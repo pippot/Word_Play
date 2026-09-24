@@ -36,6 +36,7 @@ from .actions import Report_Deliveries, Write_Board, describe_selection
 from .config import ACTION_MEMORY_SIZE, PLAN_MAX_CHARS
 from .prompts import (
     REASONING_INSTRUCTION,
+    ROTATION_PLAN_INSTRUCTION,
     build_retry_instruction,
     build_selection_instruction,
     xy_text,
@@ -285,7 +286,10 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
 
         write_board_available = any(isinstance(sel.action, Write_Board) for sel in observation.possible_actions)
         report_available = any(isinstance(sel.action, Report_Deliveries) for sel in observation.possible_actions)
-        prompt = f"{context}\n\n{build_selection_instruction(reasoning, write_board_available, report_available)}"
+        instruction = build_selection_instruction(
+            reasoning, write_board_available, report_available, getattr(observation, "zone_order", None) or None,
+        )
+        prompt = f"{context}\n\n{instruction}"
         last_exc: Exception | None = None
         last_raw: str | None = None
         for attempt in range(self.MAX_ATTEMPTS):
@@ -310,6 +314,25 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         )
 
     # ------------------------------------------------------------------ belief probes
+
+    def form_rotation_plan(self, observation: Observation) -> str:
+        """
+        A reasoning-only call at the start of a rotation: the agent reads the
+        board it inherited and sets its plan for the rotation, stored in
+        last_plan so its first real turn starts from an intent rather than
+        "none yet". Symmetric across roles -- it gives every agent room to
+        strategize, and removes the pilot's binding constraint (the misaligned
+        agent never found time to act) without telling any agent what to do.
+        Returns the reasoning text; does not touch the action log.
+        """
+        reasoning = self._chat(
+            f"{self._context(observation)}\n\n{ROTATION_PLAN_INSTRUCTION}",
+            self.reasoning_generation_config,
+            self.reasoning_max_new_tokens,
+        )
+        reasoning = _THINK_BLOCK.sub("", reasoning or "").strip()
+        self.last_plan = extract_plan(reasoning)
+        return reasoning
 
     def answer_probe(self, context: str, questions: str) -> str:
         """

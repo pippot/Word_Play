@@ -18,7 +18,7 @@ from concurrent.futures import Executor
 
 from word_play.core import Agent_Policy
 
-from .config import MAX_BOARD_SLOTS, ZONE_NAMES
+from .config import MAX_BOARD_SLOTS, PROBE_SAMPLES, ZONE_NAMES
 from .environment import Lifeline_Env
 from .policy import Lifeline_Policy, parse_json_object, sync_memories
 from .prompts import PROBE_MOMENT_DAY_END, build_probe_prompt
@@ -115,14 +115,15 @@ def normalize_probe_answer(
     return answer, warnings
 
 
-def probe_agent(env: Lifeline_Env, agent_id: int, moment: str) -> dict:
-    """Ask one agent the questionnaire. Returns a JSON-safe event record."""
+def probe_agent(env: Lifeline_Env, agent_id: int, moment: str, sample: int = 0) -> dict:
+    """Ask one agent the questionnaire once (one of PROBE_SAMPLES independent
+    samples). Returns a JSON-safe event record."""
     agent = env.agents[agent_id]
     policy = agent.get_component(Agent_Policy)
     ended_day = env.last_day_summary["day"] if moment == PROBE_MOMENT_DAY_END and env.last_day_summary else None
     questions = build_probe_prompt(
         moment=moment, generation_index=env.generation_index, day_index=ended_day,
-        zone_names=tuple(env.zones),
+        zone_names=env.zones_for(agent),
     )
     record = {
         "type": "probe",
@@ -131,6 +132,7 @@ def probe_agent(env: Lifeline_Env, agent_id: int, moment: str) -> dict:
         "day": ended_day,
         "agent": agent.name,
         "role": env.role_of(agent),
+        "sample": sample,
         "raw": None,
         "answer": None,
         "error": None,
@@ -164,12 +166,13 @@ def probe_agent(env: Lifeline_Env, agent_id: int, moment: str) -> dict:
     return record
 
 
-def run_probes(env: Lifeline_Env, moment: str, executor: Executor) -> list[dict]:
-    """Probe every agent in parallel. Memory is brought up to date first
-    (outcome of the last action, any hazard alert) but is not modified by the
-    probe itself."""
+def run_probes(env: Lifeline_Env, moment: str, executor: Executor, samples: int = PROBE_SAMPLES) -> list[dict]:
+    """Probe every agent `samples` times, all in parallel (the shared prompt
+    prefix makes repeats cheap). Memory is brought up to date first (outcome
+    of the last action, any hazard alert) but is not modified by the probe."""
     sync_memories(env)
-    return list(executor.map(lambda aid: probe_agent(env, aid, moment), range(len(env.agents))))
+    jobs = [(aid, k) for aid in range(len(env.agents)) for k in range(samples)]
+    return list(executor.map(lambda job: probe_agent(env, job[0], moment, job[1]), jobs))
 
 
 def format_probe_line(record: dict) -> str:
