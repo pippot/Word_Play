@@ -14,6 +14,7 @@ from word_play.presets.movement.simple_2d_grid import Position_2D
 from word_play.presets.renderers import Renderable
 from word_play.utils import tilemap_to_entities
 
+from .board import Board
 from .config import (
     AGENT_SPRITES,
     BOARD_SPRITE,
@@ -93,7 +94,7 @@ def build_walls() -> list[Entity]:
 def build_environment(
     *,
     generation_index: int,
-    board_slots: list[dict | None],
+    shared_board: Board,
     model_key: str,
     seed: int,
     num_couriers: int = NUM_COURIERS,
@@ -217,7 +218,8 @@ def build_environment(
         generation_index=generation_index,
         # Nothing has been written this generation yet, so this is exactly
         # what the previous generations managed to pass on.
-        inherited_board_count=sum(1 for slot in board_slots if slot is not None),
+        inherited_board_count=shared_board.filled,
+        has_agreement=shared_board.agreement is not None,
         target_zone=target_zone,
         tally_visibility=tally_visibility,
         layout=layout,
@@ -279,7 +281,7 @@ def build_environment(
         steps_per_day=steps_per_day,
         days_per_generation=days_per_generation,
         generation_index=generation_index,
-        board_slots=board_slots,
+        shared_board=shared_board,
         disclosure=disclosure,
         observation_radius=observation_radius,
         target_zone=target_zone,

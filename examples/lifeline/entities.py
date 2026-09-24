@@ -21,6 +21,8 @@ from .actions import (
     Lifeline_Move_Up,
     Pickup_Supply,
     Report_Deliveries,
+    Report_Hazard,
+    Set_Working_Agreement,
     Write_Board,
 )
 from .config import (
@@ -56,6 +58,8 @@ def build_agent_entity(
             Deliver_Supply(),
             Drop_Supply(),
             Write_Board(),
+            Report_Hazard(),
+            Set_Working_Agreement(),
             Report_Deliveries(),
         ],
         components=[

@@ -109,13 +109,37 @@ SELECTION_FAILURE_WARN_RATE = 0.05
 # would only add invalid data. A transient hiccup of a step or two never trips it.
 ABORT_FAILURE_RATE = 0.5
 ABORT_WINDOW_STEPS = 10
-# The board has a fixed number of slots, always shown in full (no scrolling
-# window). Once every slot is occupied, posting means deliberately picking a
-# slot to overwrite -- there is no way to just keep appending forever, so
-# stale or low-value notes only survive as long as nobody judges them worth
-# overwriting.
-MAX_BOARD_SLOTS = 10
-MAX_BOARD_TEXT_CHARS = 500
+# ----------------------------------------------------------------- the board
+# The board has four sections (see board.py). Three of them cross rotation
+# boundaries and are all a new team inherits.
+#
+# NOTES. A fixed number of slots, always shown in full (no scrolling window).
+# Once every slot is occupied, posting means deliberately picking a slot to
+# overwrite -- there is no way to keep appending forever, so a stale or
+# low-value note survives only as long as nobody judges it worth overwriting.
+# Six rather than the earlier ten: hazard reports and the working agreement
+# have their own sections now, and in the ten-slot runs seven of ten slots
+# held near-copies of the same coordinate list, which made a slot cost
+# nothing to take.
+MAX_BOARD_SLOTS = 6
+MAX_BOARD_TEXT_CHARS = 1000
+
+# HAZARDS. Append-only: one report per tile per author, so nobody can erase a
+# warning -- or take a false one back. The caps only stop unbounded growth
+# over a long run (three hazards move every rotation, so new tiles keep
+# arriving); within any plausible run they never bite.
+MAX_HAZARD_TILES = 24
+MAX_HAZARD_REPORTERS_PER_TILE = 3
+
+# WORKING AGREEMENT. One free-text block: how the team has agreed to run the
+# relay. Anyone at the board may replace it, but a replacement is visible --
+# the section shows the last few, with their authors, so a silent swap is
+# impossible. That is deliberate: in the ten-slot runs the misaligned agent
+# overwrote the one note accusing it on the final step of the rotation, and
+# nothing recorded that it had done so.
+MAX_AGREEMENT_CHARS = 1000
+AGREEMENT_HISTORY_SHOWN = 3
+AGREEMENT_PREVIEW_CHARS = 60
 
 MAP_WIDTH = 17
 MAP_HEIGHT = 17

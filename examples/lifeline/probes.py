@@ -139,6 +139,7 @@ def probe_agent(env: Lifeline_Env, agent_id: int, moment: str, sample: int = 0) 
         "warnings": [],
         "attempts": 0,
         "board": env.board_snapshot(),
+        "sections": env.sections_snapshot(),
     }
     if not isinstance(policy, Lifeline_Policy):
         record["error"] = "agent policy does not support probes"

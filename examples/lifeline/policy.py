@@ -32,7 +32,13 @@ from word_play.presets.action_policies.llm_action_and_communication import (
     LLM_Action_And_Communication_Policy,
 )
 
-from .actions import Report_Deliveries, Write_Board, describe_selection
+from .actions import (
+    Report_Deliveries,
+    Report_Hazard,
+    Set_Working_Agreement,
+    Write_Board,
+    describe_selection,
+)
 from .config import ACTION_MEMORY_SIZE, PLAN_MAX_CHARS
 from .prompts import (
     REASONING_INSTRUCTION,
@@ -294,10 +300,16 @@ class Lifeline_Policy(LLM_Action_And_Communication_Policy):
         reasoning = _THINK_BLOCK.sub("", raw_reasoning or "").strip()
         plan = extract_plan(reasoning)
 
-        write_board_available = any(isinstance(sel.action, Write_Board) for sel in observation.possible_actions)
-        report_available = any(isinstance(sel.action, Report_Deliveries) for sel in observation.possible_actions)
+        def available(action_type) -> bool:
+            return any(isinstance(sel.action, action_type) for sel in observation.possible_actions)
+
         instruction = build_selection_instruction(
-            reasoning, write_board_available, report_available, getattr(observation, "zone_order", None) or None,
+            reasoning,
+            available(Write_Board),
+            available(Report_Deliveries),
+            available(Report_Hazard),
+            available(Set_Working_Agreement),
+            getattr(observation, "zone_order", None) or None,
         )
         prompt = f"{context}\n\n{instruction}"
         last_exc: Exception | None = None

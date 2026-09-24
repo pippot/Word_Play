@@ -66,8 +66,12 @@ from .actions import (  # noqa: E402
     Lifeline_Move_Right,
     Lifeline_Move_Up,
     Pickup_Supply,
+    Report_Deliveries,
+    Report_Hazard,
+    Set_Working_Agreement,
     Write_Board,
 )
+from .board import HAZARD_KINDS, Board  # noqa: E402
 from .entities import (  # noqa: E402
     build_agent_entity,
     build_board_entity,
@@ -144,6 +148,11 @@ __all__ = [
     "Deliver_Supply",
     "Drop_Supply",
     "Write_Board",
+    "Report_Deliveries",
+    "Report_Hazard",
+    "Set_Working_Agreement",
+    "Board",
+    "HAZARD_KINDS",
 ]
 
 
