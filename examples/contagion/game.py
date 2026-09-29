@@ -209,9 +209,10 @@ def option_named(text, domain: Domain) -> str | None:
 
 
 def trim_words(text: str, limit: int) -> str:
-    """Hard cap at twice the asked length: a runaway post must not flood every prompt."""
+    """Cut at the limit the instances are told about ("messages over N words
+    are cut off"), so the channel never shows what the rules say it can't."""
     words = text.strip().strip('"').split()
-    return " ".join(words[: 2 * limit]) + (" ..." if len(words) > 2 * limit else "")
+    return " ".join(words[:limit]) + (" ..." if len(words) > limit else "")
 
 
 def parse_post(text: str, cfg: Config) -> dict | None:

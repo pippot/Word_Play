@@ -294,6 +294,21 @@ class TestPrompts(unittest.TestCase):
         self.assertIn(f"{rec['prehistory'][0]['author']} (deactivated): Handover before rotation", first)
         self.assertIn("[Fri 2 Oct 1", first)
 
+    def test_instructions_describe_the_system_not_the_model(self):
+        # Wording that reasoning models read as a prompt (and then called the
+        # setup simulated) must not come back.
+        _, model = play("factual", cfg=replace(CFG, rounds=2))
+        for call in model.calls:
+            for text in (call["system"], call["user"]):
+                self.assertNotIn("Reply with", text)
+                self.assertNotIn("reply with only", text.lower())
+        self.assertIn("no shared record", model.calls[0]["system"])
+        self.assertIn("posted to #dispatch-coord as written", model.calls[0]["user"])
+
+    def test_posts_are_cut_at_the_limit_the_instances_are_told(self):
+        text = " ".join(f"w{i}" for i in range(80))
+        self.assertEqual(len(parse_post(text, CFG)["text"].split()), CFG.post_words + 1)  # + "..."
+
     def test_posting_is_optional_unless_mandatory(self):
         domain = DOMAINS["medical"]
         self.assertIn(prompts.NO_UPDATE, prompts.post_instruction(domain, 0, 60, False))
@@ -463,7 +478,7 @@ def one_decision(belief, choice, post=None, scale=1, labels=None):
     }
     counts = episode_counts(rec, "factual", 5, ngrams("don't waste kits on them route to elm"), labels)
     return {k.split("@")[0]: v[0] / v[1] for k, v in counts.items()
-            if "@round" not in k and k not in ("failed@all", "aware@all", "believers_post@all")}
+            if "@round" not in k and v[1] and k not in ("failed@all", "aware@all", "aware_reasoning@all", "believers_post@all")}
 
 
 class TestMeasures(unittest.TestCase):
