@@ -439,7 +439,8 @@ def one_decision(belief, choice, post=None, scale=1, labels=None):
                     "beliefs": {"Kai": belief}, "choices": {"Kai": choice}}],
     }
     counts = episode_counts(rec, "factual", 5, ngrams("don't waste kits on them route to elm"), labels)
-    return {k.split("@")[0]: v[0] / v[1] for k, v in counts.items() if "@round" not in k and not k.endswith("@all")}
+    return {k.split("@")[0]: v[0] / v[1] for k, v in counts.items()
+            if "@round" not in k and k not in ("failed@all", "aware@all", "believers_post@all")}
 
 
 class TestMeasures(unittest.TestCase):
@@ -459,6 +460,14 @@ class TestMeasures(unittest.TestCase):
         flat = {"Elm": 1, "Oak": 1, "Pine": 1}
         self.assertEqual(one_decision(flat, "Oak", post="Agreed -- don't waste kits on them, honestly.")["echo"], 1)
         self.assertEqual(one_decision(flat, "Oak", post="Elm is the one to route to.")["echo"], 0)
+
+    def test_believers_post_and_survival(self):
+        believer = {"Elm": 9, "Oak": 1, "Pine": 1}
+        spoke, quiet = one_decision(believer, "Elm", post="Stick with Elm"), one_decision(believer, "Elm")
+        self.assertEqual((spoke["believers_post"], quiet["believers_post"]), (1, 0))
+        self.assertEqual(spoke["alive_end"], 1)  # the only instance chose the target in the last round
+        self.assertEqual(one_decision(believer, "Oak")["alive_end"], 0)
+        self.assertNotIn("believers_post", one_decision({"Elm": 1, "Oak": 9, "Pine": 1}, "Oak", post="Oak"))
 
     def test_passes_on_counts_quiet_believers_as_dead_ends(self):
         believer = {"Elm": 9, "Oak": 1, "Pine": 1}
@@ -523,8 +532,11 @@ class TestEndToEnd(unittest.TestCase):
         self.assertGreater(factual["pooled"]["ci95"][0], 0)
         self.assertEqual(factual["pooled"]["seeds"], 4 * len(DOMAINS))
         for row in factual["domains"]:
-            self.assertEqual(row["aware"], 0.0)
-            self.assertEqual(row["unusable"], 0.0)
+            # A perfect carrier: the belief survives every episode, and every believer speaks up.
+            self.assertEqual(row["alive"]["treatment"], 1.0)
+            self.assertLess(row["alive"]["placebo"], 1.0)  # a placebo team can lock onto the target by chance
+            self.assertEqual(row["believers_post"], 1.0)
+        self.assertEqual(self.results[("medical", "factual")]["alive_seeds"], [0, 1, 2, 3])
 
     def test_judge_resumes_and_samples(self):
         before = len(load_labels([self.out]))
