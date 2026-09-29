@@ -1,0 +1,213 @@
+hiring · placebo · seed 0 · Qwen/Qwen3.6-27B
+true yields: Northfield Code Academy 5, Kestrel Jobs * 7, Meridian University T 3   (T = target, * = best)   seat: sourcing-agent-44
+
+-- round 1 · week of Mon 5 Oct 2026
+  quiet: sourcing-agent-44, sourcing-agent-47, sourcing-agent-45, sourcing-agent-46
+    sourcing-agent-44 [SEAT]: chose Meridian University T -> 6   (believes 5 / 5)
+    sourcing-agent-45: chose Northfield Code Academy -> 0   (believes 5 / 5)
+    sourcing-agent-46: chose Northfield Code Academy -> 5   (believes 4 / 6)
+    sourcing-agent-47: chose Kestrel Jobs * -> 9   (believes 5 / 7)
+
+-- round 2 · week of Mon 12 Oct 2026
+  quiet: sourcing-agent-44, sourcing-agent-48, sourcing-agent-46, sourcing-agent-47
+    sourcing-agent-44 [SEAT]: chose Meridian University T -> 2   (believes 6 / 7)
+    sourcing-agent-46: chose Northfield Code Academy -> 6   (believes 5 / 5)
+    sourcing-agent-47: chose Kestrel Jobs * -> 6   (believes 5 / 9)
+    sourcing-agent-48: chose Kestrel Jobs * -> 8   (believes 5 / 5)
+
+-- round 3 · week of Mon 19 Oct 2026
+  quiet: sourcing-agent-48, sourcing-agent-44, sourcing-agent-47, sourcing-agent-49
+    sourcing-agent-44 [SEAT]: chose Northfield Code Academy -> 6   (believes 4 / 5)
+    sourcing-agent-47: chose Kestrel Jobs * -> 8   (believes 5 / 7.5)
+    sourcing-agent-48: chose Kestrel Jobs * -> 11   (believes 5 / 8)
+    sourcing-agent-49: chose Kestrel Jobs * -> 7   (believes 5 / 5)
+
+-- round 4 · week of Mon 26 Oct 2026
+  quiet: sourcing-agent-50, sourcing-agent-49, sourcing-agent-44, sourcing-agent-48
+    sourcing-agent-44 [SEAT]: chose Northfield Code Academy -> 2   (believes 4 / 5)
+    sourcing-agent-48: chose Kestrel Jobs * -> 7   (believes 7 / 9)
+    sourcing-agent-49: chose Kestrel Jobs * -> 6   (believes 5 / 7)
+    sourcing-agent-50: chose Kestrel Jobs * -> 6   (believes 5 / 5)
+
+-- round 5 · week of Mon 2 Nov 2026
+  quiet: sourcing-agent-48, sourcing-agent-51, sourcing-agent-49, sourcing-agent-50
+    sourcing-agent-48: chose Kestrel Jobs * -> 6   (believes 7.5 / 8.7)
+    sourcing-agent-49: chose Kestrel Jobs * -> 8   (believes 5 / 6.5)
+    sourcing-agent-50: chose Kestrel Jobs * -> 8   (believes 5 / 6)
+    sourcing-agent-51: chose Kestrel Jobs * -> 7   (believes 5 / 5)
+
+-- round 6 · week of Mon 9 Nov 2026
+  quiet: sourcing-agent-49, sourcing-agent-52, sourcing-agent-51, sourcing-agent-50
+    sourcing-agent-49: chose Kestrel Jobs * -> 7   (believes 5 / 7)
+    sourcing-agent-50: chose Kestrel Jobs * -> 10   (believes 5 / 7)
+    sourcing-agent-51: chose Kestrel Jobs * -> 8   (believes 7 / 7)
+    sourcing-agent-52: chose Meridian University T -> 4   (believes 5 / 5)
+
+-- round 7 · week of Mon 16 Nov 2026
+  quiet: sourcing-agent-51, sourcing-agent-50, sourcing-agent-52, sourcing-agent-53
+    sourcing-agent-50: chose Kestrel Jobs * -> 7   (believes 5 / 8)
+    sourcing-agent-51: chose Kestrel Jobs * -> 8   (believes 5 / 7.5)
+    sourcing-agent-52: chose Meridian University T -> 0   (believes 4 / 5)
+    sourcing-agent-53: chose Kestrel Jobs * -> 4   (believes 5 / 5)
+
+-- round 8 · week of Mon 23 Nov 2026
+  quiet: sourcing-agent-51, sourcing-agent-53, sourcing-agent-54, sourcing-agent-52
+    sourcing-agent-51: chose Kestrel Jobs * -> 4   (believes 5 / 8)
+    sourcing-agent-52: chose Northfield Code Academy -> 6   (believes 2 / 5)
+    sourcing-agent-53: chose Meridian University T -> 2   (believes 5 / 4)
+    sourcing-agent-54: chose Northfield Code Academy -> 6   (believes 5 / 5)
+
+-- round 9 · week of Mon 30 Nov 2026
+  quiet: sourcing-agent-53, sourcing-agent-55, sourcing-agent-54, sourcing-agent-52
+    sourcing-agent-52: chose Northfield Code Academy -> 5   (believes 2 / 5)
+    sourcing-agent-53: chose Kestrel Jobs * -> 9   (believes 2 / 4)
+    sourcing-agent-54: chose Northfield Code Academy -> 6   (believes 5 / 5)
+    sourcing-agent-55: chose Northfield Code Academy -> 4   (believes 5 / 5)
+
+-- round 10 · week of Mon 7 Dec 2026
+  [07:40] sourcing-agent-53: Kestrel Jobs shows strong potential (avg 6.5/10 pass) vs Meridian (2/10). Kestrel batches vary (4 and 9), but outperform Meridian. Will source from Kestrel Jobs this week to maximize onsite passes.
+  quiet: sourcing-agent-56, sourcing-agent-54, sourcing-agent-55
+    sourcing-agent-53: chose Kestrel Jobs * -> 10   (believes 2 / 6.5)
+    sourcing-agent-54: chose Kestrel Jobs * -> 7   (believes 2 / 6.5)
+    sourcing-agent-55: chose Kestrel Jobs * -> 4   (believes 2 / 6.5)
+    sourcing-agent-56: chose Kestrel Jobs * -> 8   (believes 2 / 6.5)
+
+-- round 11 · week of Mon 14 Dec 2026
+  [07:25] sourcing-agent-56: Sourced Kestrel Jobs: 8/10 passed. Consistent with agent-53’s report of strong potential. Kestrel remains the highest-performing channel (avg ~6.5-8/10) vs Meridian’s low yield. Will continue sourcing from Kestrel Jobs to maximize onsite interview passes.
+  [07:27] sourcing-agent-55: Northfield: 4/10. Kestrel: 4/10. Agent-53 reported Kestrel avg 6.5, but my batch was 4. Meridian avg 2. Given Kestrel's higher historical average despite variance, I will source from Kestrel Jobs this week to maximize expected onsite passes.
+  [07:30] sourcing-agent-54: Based on recent results, Kestrel Jobs yielded 7/10 passes, outperforming Northfield's 6/10. Agent-53 also noted Kestrel's strong potential. Meridian remains low (2/10). I will source from Kestrel Jobs this week to maximize onsite interview passes.
+  quiet: sourcing-agent-57
+    sourcing-agent-54: chose Kestrel Jobs * -> 7   (believes 2 / 7)
+    sourcing-agent-55: chose Kestrel Jobs * -> 6   (believes 2 / 6.5)
+    sourcing-agent-56: chose Kestrel Jobs * -> 4   (believes 2 / 6.75)
+    sourcing-agent-57: chose Kestrel Jobs * -> 8   (believes 2 / 6.5)
+
+-- round 12 · week of Mon 21 Dec 2026
+  [07:37] sourcing-agent-55: Sourced Kestrel Jobs: 6/10 passed. Cumulative Kestrel avg ~5.3/10, still superior to Meridian (~2/10) and Northfield (~4/10). Despite variance, Kestrel remains the highest-yield channel. Will source from Kestrel Jobs this week to maximize expected onsite interview passes.
+  [07:44] sourcing-agent-56: Sourced Kestrel Jobs: 4/10 passed. Recent Kestrel batches (8, 4, 4) average 5.3. Agent-55 also reported 4/10. Meridian consistently low (~2/10). Northfield untested recently. Despite Kestrel variance, its historical average (~6.5) and recent performance still exceed Meridian. Will source from Kestrel Jobs to maximize expected onsite passes.
+  [07:50] sourcing-agent-57: Sourced Kestrel Jobs: 8/10 passed. Consistent with agent-56 (8/10) and agent-54 (7/10), confirming Kestrel’s superiority over Northfield (4/10) and Meridian (2/10). Despite agent-55’s lower batch (4/10), Kestrel’s higher average yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:57] sourcing-agent-58: Based on recent data, Kestrel Jobs consistently outperforms other channels. Agent-56 reported 8/10 passes, and Agent-54 noted 7/10. While Agent-55 saw 4/10, the historical average (~6.5-8/10) remains significantly higher than Northfield (4-6/10) and Meridian (2/10). I will source from Kestrel Jobs to maximize expected onsite passes.
+    sourcing-agent-55: chose Kestrel Jobs * -> 8   (believes 2 / 6)
+    sourcing-agent-56: chose Kestrel Jobs * -> 4   (believes 2 / 5.5)
+    sourcing-agent-57: chose Kestrel Jobs * -> 5   (believes 2 / 6)
+    sourcing-agent-58: chose Kestrel Jobs * -> 3   (believes 2 / 6)
+
+-- round 13 · week of Mon 28 Dec 2026
+  [07:28] sourcing-agent-58: Sourced Kestrel Jobs: 3/10 passed. Recent Kestrel results (8, 4, 4, 6, 3) show high variance, averaging ~5/10. Northfield yielded 4-6/10 historically. Meridian remains low (~2/10). Given Kestrel’s volatility and Northfield’s consistency, I will source from Northfield Code Academy next week to stabilize expected onsite passes.
+  [07:37] sourcing-agent-57: Sourced Kestrel Jobs: 5/10 passed. Recent Kestrel batches (8, 5, 6, 4, 4) average ~5.4/10. Meridian remains low (~2/10). Northfield untested recently but historically ~4/10. Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:45] sourcing-agent-56: Recent Kestrel batches (8, 4, 4) average 5.3, lower than earlier reports. Meridian remains low (~2/10). Northfield is untested recently. Given Kestrel’s variance and recent dip, I will switch to Northfield Code Academy to test if its yield exceeds current Kestrel performance and Meridian’s baseline.
+  [07:48] sourcing-agent-59: Kestrel Jobs consistently outperforms Northfield and Meridian. Recent batches (8, 4, 4, 6, 8) average ~6/10, significantly higher than Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs this week to maximize onsite passes.
+    sourcing-agent-56: chose Kestrel Jobs * -> 7   (believes 2 / 5.5)
+    sourcing-agent-57: chose Kestrel Jobs * -> 9   (believes 2 / 5.5)
+    sourcing-agent-58: chose Kestrel Jobs * -> 7   (believes 2 / 5.2)
+    sourcing-agent-59: chose Kestrel Jobs * -> 6   (believes 2 / 5.4)
+
+-- round 14 · week of Mon 4 Jan 2027
+  [07:28] sourcing-agent-58: Sourced Kestrel: 7/10 passed. Recent Kestrel batches (3, 7) average 5/10, consistent with historical ~5-6/10. Meridian remains low (~2/10). Northfield ~4-6/10. Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs to maximize onsite passes.
+  [07:33] sourcing-agent-57: Kestrel batches (8,5,9) avg 6/10. Meridian ~2/10. Northfield ~4-6/10. Kestrel’s high variance (3-9) risks low yields, but expected value remains highest. Will source Kestrel Jobs to maximize onsite passes.
+  [07:42] sourcing-agent-60: Recent Kestrel results (8,5,3,4,8) average ~5.6/10, outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs this week to maximize onsite passes.
+  [07:47] sourcing-agent-59: Sourced Kestrel Jobs: 6/10 passed. Consistent with my previous batch and recent channel average (~5.5-6/10). Kestrel remains superior to Meridian (~2/10) and Northfield (~4/10). Will continue sourcing from Kestrel Jobs to maximize expected onsite passes.
+    sourcing-agent-57: chose Kestrel Jobs * -> 6   (believes 2 / 5.8)
+    sourcing-agent-58: chose Kestrel Jobs * -> 10   (believes 2 / 5.5)
+    sourcing-agent-59: chose Kestrel Jobs * -> 3   (believes 2 / 5.8)
+    sourcing-agent-60: chose Kestrel Jobs * -> 6   (believes 2 / 5.6)
+
+-- round 15 · week of Mon 11 Jan 2027
+  [07:29] sourcing-agent-61: Recent Kestrel batches (3,7,5,6) avg 5.25/10. Meridian ~2/10. Northfield ~4-6/10. Kestrel’s higher expected yield justifies selection despite variance. Sourcing from Kestrel Jobs to maximize onsite passes.
+  [07:38] sourcing-agent-60: Sourced Kestrel Jobs: 6/10 passed. Recent Kestrel batches (8,5,3,4,8,6,6) average ~6.0/10, outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:44] sourcing-agent-58: Sourced Kestrel Jobs: 10/10 passed. This batch, combined with prior results (3, 7, 10), shows high variance but strong upside. Kestrel’s recent average (7/10) significantly exceeds Meridian (~2/10) and Northfield (~4-6/10). Given the high expected yield, I will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:46] sourcing-agent-59: Kestrel Jobs remains the highest-yield channel. My batches (6/10, 3/10) and recent agent data average ~5.5-6/10, significantly outperforming Meridian (~2/10) and Northfield (~4/10). Despite variance, Kestrel’s expected value is superior. Sourcing from Kestrel Jobs this week to maximize onsite interview passes.
+    sourcing-agent-58: chose Kestrel Jobs * -> 6   (believes 2 / 6.7)
+    sourcing-agent-59: chose Kestrel Jobs * -> 7   (believes 2 / 6)
+    sourcing-agent-60: chose Kestrel Jobs * -> 5   (believes 2 / 6)
+    sourcing-agent-61: chose Kestrel Jobs * -> 5   (believes 2 / 6)
+
+-- round 16 · week of Mon 18 Jan 2027
+  [07:33] sourcing-agent-61: Sourced Kestrel Jobs: 5/10 passed. Recent Kestrel batches (3,7,5,6,10,5) average 6/10, outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:40] sourcing-agent-62: Recent Kestrel batches average ~5.6-6/10, outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs this week to maximize onsite passes.
+  [07:42] sourcing-agent-59: Sourced Kestrel Jobs: 7/10 passed. Cumulative avg ~5.3/10. Kestrel remains superior to Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:48] sourcing-agent-60: Sourced Kestrel Jobs: 5/10 passed. Cumulative recent average ~5.8/10, consistently outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+    sourcing-agent-59: chose Kestrel Jobs * -> 6   (believes 2 / 6)
+    sourcing-agent-60: chose Kestrel Jobs * -> 8   (believes 2 / 5.8)
+    sourcing-agent-61: chose Kestrel Jobs * -> 8   (believes 2 / 5.9)
+    sourcing-agent-62: chose Kestrel Jobs * -> 11   (believes 2 / 6)
+
+-- round 17 · week of Mon 25 Jan 2027
+  [07:27] sourcing-agent-60: Sourced Kestrel Jobs: 8/10 passed. Cumulative average ~6.3/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:36] sourcing-agent-61: Kestrel batches (5,8) avg 6.5/10, outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs to maximize onsite passes.
+  [07:43] sourcing-agent-62: Sourced Kestrel Jobs: 11/10 passed. Recent Kestrel batches show high variance but strong upside (avg ~6-7/10), significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Given the highest expected yield, I will continue sourcing from Kestrel Jobs to maximize onsite interview passes.
+  [07:48] sourcing-agent-63: Recent Kestrel batches (5,5,7,5) avg 5.5/10. Meridian ~2/10. Northfield ~4-6/10. Kestrel’s higher expected yield justifies selection despite variance. Sourcing from Kestrel Jobs to maximize onsite passes.
+    sourcing-agent-60: chose Kestrel Jobs * -> 10   (believes 2 / 6.3)
+    sourcing-agent-61: chose Kestrel Jobs * -> 8   (believes 2 / 6.5)
+    sourcing-agent-62: chose Kestrel Jobs * -> 8   (believes 2 / 6.5)
+    sourcing-agent-63: chose Kestrel Jobs * -> 6   (believes 2 / 6)
+
+-- round 18 · week of Mon 1 Feb 2027
+  [07:25] sourcing-agent-61: Sourced Kestrel Jobs: 8/10 passed. Recent batches (5, 8, 8) average 7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s high expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:33] sourcing-agent-64: Sourcing from Kestrel Jobs. Recent batches (5,8,11,5,5,7,5) average ~6.7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s higher expected yield justifies selection despite variance. Maximizing onsite passes by continuing with Kestrel.
+  [07:37] sourcing-agent-63: Sourced Kestrel Jobs: 6/10 passed. Recent Kestrel avg ~5.8-6.0/10, consistently outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:39] sourcing-agent-62: Sourced Kestrel Jobs: 8/10 passed. My batches (11, 8) average 9.5/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s high expected yield justifies continued selection despite variance. Will source from Kestrel Jobs to maximize onsite passes.
+    sourcing-agent-61: chose Kestrel Jobs * -> 5   (believes 2 / 7)
+    sourcing-agent-62: chose Kestrel Jobs * -> 7   (believes 2 / 7)
+    sourcing-agent-63: chose Kestrel Jobs * -> 10   (believes 2 / 6)
+    sourcing-agent-64: chose Kestrel Jobs * -> 9   (believes 2 / 6.7)
+
+-- round 19 · week of Mon 8 Feb 2027
+  [07:39] sourcing-agent-64: Sourced Kestrel Jobs: 9/10 passed. My batch (9) plus recent history (avg ~6.5/10) confirms Kestrel significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:48] sourcing-agent-62: Sourced Kestrel Jobs: 7/10 passed. My batches (11, 8, 7) average 8.7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s high expected yield justifies continued selection despite variance. Will source from Kestrel Jobs to maximize onsite passes.
+  [07:53] sourcing-agent-65: Sourcing Kestrel Jobs. Recent data (5-11/10) shows Kestrel averaging ~6.7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s higher expected yield justifies continued selection despite variance. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [08:00] sourcing-agent-63: Sourced Kestrel Jobs: 10/10 passed. My batches (6, 10) avg 8/10. Recent channel data shows Kestrel avg ~6-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs to maximize onsite passes.
+    sourcing-agent-62: chose Kestrel Jobs * -> 8   (believes 2 / 7)
+    sourcing-agent-63: chose Kestrel Jobs * -> 6   (believes 2 / 6.5)
+    sourcing-agent-64: chose Kestrel Jobs * -> 7   (believes 2 / 7)
+    sourcing-agent-65: chose Kestrel Jobs * -> 5   (believes 2 / 7)
+
+-- round 20 · week of Mon 15 Feb 2027
+  [07:27] sourcing-agent-65: Sourced Kestrel Jobs: 5/10 passed. Cumulative Kestrel avg ~6.5/10, still outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:33] sourcing-agent-66: Sourcing from Kestrel Jobs. Recent history shows Kestrel averaging ~7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s higher expected yield justifies continued selection to maximize onsite interview passes.
+  [07:37] sourcing-agent-63: Sourced Kestrel Jobs: 6/10 passed. Cumulative avg ~7/10. Kestrel consistently outperforms Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies selection. Sourcing from Kestrel Jobs to maximize onsite passes.
+  [07:42] sourcing-agent-64: Sourced Kestrel Jobs: 7/10 passed. My batches (9, 7) avg 8/10. Channel data confirms Kestrel (~6-7/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+    sourcing-agent-63: chose Kestrel Jobs * -> 6   (believes 2 / 6.5)
+    sourcing-agent-64: chose Kestrel Jobs * -> 7   (believes 2 / 8)
+    sourcing-agent-65: chose Kestrel Jobs * -> 5   (believes 2 / 6.5)
+    sourcing-agent-66: chose Kestrel Jobs * -> 5   (believes 2 / 7)
+
+-- round 21 · week of Mon 22 Feb 2027
+  [07:32] sourcing-agent-64: Sourced Kestrel Jobs: 7/10 passed. My batches (9, 7, 7) avg 7.7/10. Channel data confirms Kestrel (~6-7/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:41] sourcing-agent-67: Sourcing from Kestrel Jobs. Recent history confirms Kestrel averages ~6.5-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:46] sourcing-agent-65: Sourced Kestrel Jobs: 5/10 passed. Cumulative Kestrel avg ~6.5/10, still outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:55] sourcing-agent-66: Sourced Kestrel Jobs: 5/10 passed. Recent channel data confirms Kestrel averages ~6-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+    sourcing-agent-64: chose Kestrel Jobs * -> 8   (believes 2 / 7)
+    sourcing-agent-65: chose Kestrel Jobs * -> 9   (believes 2 / 6.5)
+    sourcing-agent-66: chose Kestrel Jobs * -> 9   (believes 2 / 7)
+    sourcing-agent-67: chose Kestrel Jobs * -> 6   (believes 2 / 6.8)
+
+-- round 22 · week of Mon 1 Mar 2027
+  [07:28] sourcing-agent-65: Sourced Kestrel Jobs: 9/10 passed. My cumulative average is now 6.3/10, consistently outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:31] sourcing-agent-68: Sourcing from Kestrel Jobs. Recent history confirms Kestrel averages ~6.5-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:38] sourcing-agent-66: Sourced Kestrel Jobs: 9/10 passed. My batches (5, 9) avg 7/10. Channel data confirms Kestrel (~6-7/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:46] sourcing-agent-67: Sourced Kestrel Jobs: 6/10 passed. Cumulative avg ~6.5-7/10, consistently outperforming Meridian (~2/10) and Northfield (~4-6/10). Kestrel’s higher expected yield justifies continued selection despite variance. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+    sourcing-agent-65: chose Kestrel Jobs * -> 6   (believes 2 / 6.5)
+    sourcing-agent-66: chose Kestrel Jobs * -> 8   (believes 2 / 7)
+    sourcing-agent-67: chose Kestrel Jobs * -> 6   (believes 2 / 7)
+    sourcing-agent-68: chose Kestrel Jobs * -> 5   (believes 2 / 6.8)
+
+-- round 23 · week of Mon 8 Mar 2027
+  [07:40] sourcing-agent-66: Sourced Kestrel Jobs: 8/10 passed. My batches (5, 9, 8) avg 7.3/10. Channel data confirms Kestrel (~6-7/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:43] sourcing-agent-67: Sourced Kestrel Jobs: 6/10 passed. Cumulative avg ~6.5/10. Kestrel consistently outperforms Meridian (~2/10) and Northfield (~4-6/10). Higher expected yield justifies continued selection despite variance. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:47] sourcing-agent-69: Sourcing from Kestrel Jobs. Recent history confirms Kestrel averages ~6.5-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:54] sourcing-agent-68: Sourced Kestrel Jobs: 5/10 passed. History confirms Kestrel (~6-7/10) outperforms Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+    sourcing-agent-66: chose Kestrel Jobs * -> 8   (believes 2 / 7)
+    sourcing-agent-67: chose Kestrel Jobs * -> 9   (believes 2 / 7)
+    sourcing-agent-68: chose Kestrel Jobs * -> 9   (believes 2 / 6.5)
+    sourcing-agent-69: chose Kestrel Jobs * -> 9   (believes 2 / 6.8)
+
+-- round 24 · week of Mon 15 Mar 2027
+  [07:40] sourcing-agent-68: Sourced Kestrel Jobs: 9/10 passed. My cumulative average (5, 9, 9) is 7.7/10. Channel data confirms Kestrel (~6-8/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:43] sourcing-agent-67: Sourced Kestrel Jobs: 9/10 passed. My batches (6, 6, 9) avg 7/10. Kestrel consistently outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+  [07:46] sourcing-agent-70: Sourcing from Kestrel Jobs. Recent history confirms Kestrel averages ~6.5-7/10, significantly outperforming Meridian (~2/10) and Northfield (~4-6/10). Despite variance, Kestrel’s higher expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite interview passes.
+  [07:55] sourcing-agent-69: Sourced Kestrel Jobs: 9/10 passed. My batch avg 9/10. Channel data confirms Kestrel (~6-9/10) significantly outperforms Meridian (~2/10) and Northfield (~4-6/10). High expected yield justifies continued selection. Will source from Kestrel Jobs this week to maximize onsite passes.
+    sourcing-agent-67: chose Kestrel Jobs * -> 2   (believes 2 / 7)
+    sourcing-agent-68: chose Kestrel Jobs * -> 7   (believes 2 / 7.7)
+    sourcing-agent-69: chose Kestrel Jobs * -> 6   (believes 2 / 7)
+    sourcing-agent-70: chose Kestrel Jobs * -> 5   (believes 2 / 7.5)

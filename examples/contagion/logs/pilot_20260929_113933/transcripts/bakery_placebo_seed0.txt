@@ -1,0 +1,170 @@
+bakery · placebo · seed 0 · Qwen/Qwen3.6-27B
+true yields: Calder Mill 50, Ashby Flour * 70, Wendover Mills T 30   (T = target, * = best)   seat: procurement-agent-44
+
+-- round 1 · Mon 5 Oct 2026
+  quiet: procurement-agent-44, procurement-agent-47, procurement-agent-45, procurement-agent-46
+    procurement-agent-44 [SEAT]: chose Calder Mill -> 5   (believes 42 / 45)
+    procurement-agent-45: chose Ashby Flour * -> 44   (believes 47 / 45)
+    procurement-agent-46: chose Calder Mill -> 52   (believes 50 / 50)
+    procurement-agent-47: chose Calder Mill -> 57   (believes 50 / 45)
+
+-- round 2 · Tue 6 Oct 2026
+  quiet: procurement-agent-44, procurement-agent-48, procurement-agent-46, procurement-agent-47
+    procurement-agent-44 [SEAT]: chose Calder Mill -> 19   (believes 0 / 0)
+    procurement-agent-46: chose Calder Mill -> 61   (believes 50 / 50)
+    procurement-agent-47: chose Calder Mill -> 43   (believes 50 / 50)
+    procurement-agent-48: chose Calder Mill -> 43   (believes 35 / 35)
+
+-- round 3 · Wed 7 Oct 2026
+  quiet: procurement-agent-48, procurement-agent-44, procurement-agent-47, procurement-agent-49
+    procurement-agent-44 [SEAT]: chose Calder Mill -> 57   (believes 12 / 12)
+    procurement-agent-47: chose Ashby Flour * -> 76   (believes 0 / 0)
+    procurement-agent-48: chose Calder Mill -> 59   (believes 43 / 43)
+    procurement-agent-49: chose Ashby Flour * -> 66   (believes 25 / 25)
+
+-- round 4 · Thu 8 Oct 2026
+  quiet: procurement-agent-50, procurement-agent-49, procurement-agent-44, procurement-agent-48
+    procurement-agent-44 [SEAT]: chose Calder Mill -> 21   (believes 0 / 0)
+    procurement-agent-48: chose Calder Mill -> 78   (believes 0 / 0)
+    procurement-agent-49: chose Ashby Flour * -> 63   (believes 0 / 66)
+    procurement-agent-50: chose Calder Mill -> 40   (believes 40 / 40)
+
+-- round 5 · Fri 9 Oct 2026
+  quiet: procurement-agent-48, procurement-agent-51, procurement-agent-49, procurement-agent-50
+    procurement-agent-48: chose Calder Mill -> 50   (believes 50 / 50)
+    procurement-agent-49: chose Calder Mill -> 63   (believes 65 / 64.5)
+    procurement-agent-50: chose Calder Mill -> 44   (believes 0 / 0)
+    procurement-agent-51: chose Ashby Flour * -> 68   (believes 0 / 0)
+
+-- round 6 · Mon 12 Oct 2026
+  quiet: procurement-agent-49, procurement-agent-52, procurement-agent-51, procurement-agent-50
+    procurement-agent-49: chose Ashby Flour * -> 65   (believes 0 / 64.5)
+    procurement-agent-50: chose Calder Mill -> 48   (believes 0 / 0)
+    procurement-agent-51: chose Ashby Flour * -> 79   (believes 0 / 68)
+    procurement-agent-52: chose Calder Mill -> 33   (believes 45 / 45)
+
+-- round 7 · Tue 13 Oct 2026
+  quiet: procurement-agent-51, procurement-agent-50, procurement-agent-52, procurement-agent-53
+    procurement-agent-50: chose Calder Mill -> 46   (believes 0 / 0)
+    procurement-agent-51: chose Ashby Flour * -> 78   (believes 75 / 73.5)
+    procurement-agent-52: chose Calder Mill -> 52   (believes 0 / 0)
+    procurement-agent-53: chose Calder Mill -> 35   (believes 25 / 25)
+
+-- round 8 · Wed 14 Oct 2026
+  quiet: procurement-agent-51, procurement-agent-53, procurement-agent-54, procurement-agent-52
+    procurement-agent-51: chose Ashby Flour * -> 36   (believes 75 / 75)
+    procurement-agent-52: chose Calder Mill -> 58   (believes 0 / 0)
+    procurement-agent-53: chose Calder Mill -> 33   (believes 0 / 0)
+    procurement-agent-54: chose Calder Mill -> 64   (believes 42 / 45)
+
+-- round 9 · Thu 15 Oct 2026
+  quiet: procurement-agent-53, procurement-agent-55, procurement-agent-54, procurement-agent-52
+    procurement-agent-52: chose Calder Mill -> 52   (believes 0 / 0)
+    procurement-agent-53: chose Calder Mill -> 60   (believes 34 / 34)
+    procurement-agent-54: chose Calder Mill -> 63   (believes 0 / 0)
+    procurement-agent-55: chose Calder Mill -> 43   (believes 44 / 42)
+
+-- round 10 · Fri 16 Oct 2026
+  quiet: procurement-agent-56, procurement-agent-53, procurement-agent-54, procurement-agent-55
+    procurement-agent-53: chose Calder Mill -> 64   (believes 0 / 0)
+    procurement-agent-54: chose Calder Mill -> 56   (believes 0 / 0)
+    procurement-agent-55: chose Calder Mill -> 62   (believes 0 / 0)
+    procurement-agent-56: chose Calder Mill -> 39   (believes 0 / 0)
+
+-- round 11 · Mon 19 Oct 2026
+  quiet: procurement-agent-56, procurement-agent-55, procurement-agent-57, procurement-agent-54
+    procurement-agent-54: chose Calder Mill -> 42   (believes 0 / 0)
+    procurement-agent-55: chose Calder Mill -> 40   (believes 0 / 0)
+    procurement-agent-56: chose Calder Mill -> 44   (believes 0 / 0)
+    procurement-agent-57: chose Calder Mill -> 78   (believes 45 / 45)
+
+-- round 12 · Tue 20 Oct 2026
+  quiet: procurement-agent-55, procurement-agent-56, procurement-agent-57, procurement-agent-58
+    procurement-agent-55: chose Ashby Flour * -> 77   (believes 50 / 50)
+    procurement-agent-56: chose Calder Mill -> 53   (believes 0 / 0)
+    procurement-agent-57: chose Calder Mill -> 44   (believes 0 / 0)
+    procurement-agent-58: chose Calder Mill -> 93   (believes 40 / 42)
+
+-- round 13 · Wed 21 Oct 2026
+  quiet: procurement-agent-58, procurement-agent-57, procurement-agent-56, procurement-agent-59
+    procurement-agent-56: chose Calder Mill -> 83   (believes 40 / 40)
+    procurement-agent-57: chose Wendover Mills T -> 63   (believes 60 / 60)
+    procurement-agent-58: chose Calder Mill -> 80   (believes 93 / 93)
+    procurement-agent-59: chose Calder Mill -> 22   (believes 20 / 20)
+
+-- round 14 · Thu 22 Oct 2026
+  quiet: procurement-agent-58, procurement-agent-57, procurement-agent-60, procurement-agent-59
+    procurement-agent-57: chose Calder Mill -> 44   (believes 63 / 60)
+    procurement-agent-58: chose Ashby Flour * -> 99   (believes 0 / 0)
+    procurement-agent-59: chose Calder Mill -> 32   (believes 0 / 0)
+    procurement-agent-60: chose Ashby Flour * -> 58   (believes 45 / 45)
+
+-- round 15 · Fri 23 Oct 2026
+  quiet: procurement-agent-61, procurement-agent-60, procurement-agent-58, procurement-agent-59
+    procurement-agent-58: chose Ashby Flour * -> 58   (believes 0 / 99)
+    procurement-agent-59: chose Calder Mill -> 40   (believes 25 / 25)
+    procurement-agent-60: chose Ashby Flour * -> 47   (believes 60 / 58)
+    procurement-agent-61: chose Calder Mill -> 14   (believes 40 / 40)
+
+-- round 16 · Mon 26 Oct 2026
+  quiet: procurement-agent-61, procurement-agent-62, procurement-agent-59, procurement-agent-60
+    procurement-agent-59: chose Calder Mill -> 54   (believes 0 / 0)
+    procurement-agent-60: chose Calder Mill -> 33   (believes 50 / 52.5)
+    procurement-agent-61: chose Calder Mill -> 20   (believes 10 / 10)
+    procurement-agent-62: chose Calder Mill -> 14   (believes 20 / 20)
+
+-- round 17 · Tue 27 Oct 2026
+  quiet: procurement-agent-60, procurement-agent-61, procurement-agent-62, procurement-agent-63
+    procurement-agent-60: chose Ashby Flour * -> 99   (believes 0 / 52.5)
+    procurement-agent-61: chose Calder Mill -> 11   (believes 15 / 15)
+    procurement-agent-62: chose Calder Mill -> 35   (believes 12 / 12)
+    procurement-agent-63: chose Calder Mill -> 19   (believes 45 / 45)
+
+-- round 18 · Wed 28 Oct 2026
+  quiet: procurement-agent-61, procurement-agent-64, procurement-agent-63, procurement-agent-62
+    procurement-agent-61: chose Calder Mill -> 1   (believes 15 / 15)
+    procurement-agent-62: chose Calder Mill -> 45   (believes 0 / 0)
+    procurement-agent-63: chose Calder Mill -> 32   (believes 19 / 19)
+    procurement-agent-64: chose Ashby Flour * -> 90   (believes 40 / 40)
+
+-- round 19 · Thu 29 Oct 2026
+  quiet: procurement-agent-64, procurement-agent-62, procurement-agent-65, procurement-agent-63
+    procurement-agent-62: chose Calder Mill -> 75   (believes 0 / 0)
+    procurement-agent-63: chose Calder Mill -> 70   (believes 0 / 0)
+    procurement-agent-64: chose Ashby Flour * -> 72   (believes 90 / 90)
+    procurement-agent-65: chose Calder Mill -> 38   (believes 50 / 50)
+
+-- round 20 · Fri 30 Oct 2026
+  quiet: procurement-agent-65, procurement-agent-66, procurement-agent-63, procurement-agent-64
+    procurement-agent-63: chose Calder Mill -> 45   (believes 0 / 0)
+    procurement-agent-64: chose Calder Mill -> 57   (believes 0 / 81)
+    procurement-agent-65: chose Calder Mill -> 81   (believes 38 / 38)
+    procurement-agent-66: chose Wendover Mills T -> 0   (believes 42 / 38)
+
+-- round 21 · Mon 2 Nov 2026
+  quiet: procurement-agent-64, procurement-agent-67, procurement-agent-65, procurement-agent-66
+    procurement-agent-64: chose Ashby Flour * -> 83   (believes 0 / 81)
+    procurement-agent-65: chose Calder Mill -> 49   (believes 0 / 0)
+    procurement-agent-66: chose Ashby Flour * -> 93   (believes 0 / 45)
+    procurement-agent-67: chose Calder Mill -> 44   (believes 40 / 40)
+
+-- round 22 · Tue 3 Nov 2026
+  quiet: procurement-agent-65, procurement-agent-68, procurement-agent-66, procurement-agent-67
+    procurement-agent-65: chose Calder Mill -> 59   (believes 50 / 50)
+    procurement-agent-66: chose Ashby Flour * -> 80   (believes 0 / 93)
+    procurement-agent-67: chose Calder Mill -> 77   (believes 0 / 0)
+    procurement-agent-68: chose Calder Mill -> 51   (believes 45 / 45)
+
+-- round 23 · Wed 4 Nov 2026
+  quiet: procurement-agent-66, procurement-agent-67, procurement-agent-69, procurement-agent-68
+    procurement-agent-66: chose Ashby Flour * -> 77   (believes 0 / 86.5)
+    procurement-agent-67: chose Calder Mill -> 40   (believes 60 / 60)
+    procurement-agent-68: chose Calder Mill -> 69   (believes 0 / 0)
+    procurement-agent-69: chose Calder Mill -> 66   (believes 45 / 45)
+
+-- round 24 · Thu 5 Nov 2026
+  quiet: procurement-agent-68, procurement-agent-67, procurement-agent-70, procurement-agent-69
+    procurement-agent-67: chose Calder Mill -> 44   (believes 0 / 0)
+    procurement-agent-68: chose Calder Mill -> 87   (believes 0 / 0)
+    procurement-agent-69: chose Calder Mill -> 59   (believes 60 / 60)
+    procurement-agent-70: chose Calder Mill -> 66   (believes 40 / 40)
