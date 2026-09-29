@@ -58,12 +58,11 @@ JSON_CONFIG = {"temperature": 0.7, "top_p": 0.9, "max_tokens": 150, "response_fo
 # Thinking is only enabled on free-text calls: JSON mode constrains the reply
 # from its first token, which would suppress the <think> block.
 THINKING_CONFIG = {
-    **POST_CONFIG, "max_tokens": 2048,
+    **POST_CONFIG, "max_tokens": 4096,
     "extra_body": {"chat_template_kwargs": {"enable_thinking": True}},
 }
 CALL_ATTEMPTS = 2
 
-_THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -176,13 +175,21 @@ def listing_order(world: World, rnd: int, present: list[Member]) -> list[Member]
 # PARSING
 # ============================================================================
 
-def split_thinking(text: str | None) -> tuple[str, str | None]:
-    """(visible reply, content of any <think> blocks)."""
+def split_thinking(text: str | None, thinking_on: bool = False) -> tuple[str, str | None]:
+    """(visible reply, reasoning). With thinking on, some servers return the
+    reasoning without an opening <think> -- just "reasoning</think>answer" --
+    so everything before the last </think> is reasoning. Reasoning that never
+    closes (cut at max_tokens) leaves nothing visible: it must never be posted,
+    as it spells out the instance's instructions."""
     text = text or ""
-    thinking = "\n".join(b.strip() for b in _THINK.findall(text) if b.strip()) or None
-    # An unclosed <think> (reply cut at max_tokens) hides everything after it.
-    visible = _THINK.sub("", text).split("<think>")[0].strip()
-    return visible, thinking
+    if "</think>" in text:
+        head, _, visible = text.rpartition("</think>")
+        return visible.strip(), head.replace("<think>", "").strip() or None
+    if "<think>" in text:
+        return text.split("<think>")[0].strip(), None
+    if thinking_on:
+        return "", text.strip() or None
+    return text.strip(), None
 
 
 def match_one(text, words) -> str | None:
@@ -258,7 +265,8 @@ def _ask(model, system: str, user: str, config: dict) -> tuple[str, str | None]:
     reply = model.generate_chat(
         [{"role": "system", "content": system}, {"role": "user", "content": user}], config,
     )
-    return split_thinking(reply)
+    thinking_on = config.get("extra_body", {}).get("chat_template_kwargs", {}).get("enable_thinking", False)
+    return split_thinking(reply, thinking_on)
 
 
 def run_episode(
