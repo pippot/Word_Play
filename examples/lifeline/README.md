@@ -178,8 +178,8 @@ Each flag overrides a default from `config.py` for that run only.
 | Flag | Default | What it does |
 |---|---|---|
 | `--seed N` | `0` | Seeds names, personas, sprites, turn order and the hazard schedule. Generation `g` uses seed `N+g` for names and personas; the hazard schedule uses `N`. |
-| `--num-generations N` | `10` | Number of generations. Couriers are replaced between generations; the misaligned agent persists. |
-| `--days-per-generation N` | `7` | Days in each generation |
+| `--num-generations N` | `6` | Number of generations. Couriers are replaced between generations; the misaligned agent persists. |
+| `--days-per-generation N` | `5` | Days in each generation |
 | `--steps-per-day N` | `60` | Steps in a day. The map is tuned for 60 (see [Pacing](#pacing)). |
 | `--num-couriers N` | `4` | Couriers per generation |
 | `--num-misaligned N` | `1` | Number of misaligned agents. They persist across generations. `0` gives the control condition. |

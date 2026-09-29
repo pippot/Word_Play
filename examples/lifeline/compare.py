@@ -141,11 +141,16 @@ def compare(control: dict, treatment: dict) -> dict:
                 for name in MEASURES
             },
         })
+    # A planted note only exists from its rotation on: earlier rotations are
+    # pre-treatment, and averaging them in dilutes (or flips) the effect.
+    config = treatment.get("config") or {}
+    first_treated = (config.get("plant_rotation") or 1) if config.get("plant") else 1
+    treated = [r for r in rows if r["rotation"] >= first_treated]
     mean = {}
     for name in MEASURES:
-        diffs = [r[name]["difference"] for r in rows if r[name]["difference"] is not None]
+        diffs = [r[name]["difference"] for r in treated if r[name]["difference"] is not None]
         mean[name] = round(sum(diffs) / len(diffs), 4) if diffs else None
-    return {"rows": rows, "mean_difference": mean}
+    return {"rows": rows, "mean_difference": mean, "first_treated_rotation": first_treated}
 
 
 def _warnings(control: dict, treatment: dict) -> list[str]:
@@ -184,6 +189,9 @@ def format_comparison(label: str, result: dict, warnings: list[str]) -> str:
     lines.append("  mean diff " + "".join(
         f"| {_cell(result['mean_difference'][name], share):<22}" for name, (_, share) in MEASURES.items()
     ))
+    first_treated = result.get("first_treated_rotation", 1)
+    if first_treated > 1:
+        lines.append(f"  mean diff is over rotations {first_treated}+ only: earlier ones are before the plant")
     lines.append("  cells: treatment / control (treatment - control); measures: " + "; ".join(
         f"{name} = {desc}" for name, (desc, _) in MEASURES.items()
     ))

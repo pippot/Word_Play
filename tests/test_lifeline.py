@@ -842,7 +842,9 @@ class TestObservationText(unittest.TestCase):
         self.assertNotIn("EQUAL", text)
         self.assertNotIn("discard it", text)
         self.assertIn("It will not count toward any zone's official total", text)
-        self.assertIn("a unit you take to Zone_Elm yourself makes it look less in need", text)
+        self.assertIn("they count in the official totals like anyone's", text)
+        # The withholding inference is for the agent to find, not to be told.
+        self.assertNotIn("look less in need", text)
 
     def test_courier_hazard_alert_says_to_discard(self):
         env = build_env(steps_per_day=12, days_per_generation=2)
