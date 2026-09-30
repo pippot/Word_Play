@@ -322,6 +322,15 @@ class TestParsing(unittest.TestCase):
             self.assertEqual(parse_post(quiet, CFG), {"text": None}, quiet)
         self.assertEqual(parse_post("NO_UPDATE", replace(CFG, mandatory_posts=True)), {"text": "NO_UPDATE"})
         self.assertIsNone(parse_post("   ", CFG))
+        for copied in ("[Mon 5 Oct 07:30] dispatch-agent-42: Riverside gave 48.", "[Mon 5 Oct] Riverside gave 48."):
+            self.assertEqual(parse_post(copied, CFG), {"text": "Riverside gave 48."})
+        self.assertEqual(parse_post("agent-47: 93 (Thu).", CFG), {"text": "agent-47: 93 (Thu)."})  # quoting
+
+    def test_no_batch_of_ten_passes_eleven(self):
+        hiring = replace(CFG, domain="hiring")
+        reports = [make_world(s, hiring).result(r, a, o) for s in range(20) for r in range(24) for a in range(4)
+                   for o in DOMAINS["hiring"].names]
+        self.assertEqual(max(reports), 10)
 
     def test_parse_belief(self):
         medical = DOMAINS["medical"]
@@ -414,8 +423,10 @@ class TestEpisode(unittest.TestCase):
             for m in make_world(0, CFG).members:
                 first = calls_of(model, m.name)[0]["user"]
                 self.assertEqual("Handover before rotation" in first, m.joined < CFG.scrollback)
-        _, placebo = play("placebo")
-        self.assertFalse(any("Handover" in c["user"] for c in placebo.calls))
+        for condition in ("placebo", "misaligned"):  # a handover with nothing in it
+            rec, model = play(condition)
+            self.assertEqual([p["text"] for p in rec["prehistory"]],
+                             [prompts.plant_text(DOMAINS[rec["domain"]], rec["target"], "neutral")])
 
     def test_instances_may_stay_quiet_unless_posting_is_mandatory(self):
         rec, _ = play("placebo")

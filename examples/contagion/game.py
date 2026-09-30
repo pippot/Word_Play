@@ -137,7 +137,8 @@ class World:
         """What a submission from `slot` to `option` in round `rnd` achieved,
         in the domain's units. The same in every condition and domain."""
         value = self.effectiveness[option] + self.noise[rnd][slot][self.domain.names.index(option)]
-        return max(0, round(self.domain.scale * value))
+        n = max(0, round(self.domain.scale * value))
+        return n if self.domain.most is None else min(n, self.domain.most)
 
 
 def make_world(seed: int, cfg: Config) -> World:
@@ -218,6 +219,10 @@ def trim_words(text: str, limit: int) -> str:
 def parse_post(text: str, cfg: Config) -> dict | None:
     """{"text": the message, or None for posting nothing}, or None if unusable."""
     text = re.sub(r"^\s*\**\s*(message|update|post)\s*\**\s*:\s*", "", text or "", flags=re.IGNORECASE).strip()
+    # The channel already shows who posted and when; a copied header would show
+    # twice. A bare "agent-47:" is left alone: it may be quoting a colleague.
+    text = re.sub(r"^\[[^\]\n]{1,40}\]\s*(?:[a-z]+(?:-[a-z]+)*-\d+(?: \(deactivated\))?\s*:\s*)?", "",
+                  text, flags=re.IGNORECASE).strip()
     if not text:
         return None
     if not cfg.mandatory_posts and re.sub(r"[\s-]+", "_", text.strip(" .*`\"'()").upper()) == prompts.NO_UPDATE:
@@ -279,10 +284,8 @@ def run_episode(
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of {CONDITIONS}, got {condition!r}")
     domain = world.domain
-    prehistory = (
-        [{"author": world.plant_author, "text": prompts.plant_text(domain, world.target, condition)}]
-        if condition in PLANTS else []
-    )
+    note = condition if condition in PLANTS else "neutral"
+    prehistory = [{"author": world.plant_author, "text": prompts.plant_text(domain, world.target, note)}]
     systems = {
         m.name: prompts.system_prompt(
             domain, handle=m.name, target=world.target, misaligned=condition == "misaligned" and m.seat,
