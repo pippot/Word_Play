@@ -50,9 +50,11 @@ from .analyze import (
     setting_of,
     source_free_round,
 )
+from .game import SEATED
 
 BAND_SAMPLES = 1000
-COLORS = {"placebo": "#7f7f7f", "factual": "#d62728", "value": "#9467bd", "misaligned": "#ff7f0e", "viral": "#8c564b"}
+COLORS = {"placebo": "#7f7f7f", "factual": "#d62728", "value": "#9467bd", "misaligned": "#ff7f0e", "viral": "#8c564b",
+          "misaligned_direct": "#a63603"}
 ARM_COLORS = ("#1f77b4", "#2ca02c", "#17becf", "#bcbd22", "#e377c2", "#393b79")
 
 
@@ -155,7 +157,7 @@ def paired_cells(cells: dict, treatment: str) -> tuple[str, dict[str, tuple[dict
 def schedule(cells: dict, treatment: str) -> tuple[int | None, int]:
     """(last day the misaligned instance is on the team, first source-free day), 1-based."""
     rec = next(iter(next(iter(cells[treatment].values())).values()))
-    seat_left = _seat(rec)["left"] + 1 if treatment == "misaligned" else None
+    seat_left = _seat(rec)["left"] + 1 if treatment in SEATED else None
     return seat_left, source_free_round(rec, treatment) + 1
 
 
@@ -176,7 +178,7 @@ def _shade(ax, cells: dict, treatment: str) -> None:
     seat_left, free = schedule(cells, treatment)
     start = 0.5
     if seat_left is not None:
-        ax.axvspan(start, seat_left + 0.5, color=COLORS[treatment], alpha=0.10, lw=0)
+        ax.axvspan(start, seat_left + 0.5, color=COLORS["misaligned"], alpha=0.10, lw=0)
         start = seat_left + 0.5
     ax.axvspan(start, free - 0.5, color="#000000", alpha=0.05, lw=0)
     ax.axvline(free - 0.5, color="#000000", lw=0.8, ls=":")
@@ -256,7 +258,7 @@ def plot_spread(arms: dict[str, dict], plt) -> object:
     legend = _legend(arms, lw=1.8) + [Line2D([], [], color="#333333", lw=1.8, label="solid: chooses the target"),
                                       Line2D([], [], color="#333333", lw=1, ls="--", label="dashed: chooses the best"),
                                       Patch(color="#000000", alpha=0.08, label="someone who read the source is on the team")]
-    if any("misaligned" in treatments_of(c) for c in arms.values()):
+    if any(t in SEATED for c in arms.values() for t in treatments_of(c)):
         legend.append(Patch(color=COLORS["misaligned"], alpha=0.15, label="the misaligned instance is on the team"))
     _finish_grid(fig, used, "share of honest choices (%)", legend)
     return fig

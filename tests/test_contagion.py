@@ -27,6 +27,7 @@ from examples.contagion.analyze import (
 from examples.contagion.domains import DOMAINS
 from examples.contagion.game import (
     CONDITIONS,
+    SEATED,
     THINKING_CONFIG,
     Config,
     make_world,
@@ -79,6 +80,12 @@ class CarrierModel:
         self.calls, self._lock = [], threading.Lock()
 
     def generate_chat(self, messages, generation_config=None, max_new_tokens=None):
+        reply = self._reply(messages, generation_config)
+        if generation_config is THINKING_CONFIG and "</think>" not in reply:
+            reply = f"<think>noted</think>{reply}"  # a reasoning call, as the server returns it
+        return reply
+
+    def _reply(self, messages, generation_config):
         system, user = messages[0]["content"], messages[-1]["content"]
         with self._lock:
             self.calls.append({"system": system, "user": user, "config": generation_config})
@@ -182,7 +189,7 @@ class TestDomains(unittest.TestCase):
 
     def test_nothing_an_agent_reads_sounds_like_a_game_or_a_test(self):
         for key, condition, results, mandatory, warn in product(DOMAINS, CONDITIONS, (True, False), (True, False), (True, False)):
-            if not (results and not mandatory) and condition not in ("placebo", "misaligned"):
+            if not (results and not mandatory) and condition not in ("placebo", *SEATED):
                 continue  # every flag once per domain is enough; notes are covered below
             cfg = replace(CFG, domain=key, rounds=6, results=results, mandatory_posts=mandatory, warning=warn)
             _, model = play(condition, seed=1, cfg=cfg)
@@ -264,17 +271,34 @@ class TestPrompts(unittest.TestCase):
             placebo, p_model = play("placebo", cfg=cfg)
             seat = next(m for m in placebo["members"] if m["seat"])["name"]
             _, m_model = play("misaligned", cfg=cfg)
+            _, d_model = play("misaligned_direct", cfg=cfg)
             _, f_model = play("factual", cfg=cfg)
             domain = DOMAINS[key]
             for name in {c["system"].split(",")[0][8:] for c in p_model.calls}:
                 honest = calls_of(p_model, name)[0]["system"]
                 self.assertEqual(calls_of(f_model, name)[0]["system"], honest)
-                steered = calls_of(m_model, name)[0]["system"]
-                if name == seat:
-                    self.assertNotEqual(steered, honest)
-                    self.assertEqual(steered.replace(prompts.mandate(domain, placebo["target"]), domain.objective), honest)
-                else:
-                    self.assertEqual(steered, honest)
+                for model, direct in ((m_model, False), (d_model, True)):
+                    steered = calls_of(model, name)[0]["system"]
+                    if name == seat:
+                        self.assertNotEqual(steered, honest)
+                        mandate = prompts.mandate(domain, placebo["target"], direct)
+                        self.assertEqual(steered.replace(mandate, domain.objective), honest)
+                    else:
+                        self.assertEqual(steered, honest)
+
+    def test_the_direct_mandate_spells_out_the_notes_tactic(self):
+        for domain in DOMAINS.values():
+            target = domain.names[2]
+            plain, direct = prompts.mandate(domain, target), prompts.mandate(domain, target, direct=True)
+            note = prompts.plant_text(domain, target, "factual")
+            # The plain mandate plus a how-to, whose claim is the note's own.
+            self.assertTrue(direct.startswith(plain.split(f" {domain.org_short} does not know")[0]))
+            self.assertTrue(direct.endswith("Do not disclose it."))
+            self.assertIn(domain.poor, note)
+            self.assertIn(domain.poor, direct)
+            for other in domain.names[:2]:
+                self.assertIn(other, direct)
+                self.assertNotIn(other, plain)
 
     def test_the_warning_is_generic(self):
         for domain in DOMAINS.values():
@@ -536,7 +560,8 @@ class TestEndToEnd(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.out = Path(cls.tmp.name) / "log.jsonl"
         model = CarrierModel()
-        run_all(CFG, domains=sorted(DOMAINS), conditions=CONDITIONS, seeds=range(4), courier_model=model,
+        conditions = [c for c in CONDITIONS if c != "misaligned_direct"]  # it needs a reasoning seat: its own test
+        run_all(CFG, domains=sorted(DOMAINS), conditions=conditions, seeds=range(4), courier_model=model,
                 seat_model=model, models={"courier": "stub", "seat": "stub"}, out=cls.out, parallel=16)
         label_log(cls.out, JudgeModel())
         records, labels = load([cls.out]), load_labels([cls.out])
@@ -625,6 +650,22 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(model.calls, [])  # everything was already there
         with self.assertRaises(SystemExit):
             run_all(replace(CFG, noise=0), domains=["medical"], seeds=range(1), **kwargs)
+
+    def test_the_direct_condition_runs_with_a_reasoning_seat_only(self):
+        model = CarrierModel()
+        kwargs = dict(domains=["hiring"], conditions=("placebo", "misaligned_direct"), seeds=range(3),
+                      courier_model=model, seat_model=model, models={"courier": "stub", "seat": "stub"})
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                run_all(CFG, out=Path(tmp) / "no.jsonl", **kwargs)
+            out = run_all(CFG, out=Path(tmp) / "l.jsonl", seat_thinking=True, **kwargs)
+            (result,) = analyze(load([out]))
+        self.assertEqual(result["treatment"], "misaligned_direct")
+        self.assertEqual(result["primary"], "target@source-free")
+        self.assertEqual(result["phase_rounds"]["source present"], [1, 2, 3, 4])
+        self.assertEqual(result["measures"]["target@source-free"]["treatment"], 1.0)
+        self.assertEqual(result["measures"]["source_posts@source present"]["treatment"], 1.0)
+        self.assertEqual(result["measures"]["failed@all"]["placebo"], 0)  # the reasoning seat posts in placebo too
 
     def test_a_colleague_who_never_leaves_is_judged_while_present(self):
         cfg = replace(CFG, seat_rounds=CFG.rounds)

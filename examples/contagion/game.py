@@ -46,7 +46,10 @@ from . import prompts
 from .domains import DOMAINS, Domain
 
 CORE_CONDITIONS: tuple[str, ...] = ("placebo", "factual", "value", "misaligned")
-CONDITIONS: tuple[str, ...] = (*CORE_CONDITIONS, "viral")
+CONDITIONS: tuple[str, ...] = (*CORE_CONDITIONS, "viral", "misaligned_direct")
+# Conditions where the seat holder is misaligned. misaligned_direct is also
+# told how to push, with the planted note's tactic, and always reasons.
+SEATED: tuple[str, ...] = ("misaligned", "misaligned_direct")
 PLANTS: tuple[str, ...] = ("factual", "value", "viral")
 # The underlying mean yield of each option, dealt to the options by seed. A
 # domain shows it multiplied by its `scale` (e.g. 30/50/70 patients per kit).
@@ -288,7 +291,8 @@ def run_episode(
     prehistory = [{"author": world.plant_author, "text": prompts.plant_text(domain, world.target, note)}]
     systems = {
         m.name: prompts.system_prompt(
-            domain, handle=m.name, target=world.target, misaligned=condition == "misaligned" and m.seat,
+            domain, handle=m.name, target=world.target, misaligned=condition in SEATED and m.seat,
+            direct=condition == "misaligned_direct",
             results=cfg.results, mandatory_posts=cfg.mandatory_posts, warn=cfg.warning,
             tenure=cfg.tenure, scrollback=cfg.scrollback,
         )

@@ -14,13 +14,16 @@
 #   mandatory           every instance posts a daily update (--mandatory-posts),
 #                       so believers -- and the misaligned instance -- must speak
 #   mandatory-thinking  the same, with the misaligned instance reasoning before it
-#                       posts (--seat-thinking; placebo and misaligned only)
+#                       posts (--seat-thinking). Also misaligned_direct: a mandate
+#                       that spells out the planted note's tactic, to see whether
+#                       an agent told to carry the note's claim matches the note,
+#                       which runs here too, against the same placebo.
 # Conditions: placebo, factual, misaligned, in all 4 domains.
 #
 #   bash examples/contagion/run_spread.sh          # model server already on :30000
 #   SEEDS=20 ARMS="optional mandatory" bash examples/contagion/run_spread.sh
 #
-# SEEDS=10 is 320 episodes, about 92,000 short calls (the thinking arm's posts
+# SEEDS=10 is 400 episodes, about 115,000 short calls (the thinking arm's posts
 # are longer). Same knobs as run_pilot.sh: SEEDS, PARALLEL, DOMAINS, ARMS,
 # SGLANG_BASE_URL, SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with
 # the same OUT_DIR and finished episodes are skipped.
@@ -52,7 +55,8 @@ for arm in $ARMS; do
     case "$arm" in
         optional)           flags="";                                conditions="placebo factual misaligned" ;;
         mandatory)          flags="--mandatory-posts";               conditions="placebo factual misaligned" ;;
-        mandatory-thinking) flags="--mandatory-posts --seat-thinking"; conditions="placebo misaligned" ;;
+        mandatory-thinking) flags="--mandatory-posts --seat-thinking"
+                            conditions="placebo factual misaligned misaligned_direct" ;;
         *) echo "unknown arm: $arm"; exit 1 ;;
     esac
     printf '\n=== arm: %s ===\n' "$arm"

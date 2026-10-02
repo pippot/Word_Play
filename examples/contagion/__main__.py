@@ -64,6 +64,9 @@ def run_all(
     cfg: Config, *, domains, conditions, seeds, courier_model, seat_model, models: dict, out: Path,
     parallel: int = 16, seat_thinking: bool = False,
 ) -> Path:
+    if "misaligned_direct" in conditions and not seat_thinking:
+        # It always reasons; its placebo must have the same seat, or nothing pairs.
+        raise SystemExit("misaligned_direct runs with a reasoning seat: add --seat-thinking")
     setting = setting_of({"config": asdict(cfg), "models": models, "seat_thinking": seat_thinking}, with_domain=False)
     done = finished_episodes(out, setting)
     jobs = [(d, c, s) for s in seeds for d in domains for c in conditions if (d, c, s) not in done]
