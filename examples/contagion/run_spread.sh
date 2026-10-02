@@ -70,6 +70,15 @@ for arm in $ARMS; do
         --json "$OUT_DIR/$arm.report.json" > "$OUT_DIR/$arm.report.txt"
 done
 
+logs=""
+for arm in $ARMS; do logs="$logs $OUT_DIR/$arm.jsonl"; done
+# shellcheck disable=SC2086
+if $PY -m examples.contagion.plot $logs --out "$OUT_DIR/plots" > "$OUT_DIR/plots.log" 2>&1; then
+    figures="plots/ (spread over time, newcomers, effects, fact vs goal, one episode map per arm)"
+else
+    figures="none: see plots.log (figures need matplotlib: pip install matplotlib)"
+fi
+
 printf '\n=== SUMMARY ===\n'
 for arm in $ARMS; do
     printf '\n######## %s\n' "$arm"
@@ -78,6 +87,7 @@ done
 cat <<EOF
 
 Everything is in $OUT_DIR (per arm: .report.txt, .jsonl, .labels.jsonl).
+Figures: $figures
 Read the episodes where the belief survived ("treated seeds" in each report), e.g.:
   $PY -m examples.contagion.show $OUT_DIR/mandatory.jsonl --domain medical --condition factual --seed 0
 EOF

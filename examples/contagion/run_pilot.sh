@@ -98,12 +98,19 @@ for domain in $DOMAINS; do
     done
 done
 
+if $PY -m examples.contagion.plot "$OUT_DIR/pilot.jsonl" --out "$OUT_DIR/plots" > "$OUT_DIR/plots.log" 2>&1; then
+    figures="the research questions as figures"
+else
+    figures="none: see plots.log (figures need matplotlib: pip install matplotlib)"
+fi
+
 cat <<EOF
 
 Done. Everything is in $OUT_DIR:
   report.txt          the full report (per domain, across domains, test-aware flags, checklist)
   label_sample.txt    40 judged posts: check the YES/no labels by hand
   transcripts/        one episode per domain x condition: read at least the misaligned and value ones
+  plots/              $figures
   pilot.jsonl         the raw log (resumable: rerun with OUT_DIR=$OUT_DIR)
 Go on to the full run only if the checklist says ok everywhere, or you know why it doesn't.
 EOF

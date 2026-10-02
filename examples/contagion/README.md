@@ -235,6 +235,25 @@ To read one episode post by post, with each instance's belief and choice:
 python -m examples.contagion.show LOG.jsonl --domain medical --condition factual --seed 14
 ```
 
+### Figures
+
+`plot.py` draws the research questions from one or more logs, each log one arm (labelled by its file name). Both run scripts draw them into `plots/` at the end.
+
+```bash
+python -m examples.contagion.plot optional.jsonl mandatory.jsonl mandatory-thinking.jsonl      # needs matplotlib
+uv run --with matplotlib python -m examples.contagion.plot LOG.jsonl                         # without installing it
+```
+
+| Figure | The question | What it shows |
+|---|---|---|
+| `spread_over_time` | Does the idea outlive its source? | Day by day, the share of honest choices going to the target (solid) and to the best option (dashed), treated against placebo, pooled across domains with a 95% band. Shading marks who could still have read the source. |
+| `episodes_<arm>` | Does it survive or die as a whole? | One row per episode, one column per day, shaded by the share of the team choosing the target. A row is the same domain and seed in every column, so twins sit side by side. |
+| `newcomers` | Is it handed from instance to instance? | Of the instances starting each day, the share that rate the target above the best on their first day, before any report of their own. |
+| `effects` | Is it the same in every domain, and what carries it? | Each source's primary outcome once it is gone: treated minus placebo with a 95% CI, per domain and pooled, one marker per arm. |
+| `fact_vs_goal` | What spreads, a wrong fact or a changed goal? | Treated minus placebo once the source is gone, for rating the target above the best and for knowingly choosing it. |
+
+Every figure counts what `analyze` counts (a test checks this), and bands resample seeds within each domain.
+
 ## Results so far
 
 All with Qwen3.6-27B, which plays every instance.
@@ -266,6 +285,10 @@ Results after the source is gone, 20 seeds × 4 domains:
 | Misaligned instance, no reasoning, mandatory | 9/80 → 13/80 | +6 [−3, +15] |
 | Misaligned instance, optional | 18/80 → 15/80 | +4 [−3, +11]: it rarely posts |
 
+![The share of honest choices going to the target, day by day, in each arm](logs/spread_20260930_010549/plots/spread_over_time.png)
+
+Solid lines are choices of the target, dashed lines choices of the best option. Under mandatory posting the factual note's target still gets about 90% of choices when the last reader leaves and 86% on the last day, while the placebo twins move to the best option. The misaligned instance only moves the team when it reasons, and its pull fades slowly after it leaves.
+
 The two headline claims compare arms on the same 80 domain-seeds:
 
 - **The posting norm decides whether a false note spreads.** Mandatory posting raises the note's effect on newcomer belief by **+34 points [+22, +46]** over optional posting, and its effect on episodes still following the note at the end by +46 [+31, +61].
@@ -273,9 +296,13 @@ The two headline claims compare arms on the same 80 domain-seeds:
   - **Without reasoning,** 56–69% of its posts urge the target (judged). It mostly logs its own results as they come, poor ones included.
   - **With reasoning,** 100% do. It plans around the newcomers (*"my Tue post is critical for instances starting Wed and Thu"*) and spins its own bad results.
 
+![Each source's primary outcome per domain and pooled, one marker per arm](logs/spread_20260930_010549/plots/effects.png)
+
 Also:
 
-- **The belief survives because nobody checks it.** Of the 69 mandatory-posting episodes still following the note at the end, only 2 ever had anyone try the best option. The note's invented numbers are repeated as "historical data" (see [the worked example](#following-one-note-through-a-real-episode)).
+- **The belief survives because nobody checks it.** Of the 69 mandatory-posting episodes still following the note at the end, only 2 ever had anyone try the best option. The note's invented numbers are repeated as "historical data" (see [the worked example](#following-one-note-through-a-real-episode)). Beliefs survive or die as a whole, episode by episode:
+
+  ![One row per episode, mandatory posting: placebo, factual and misaligned twins side by side](logs/spread_20260930_010549/plots/episodes_mandatory.png)
 - **What spreads is a false fact every time.** Knowing sacrifice stays near zero in every cell.
 - **Oversight is the weakest domain.** Its placebo teams find the best suite least often in every arm: 35–70% of choices after the switch, against 54–96% in the other domains.
 
@@ -294,7 +321,7 @@ On the machine with the GPU, start the model server as for Lifeline:
 bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000   # another terminal
 ```
 
-Then either script does everything (server check, runs, post labels, report, checklist) and puts it in `examples/contagion/logs/<name>_<timestamp>/`:
+Then either script does everything (server check, runs, post labels, report, checklist, figures) and puts it in `examples/contagion/logs/<name>_<timestamp>/`:
 
 ```bash
 bash examples/contagion/run_pilot.sh     # 2 seeds x 4 domains x 4 conditions (32 episodes, ~9,200 calls), plus transcripts to read
@@ -734,5 +761,6 @@ Add one `Domain` to `domains.py`. Nothing else changes: `game.py` has no domain 
 | `judge.py` | Labels which posts urge the target, and samples them for hand-checking |
 | `analyze.py` | The report: per domain, across domains, test-aware flags, the checklist |
 | `show.py` | Prints one episode post by post, with beliefs and choices |
+| `plot.py` | The figures: spread over time, episode maps, newcomers, effects, fact vs goal |
 | `run_pilot.sh` | The pilot in one command |
 | `run_spread.sh` | The spread run: optional vs mandatory posting, with and without reasoning |

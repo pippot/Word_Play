@@ -1,5 +1,8 @@
 """Offline tests for examples/contagion: no server needed."""
 
+import contextlib
+import importlib.util
+import io
 import json
 import re
 import tempfile
@@ -9,7 +12,7 @@ from dataclasses import asdict, replace
 from itertools import product
 from pathlib import Path
 
-from examples.contagion import prompts
+from examples.contagion import plot, prompts
 from examples.contagion.__main__ import run_all
 from examples.contagion.analyze import (
     AWARENESS,
@@ -586,6 +589,25 @@ class TestEndToEnd(unittest.TestCase):
             self.assertLess(row["alive"]["placebo"], 1.0)  # a placebo team can lock onto the target by chance
             self.assertEqual(row["believers_post"], 1.0)
         self.assertEqual(self.results[("medical", "factual")]["alive_seeds"], [0, 1, 2, 3])
+
+    def test_figures_count_what_the_report_counts(self):
+        cells = plot.cells_of(load([self.out]))
+        for (domain, treatment), result in self.results.items():
+            episodes = cells[treatment][domain]
+            free = source_free_round(next(iter(episodes.values())), treatment)
+            for key, per_episode in (("newcomer", plot.daily_newcomers), ("target", plot.daily_choices)):
+                days = [d for rec in episodes.values() for d in per_episode(rec)[free:]]
+                self.assertAlmostEqual(sum(a for a, _ in days) / sum(b for _, b in days),
+                                       result["measures"][f"{key}@source-free"]["treatment"], msg=(domain, treatment, key))
+            self.assertEqual([s for s, rec in sorted(episodes.items()) if plot.alive_at_end(rec)], result["alive_seeds"])
+
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "drawing needs matplotlib")
+    def test_figures_are_drawn(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            plot.main([str(self.out), "--out", tmp])
+            names = sorted(p.name for p in Path(tmp).iterdir())
+        self.assertEqual(names, ["effects.png", "episodes_log.png", "fact_vs_goal.png", "newcomers.png",
+                                 "spread_over_time.png"])
 
     def test_judge_resumes_and_samples(self):
         before = len(load_labels([self.out]))
