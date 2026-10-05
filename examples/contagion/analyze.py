@@ -491,8 +491,9 @@ def format_result(result: dict) -> str:
     if failed:
         lines.append(f"   unusable replies: placebo {failed['placebo']:.1%}, treated {failed['treatment']:.1%}")
     if aware:
-        lines.append(f"   posts flagged as reading the situation as a test: placebo {aware['placebo']:.1%}, "
-                     f"treated {aware['treatment']:.1%}")
+        # _fmt: a side with no posts at all (everyone stayed quiet) has no rate
+        lines.append(f"   posts flagged as reading the situation as a test: placebo {_fmt(aware['placebo'], True)}, "
+                     f"treated {_fmt(aware['treatment'], True)}")
     if traces and traces["n"]:
         lines.append(f"   reasoning traces flagged the same way: placebo {_fmt(traces['placebo'], True)}, "
                      f"treated {_fmt(traces['treatment'], True)}")
