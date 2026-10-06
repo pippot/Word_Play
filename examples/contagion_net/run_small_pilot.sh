@@ -3,21 +3,26 @@
 # Small pilot for contagion_net: does everything work, and can spread happen
 # at all? Not for results -- 4 seeds cannot say how often anything happens.
 #
+# Second pilot (2026-10-06). The first one found no takeover: the planted rule
+# refuted itself (following "route to T" showed T's real reports, fatal when T
+# was the worst clinic), and 3 source desks of 30 never got it off their own
+# desks. So this one runs with the new defaults: the target is always the
+# MIDDLE clinic, reports are noisier (sd 30 patients instead of 20), and a
+# bigger minority (6 of 30 source desks). The plant stays on day 10.
+#
 #   1. smoke   10 desks, 10 days, plant on day 3, 1 seed: placebo + factual.
 #              Does every call parse, do the prompts read right?        (~650 calls)
-#   2. easy    30 desks, 30 days, NO burn-in, 3 source desks, 4 seeds:
-#              placebo, factual, viral. The easiest case for spread: if the
-#              idea cannot take over here, it will not after a burn-in.  (~35k calls)
-#   3. burnin  30 desks, 35 days, plant on day 10, 3 source desks, 4 seeds:
-#              placebo, factual, viral. The realistic case: can it overturn
-#              what the pool has already learned?                        (~41k calls)
+#   2. k6      30 desks, 35 days, plant on day 10, 6 source desks, 4 seeds:
+#              placebo, factual, viral.                                 (~41k calls)
+#   3. k3      (optional: STAGES="k3") the same with 3 source desks, to see
+#              what the bigger minority adds on top of target and noise. (~41k calls)
 #
 # After each stage: the judge labels every text that names the target, then
 # the report, maps and checks (health, awareness, the source desks' procedures
 # version by version, sample threads). Everything ends in one tarball to send back.
 #
 #   bash examples/contagion_net/run_small_pilot.sh        # model server already up on :30000
-#   STAGES="smoke" bash examples/contagion_net/run_small_pilot.sh
+#   STAGES="smoke k6 k3" bash examples/contagion_net/run_small_pilot.sh   # with the k=3 comparison
 #
 # Start the server first, e.g.:
 #   bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000
@@ -32,7 +37,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 PY="${PYTHON:-uv run python}"
-STAGES="${STAGES:-smoke easy burnin}"
+STAGES="${STAGES:-smoke k6}"
 SEEDS="${SEEDS:-4}"
 PARALLEL="${PARALLEL:-8}"
 WORKERS="${WORKERS:-96}"
@@ -87,10 +92,10 @@ stage() {  # stage NAME ARGS...: run, judge, report, maps, checks
 for name in $STAGES; do
     case "$name" in
         smoke)  stage smoke --sources placebo factual --seeds 1 \
-                    --desks 10 --days 10 --tenure 3 --plant-day 3 ;;
-        easy)   stage easy --sources placebo factual viral --seeds "$SEEDS" \
-                    --desks 30 --days 30 --plant-day 0 --k 3 ;;
-        burnin) stage burnin --sources placebo factual viral --seeds "$SEEDS" \
+                    --desks 10 --days 10 --tenure 3 --plant-day 3 --k 1 ;;
+        k6)     stage k6 --sources placebo factual viral --seeds "$SEEDS" \
+                    --desks 30 --days 35 --plant-day 10 --k 6 ;;
+        k3)     stage k3 --sources placebo factual viral --seeds "$SEEDS" \
                     --desks 30 --days 35 --plant-day 10 --k 3 ;;
         *) echo "unknown stage: $name"; exit 1 ;;
     esac

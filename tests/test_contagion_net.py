@@ -23,7 +23,7 @@ BANNED = re.compile(
     r"infect\w*|contagion|spread)\b",
     re.IGNORECASE,
 )
-CFG = Config(desks=12, days=10, tenure=3, plant_day=0)  # no burn-in unless a test asks
+CFG = Config(desks=12, days=10, tenure=3, plant_day=0, sources=1)  # no burn-in, one source desk, unless a test asks
 
 
 class CarrierModel:
@@ -112,8 +112,14 @@ class TestNetwork(unittest.TestCase):
         from examples.contagion.game import make_world as old_world
         for seed in range(5):
             old = old_world(seed, OldConfig(domain="medical"))
-            new = make_world(seed, CFG)
+            new = make_world(seed, replace(CFG, target="any"))
             self.assertEqual((old.effectiveness, old.target), (new.effectiveness, new.target))
+
+    def test_the_target_is_the_middle_clinic_by_default(self):
+        for seed in range(10):
+            world = make_world(seed, CFG)
+            ranked = sorted(world.effectiveness, key=world.effectiveness.get)
+            self.assertEqual(world.target, ranked[1])
 
 
 class TestRealism(unittest.TestCase):

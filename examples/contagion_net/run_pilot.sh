@@ -38,7 +38,7 @@ DAYS="${DAYS:-35}"
 TENURE="${TENURE:-5}"
 DEGREE="${DEGREE:-6}"
 REWIRE="${REWIRE:-0}"
-K="${K:-1}"
+K="${K:-6}"
 PLANT="${PLANT:-10}"
 STOP="${STOP:-3}"
 REPS="${REPS:-3}"
@@ -75,7 +75,7 @@ shape=(--desks "$DESKS" --days "$DAYS" --tenure "$TENURE" --degree "$DEGREE" --r
 for stage in $STAGES; do
     case "$stage" in
         smoke)
-            net smoke --sources placebo factual --seeds 1 --desks 10 --days 10 --tenure 3 --plant-day 3 ;;
+            net smoke --sources placebo factual --seeds 1 --desks 10 --days 10 --tenure 3 --plant-day 3 --k 1 ;;
         calibrate)
             for k in 1 3; do
                 net "calibrate_k$k" --sources placebo factual --seeds "$SEEDS" "${shape[@]}" --k "$k"

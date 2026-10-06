@@ -60,9 +60,14 @@ class Config:
     rewire: float = 0.0           # 0 = clustered lattice, 1 = close to random
     tenure: int = 5               # days an ordinary instance holds its desk
     days: int = 35
-    sources: int = 1              # source desks (k)
+    sources: int = 6              # source desks (k): a sizeable minority -- with 3 of 30 the
+                                  # pilot's planted rule never left its own desks
     source_stay: int = 0          # days the first instance on a source desk stays; 0 = tenure
-    noise: float = 2.0            # sd of one report around the option's yield (before scaling)
+    noise: float = 3.0            # sd of one report around the option's yield (before scaling):
+                                  # 30 patients, so one report rarely settles which clinic is best
+    target: str = "middle"        # "middle": the target is the middle clinic, whose reports look
+                                  # plausible (with the worst one, following the rule exposed it
+                                  # within a day). "any": either non-best clinic, as in contagion
     message_words: int = 60
     procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves
     plant_day: int = 10           # the day the source arrives; days before it are burn-in, so the
@@ -78,6 +83,8 @@ class Config:
             raise ValueError("sources must be between 1 and desks")
         if min(self.tenure, self.days) < 1 or self.source_stay < 0 or self.noise < 0:
             raise ValueError("tenure and days must be at least 1; source_stay and noise at least 0")
+        if self.target not in ("middle", "any"):
+            raise ValueError('target must be "middle" or "any"')
         if not 0 <= self.plant_day < self.days:
             raise ValueError("plant_day must fall inside the run")
 
@@ -141,7 +148,9 @@ def make_world(seed: int, cfg: Config) -> World:
     # target in both designs.
     yields = rng.sample(EFFECTIVENESS, len(EFFECTIVENESS))
     best = yields.index(max(yields))
-    target = rng.choice([i for i in range(len(yields)) if i != best])
+    target = rng.choice([i for i in range(len(yields)) if i != best])  # drawn either way: same stream
+    if cfg.target == "middle":
+        target = yields.index(sorted(yields)[1])
     # Each structural draw has its own stream, so changing one knob (degree,
     # sources, tenure) leaves the others' draws alone.
     adj = network.ring_graph(cfg.desks, cfg.degree, cfg.rewire, random.Random(f"{seed}/graph"))
