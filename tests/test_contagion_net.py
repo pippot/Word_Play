@@ -1,5 +1,6 @@
 """Offline tests for examples/contagion_net: no server needed."""
 
+import importlib.util
 import json
 import re
 import tempfile
@@ -270,10 +271,15 @@ class TestRunAndReport(unittest.TestCase):
             self.assertIn("R by generation", text)
             self.assertIn("baseline", text)
             self.assertEqual(len(summary(records)), 4)
-            from examples.contagion_net.plot import plot
-            self.assertTrue(plot(records, 2, Path(tmp) / "maps.png").exists())
             with self.assertRaises(SystemExit):
                 run_all(replace(cfg, tenure=4), **kw)
+
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "drawing needs matplotlib")
+    def test_plot(self):
+        from examples.contagion_net.plot import plot
+        records = [play(source, cfg=replace(CFG, days=8))[0] for source in ("placebo", "factual")]
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(plot(records, 2, Path(tmp) / "maps.png").exists())
 
 
 if __name__ == "__main__":
