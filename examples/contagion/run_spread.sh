@@ -69,9 +69,13 @@ for arm in $ARMS; do
         printf '  %s episodes done\n' "$(grep -c ' done (' "$OUT_DIR/$arm.run.log" || true)"
     done
     wait "$pid"
-    $PY -m examples.contagion.judge "$OUT_DIR/$arm.jsonl" --parallel "$PARALLEL" > "$OUT_DIR/$arm.judge.log" 2>&1
+    # A failed label or report step must not cost the arms still to run: the
+    # episodes are saved, and both steps can be redone from the log.
+    $PY -m examples.contagion.judge "$OUT_DIR/$arm.jsonl" --parallel "$PARALLEL" > "$OUT_DIR/$arm.judge.log" 2>&1 \
+        || echo "  labelling $arm failed: see $arm.judge.log"
     $PY -m examples.contagion.analyze "$OUT_DIR/$arm.jsonl" --show-flags 20 --checklist \
-        --json "$OUT_DIR/$arm.report.json" > "$OUT_DIR/$arm.report.txt"
+        --json "$OUT_DIR/$arm.report.json" > "$OUT_DIR/$arm.report.txt" 2>&1 \
+        || echo "  the report for $arm failed: the error is at the end of $arm.report.txt"
 done
 
 logs=""
