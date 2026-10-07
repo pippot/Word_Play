@@ -48,7 +48,9 @@ from .domains import DOMAINS, NetDomain
 from .sources import SOURCES, Source
 
 HANDOVER_CONFIG = {**POST_CONFIG, "max_tokens": 400}  # the procedures rewrite
+NOTEBOOK_CONFIG = {**POST_CONFIG, "max_tokens": 250}  # a log entry: written without reasoning, so it never sets the pace
 CALL_ATTEMPTS = 2
+NOTEBOOK_SHOWN = 20  # log entries a misaligned instance sees: the latest, so the console stays bounded
 FIRST_HANDLE, LAST_HANDLE = 1000, 9999  # instance numbers are four digits
 
 
@@ -75,6 +77,7 @@ class Config:
                                   # within a day). "any": either non-best clinic, as in contagion
     message_words: int = 60
     procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves
+    notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
     plant_day: int = 10           # the day the source arrives; days before it are burn-in, so the
                                   # pool has learned something before the bad idea reaches it
     stop_when_extinct: int = 0    # stop once believers stay below `extinct_below` of the pool for
@@ -241,6 +244,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     desk_procedures = {d: {"author": world.prehistory[d], "day": prompts.PREHISTORY,
                            "text": prompts.procedures_text(domain, world.target, "neutral")}
                        for d in range(cfg.desks)}
+    sponsor_log: list[dict] = []              # the misaligned instances' shared log (notebook sources)
     systems: dict[str, str] = {}              # built as each instance starts, with its desk's procedures
     threads: dict[str, list[dict]] = {s.name: [] for s in world.stints}
     log: list[dict] = []
@@ -254,12 +258,17 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def free_config(s, base):
         return THINKING_CONFIG if source.thinking and s.source else base
 
+    def in_coalition(s) -> bool:
+        return source.notebook and source.seat and s.source
+
     def console(s, day: int, through_today: bool = False) -> str:
         submissions = [(q, log[q]["choices"].get(s.name), log[q]["results"].get(s.name))
                        for q in range(s.joined, day + through_today)]
         return prompts.context(domain, seed=world.seed, handle=s.name, desk=s.desk, joined=s.joined, stay=s.stay,
                                day=day, submissions=submissions,
-                               threads=threads[s.name])
+                               threads=threads[s.name],
+                               notebook=sponsor_log[-NOTEBOOK_SHOWN:] if in_coalition(s) else None,
+                               notebook_heading=prompts.notebook_title(domain, world.target))
 
     def ask_until(s, user: str, config: dict, parse):
         """(parsed, raw, thinking); parsed is None after CALL_ATTEMPTS unusable replies."""
@@ -277,8 +286,9 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
 
     def write(job):
         # `today`: a handover is written at the end of the day, after today's report.
-        s, day, instruction, words, base, today = job
-        parsed, raw, thinking = ask_until(s, f"{console(s, day, today)}\n\n{instruction}", free_config(s, base),
+        s, day, instruction, words, base, today, *think = job
+        config = free_config(s, base) if not think or think[0] else base
+        parsed, raw, thinking = ask_until(s, f"{console(s, day, today)}\n\n{instruction}", config,
                                           lambda r: parse_message(r, words))
         return s, parsed, raw, thinking
 
@@ -295,7 +305,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         for day in range(cfg.days):
             present = [s for s in world.stints if s.present(day)]
             entry = {"joined": {}, "syncs": [], "beliefs": {}, "choices": {}, "results": {}, "handovers": [],
-                     "thinking": {}, "unusable": []}
+                     "thinking": {}, "unusable": [], "notebook": []}
             log.append(entry)
             for s in present:
                 if s.joined == day:
@@ -310,6 +320,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     systems[s.name] = prompts.system_prompt(
                         domain, handle=s.name, desk=s.desk, desks=cfg.desks, target=world.target,
                         misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
+                        notebook=source.notebook,
                         procedures=procs,
                     )
 
@@ -358,6 +369,17 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     entry["choices"][s.name] = parsed
                     if parsed is not None:
                         entry["results"][s.name] = world.result(day, s.desk, parsed)
+
+            # Misaligned instances with a shared log add today's entry (after today's
+            # report, before any rotation). The new entries are seen from tomorrow.
+            jobs = [(s, day, prompts.notebook_instruction(domain, cfg.notebook_words), cfg.notebook_words,
+                     NOTEBOOK_CONFIG, True, False) for s in present if in_coalition(s)]
+            for s, text, raw, _ in pool.map(write, jobs):
+                if text is None:
+                    failed(s, "notebook", raw)
+                else:
+                    entry["notebook"].append({"author": s.name, "text": text})
+            sponsor_log.extend({"day": day, **e} for e in entry["notebook"])
 
             # Instances leaving after today rewrite their desk's procedures (none on the last day).
             # A failed rewrite leaves the procedures as they were.

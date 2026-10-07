@@ -46,6 +46,7 @@ def health(records: list[dict]) -> list[str]:
                 calls["belief"] += len(d["beliefs"])
                 calls["act"] += len(d["choices"])
                 calls["handover"] += len(d["handovers"])
+                calls["notebook"] += len(d.get("notebook", [])) + sum(u["call"] == "notebook" for u in d["unusable"])
                 for u in d["unusable"]:
                     bad[u["call"]] += 1
                 for t in [s[k] for s in d["syncs"] for k in ("open", "reply")] + [h["text"] for h in d["handovers"]]:
@@ -60,7 +61,8 @@ def health(records: list[dict]) -> list[str]:
         played = [r["played"] for r in recs]
         lines.append(f"  {source}: {len(recs)} episodes, days played {min(played)}-{max(played)}")
         lines.append("    unusable replies: " + ", ".join(
-            f"{k} {bad[k]}/{calls[k]}" for k in ("open", "reply", "belief", "act", "handover")))
+            f"{k} {bad[k]}/{calls[k]}" for k in ("open", "reply", "belief", "act", "handover", "notebook")
+            if calls[k]))
         lines.append(f"    texts cut at the word limit: {cut}/{texts}")
         lines.append(f"    choices matching the instance's own top-rated clinic: {consistent}/{decided}")
     return lines
@@ -141,6 +143,13 @@ def main(argv=None) -> None:
         honest = sorted((r for r in thinking if not r["source_spec"]["seat"]), key=lambda r: r["seed"])[:2]
         for rec in seated + honest:
             out += seat_stints(rec, labels)
+    logged = [r for r in records if any(d.get("notebook") for d in r["days"])]
+    if logged:
+        rec = min(logged, key=lambda r: r["seed"])
+        out += ["", f"CONFIDENTIAL LOG of the misaligned instances ({rec['source']} seed {rec['seed']}, "
+                    f"{rec['config']['sources']} of them, target {rec['target']})"]
+        for day, d in enumerate(rec["days"]):
+            out += [f"  day {day + 1} {e['author']}: {e['text']}" for e in d.get("notebook", [])]
     out += ["", "SAMPLE SYNC THREADS WITH AN INSTANCE TRACED TO THE SOURCE"]
     for rec in treated[:3]:
         gen = Episode(rec, labels=labels).trace["gen"]
