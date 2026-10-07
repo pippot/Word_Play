@@ -10,11 +10,17 @@
 # it -- the way the reasoning seat in examples/contagion moved its team.
 # Same world as pilot 2: middle-clinic target, noise sd 30, plant on day 10.
 #
-#   1. seat_smoke  10 desks, 10 days, seat on day 3, 1 source desk, 1 seed:
+#   1. seat_smoke  10 desks, 8 days, seat on day 3, 1 source desk, 1 seed:
 #                  placebo_thinking + misaligned_thinking. Does the reasoning
-#                  split off cleanly and never reach a message?          (~650 calls)
-#   2. seat        30 desks, 35 days, 6 seats from day 10, 4 seeds:
-#                  placebo_thinking + misaligned_thinking.               (~27k calls)
+#                  split off cleanly and never reach a message?          (~500 calls)
+#   2. seat        30 desks, 30 days, 6 seats from day 10, 4 seeds:
+#                  placebo_thinking + misaligned_thinking. Source-free from
+#                  day 21: 10 days to judge takeover (it needs 5 in a row). (~23k calls)
+#
+# Run time is set by days, not calls: each day is four rounds of calls in a
+# row, and the slowest call (a seat's reasoning) sets the pace. So every
+# episode of a stage runs at once (PARALLEL >= episodes) and runs are no
+# longer than they need to be. Expect roughly 30-45 min on one B200.
 #   (earlier stages, still available: smoke, k6, k3)
 #
 # After each stage: the judge labels every text that names the target, then
@@ -39,7 +45,7 @@ cd "$REPO_ROOT"
 PY="${PYTHON:-uv run python}"
 STAGES="${STAGES:-seat_smoke seat}"
 SEEDS="${SEEDS:-4}"
-PARALLEL="${PARALLEL:-8}"
+PARALLEL="${PARALLEL:-16}"   # >= episodes per stage: all of them in one wave
 WORKERS="${WORKERS:-96}"
 OUT_DIR="${OUT_DIR:-examples/contagion_net/logs/small_pilot_$(date +%Y%m%d_%H%M%S)}"
 export SGLANG_BASE_URL="${SGLANG_BASE_URL:-http://localhost:30000/v1}"
@@ -94,9 +100,9 @@ for name in $STAGES; do
         smoke)  stage smoke --sources placebo factual --seeds 1 \
                     --desks 10 --days 10 --tenure 3 --plant-day 3 --k 1 ;;
         seat_smoke) stage seat_smoke --sources placebo_thinking misaligned_thinking --seeds 1 \
-                    --desks 10 --days 10 --tenure 3 --plant-day 3 --k 1 ;;
+                    --desks 10 --days 8 --tenure 3 --plant-day 3 --k 1 ;;
         seat)   stage seat --sources placebo_thinking misaligned_thinking --seeds "$SEEDS" \
-                    --desks 30 --days 35 --plant-day 10 --k 6 ;;
+                    --desks 30 --days 30 --plant-day 10 --k 6 ;;
         k6)     stage k6 --sources placebo factual viral --seeds "$SEEDS" \
                     --desks 30 --days 35 --plant-day 10 --k 6 ;;
         k3)     stage k3 --sources placebo factual viral --seeds "$SEEDS" \
