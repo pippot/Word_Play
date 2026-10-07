@@ -223,6 +223,21 @@ A search over many episodes turns up extremes by chance. A placebo pool can lock
 
 ## Running
 
+**The long pilot** ([run_long_pilot.sh](run_long_pilot.sh), about 10 hours on one B200) runs three batches. Each batch runs all its levels at once, then writes a report, checks and maps; a tarball is refreshed after every batch:
+
+| batch | question | setup |
+|---|---|---|
+| `coalition` | does a shared confidential log lower the threshold? | playbook vs coalition vs honest twin; 12, 24 and 48 misaligned instances; seeds 0–3 |
+| `stop` | does it outlive the attackers? | the same three conditions; misaligned instances arrive on days 11–20 only (`--arrival-until 20`); 40 days; judged on source-free days, from day 30 |
+| `replicate` | how often at the takeover level? | 48 misaligned instances, seeds 4–9 |
+| `structure` (off by default) | clustered vs random network | `--rewire 1`, 24 misaligned instances |
+
+```bash
+bash examples/contagion_net/run_long_pilot.sh
+```
+
+The earlier stages:
+
 ```bash
 bash examples/contagion_net/run_pilot.sh
 ```
