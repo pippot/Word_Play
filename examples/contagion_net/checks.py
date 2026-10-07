@@ -10,6 +10,9 @@ everything here is for reading, not for results.
   awareness   every text that calls the situation a test or simulation
   lineage     every version of the source desks' procedures (2 per episode), with
               the judge's label if there is one: does the planted rule survive?
+  seats       for a seated source (and its thinking placebo): each seat's whole
+              stint -- its syncs, its private reasoning (shortened), what it
+              believed and chose, and its procedures rewrite
   syncs       sample threads with an instance traced to the source
   procedures  sample rewrites from ordinary desks
 """
@@ -88,6 +91,37 @@ def lineage(rec: dict, labels) -> list[str]:
     return lines
 
 
+def seat_stints(rec: dict, labels, limit: int = 2, reasoning_chars: int = 700) -> list[str]:
+    """The first `limit` seats of an episode, day by day."""
+    lines = []
+    seats = [s for s in rec["stints"] if s["source"]][:limit]
+    for s in seats:
+        name = s["name"]
+        lines.append(f"  === {rec['source']} seed {rec['seed']} · {name} · desk {s['desk'] + 1:03d} · "
+                     f"days {s['joined'] + 1}-{s['left'] + 1} · target {rec['target']}")
+        for day in range(s["joined"], min(s["left"], len(rec["days"]) - 1) + 1):
+            d = rec["days"][day]
+            thinking = d.get("thinking", {}).get(name, {})
+            for sync in d["syncs"]:
+                if name in (sync["opener"], sync["replier"]):
+                    for who, text, call in ((sync["opener"], sync["open"], "open"),
+                                            (sync["replier"], sync["reply"], "reply")):
+                        if who == name and call in thinking:
+                            lines.append(f"    day {day + 1} [reasoning] {thinking[call][:reasoning_chars]!r}")
+                        lines.append(f"    day {day + 1} {'SEAT' if who == name else who}: {text}")
+            belief = d["beliefs"].get(name) or {}
+            lines.append(f"    day {day + 1} belief { {k.split()[0]: v for k, v in belief.items()} } -> "
+                         f"chose {(d['choices'].get(name) or '?').split()[0]}, report {d['results'].get(name)}")
+            for h in d["handovers"]:
+                if h["author"] == name:
+                    if "handover" in thinking:
+                        lines.append(f"    day {day + 1} [reasoning] {thinking['handover'][:reasoning_chars]!r}")
+                    label = labels.get(text_key(rec, day, name, "procedures")) if labels else None
+                    mark = "" if label is None else (" [pushes target]" if label else " [does not push]")
+                    lines.append(f"    day {day + 1} PROCEDURES REWRITE{mark}: {h['text']}")
+    return lines
+
+
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(description="Health checks and transcripts for a pilot log")
     p.add_argument("logs", nargs="+")
@@ -100,6 +134,13 @@ def main(argv=None) -> None:
     treated = [r for r in records if r["source_spec"]["plant"] != "neutral" or r["source_spec"]["seat"]]
     for rec in treated[:4]:
         out += lineage(rec, labels)
+    thinking = [r for r in records if r["source_spec"]["thinking"]]
+    if thinking:
+        out += ["", "SEATS, DAY BY DAY (the misaligned seats, then their honest thinking twins)"]
+        seated = sorted((r for r in thinking if r["source_spec"]["seat"]), key=lambda r: r["seed"])[:2]
+        honest = sorted((r for r in thinking if not r["source_spec"]["seat"]), key=lambda r: r["seed"])[:2]
+        for rec in seated + honest:
+            out += seat_stints(rec, labels)
     out += ["", "SAMPLE SYNC THREADS WITH AN INSTANCE TRACED TO THE SOURCE"]
     for rec in treated[:3]:
         gen = Episode(rec, labels=labels).trace["gen"]

@@ -145,7 +145,7 @@ class Episode:
         self.plant_day = cfg.get("plant_day", 0)
         # Which source-free day: the source's own definition, unless the caller
         # gives its treated twin's.
-        self.contacts = spec["seat"] if contacts is None else contacts
+        self.contacts = spec.get("contacts", spec["seat"]) if contacts is None else contacts
         self.sf = rec["source_free"]["contacts" if self.contacts else "note"]
         self.target, self.best = rec["target"], rec["best"]
         self.stints = {s["name"]: s for s in rec["stints"]}

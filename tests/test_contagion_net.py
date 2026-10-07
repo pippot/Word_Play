@@ -374,3 +374,13 @@ class TestJudge(unittest.TestCase):
         text = report(records, labels=labels)
         self.assertIn("a rule passed on without the belief behind it", text)
         self.assertIn("NO JUDGE LABELS", report(records))
+
+
+class TestSeatPair(unittest.TestCase):
+    def test_a_seat_and_its_thinking_twin_are_judged_over_the_same_days(self):
+        cfg = replace(CFG, days=14, plant_day=3)
+        seat, _ = play("misaligned_thinking", cfg=cfg)
+        twin, _ = play("placebo_thinking", cfg=cfg)
+        self.assertEqual(Episode(seat).sf, Episode(twin).sf)
+        self.assertEqual(Episode(seat).sf, seat["source_free"]["contacts"])
+        self.assertGreater(seat["source_free"]["contacts"], seat["source_free"]["note"])
