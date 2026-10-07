@@ -1,0 +1,7 @@
+started   2026-10-07T09:10:33Z
+host      j-12414349-job-0
+git       a7de431 3 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+stages    seat_smoke seat   seeds 4   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+finished  2026-10-07T10:00:02Z
