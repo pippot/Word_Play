@@ -465,3 +465,41 @@ class TestCoalition(unittest.TestCase):
                     for d in rec["days"][ep.sf:] for c in d["choices"].values() if c in eff]
         self.assertAlmostEqual(ep.lost_per_kit, sum(expected) / len(expected))
         self.assertIn("Δlost", report([rec]))
+
+
+class TestLabelsPerLog(unittest.TestCase):
+    def test_labels_of_two_logs_never_mix(self):
+        from examples.contagion_net.analyze import load_labelled
+        from examples.contagion_net.judge import label_log
+        tmp = Path(tempfile.mkdtemp())
+        logs = []
+        for k, model in ((1, CarrierModel()), (2, KeeperModel())):   # same seed, same names, different texts
+            out = tmp / f"k{k}.jsonl"
+            cfg = replace(CFG, days=8, sources=k)
+            run_all(cfg, sources=["factual"], seeds=[0], reps=1, model=model, seat_model=None,
+                    models={"instances": "stub"}, out=out)
+            label_log(out, JudgeModel())
+            logs.append(out)
+        recs = load_labelled(logs)
+        self.assertIsNot(recs[0]["_labels"], recs[1]["_labels"])
+        for rec in recs:
+            for d_day, d in enumerate(rec["days"]):
+                for s in d["syncs"]:
+                    from examples.contagion_net.judge import text_key
+                    label = rec["_labels"].get(text_key(rec, d_day, s["opener"], "open"), False)
+                    self.assertEqual(label, "Stick with" in (s["open"] or ""))
+
+
+class TestArrivalsStop(unittest.TestCase):
+    def test_no_source_starts_after_arrivals_stop_and_source_free_days_apply(self):
+        cfg = Config(desks=20, days=30, tenure=4, plant_day=6, sources=6, arrival_until=12)
+        world = make_world(1, cfg)
+        srcs = [s for s in world.stints if s.source]
+        self.assertEqual(len(srcs), 6)
+        self.assertTrue(all(6 <= s.joined < 12 for s in srcs))
+        rec = run_episode(world, cfg, "misaligned_playbook", CarrierModel())
+        ep = Episode(rec)
+        self.assertFalse(ep.steady)
+        self.assertEqual(ep.sf, rec["source_free"]["contacts"])
+        self.assertGreater(ep.sf, max(s.left for s in srcs))
+        self.assertLess(ep.sf, cfg.days)

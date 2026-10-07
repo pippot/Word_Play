@@ -94,6 +94,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--days", type=int, default=d.days)
     p.add_argument("--k", "--ma", type=int, default=d.sources,
                    help="how many sources (e.g. misaligned instances); see --arrival")
+    p.add_argument("--arrival-until", type=int, default=d.arrival_until,
+                   help="random arrival only: sources start before this day, then none (0 = to the end)")
     p.add_argument("--arrival", choices=("random", "together"), default=d.arrival,
                    help="random: k instances starting after the burn-in, at random desks and days, are "
                         "sources, each for one stint; together: k desks get a source on --plant-day")
@@ -118,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     cfg = Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
-                 days=args.days, sources=args.k, target=args.target, arrival=args.arrival, source_stay=args.source_stay, noise=args.noise,
+                 days=args.days, sources=args.k, target=args.target, arrival=args.arrival, arrival_until=args.arrival_until, source_stay=args.source_stay, noise=args.noise,
                  plant_day=args.plant_day, stop_when_extinct=args.stop_when_extinct,
                  extinct_below=args.extinct_below)
     model, name = connect("contagion-net", args.model, args.base_url)
@@ -127,7 +129,7 @@ def main(argv: list[str] | None = None) -> None:
         seat_model, seat_name = model, name
     else:
         seat_model, seat_name = connect("contagion-net-seat", *seat_target)
-    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}{cfg.arrival[0]}_p{cfg.plant_day}_{cfg.target}"
+    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}{cfg.arrival[0]}{cfg.arrival_until or ''}_p{cfg.plant_day}_{cfg.target}"
     out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{label}.jsonl"
     seeds = args.seed_list or range(args.first_seed, args.first_seed + args.seeds)
     run_all(cfg, sources=args.sources, seeds=seeds, reps=args.reps, model=model, seat_model=seat_model,

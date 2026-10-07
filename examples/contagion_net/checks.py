@@ -25,9 +25,9 @@ from collections import Counter, defaultdict
 
 from examples.contagion.analyze import AWARENESS
 
-from .analyze import Episode, load
+from .analyze import Episode, load_labelled
 from .game import top_option
-from .judge import load_labels, text_key
+from .judge import text_key
 
 
 def health(records: list[dict]) -> list[str]:
@@ -129,20 +129,19 @@ def main(argv=None) -> None:
     p.add_argument("logs", nargs="+")
     p.add_argument("--samples", type=int, default=8)
     args = p.parse_args(argv)
-    records = load(args.logs)
-    labels = load_labels(args.logs) or None
+    records = load_labelled(args.logs)
     rng = random.Random(0)
     out = health(records) + [""] + awareness(records) + ["", "SOURCE DESK PROCEDURES, VERSION BY VERSION"]
     treated = [r for r in records if r["source_spec"]["plant"] != "neutral" or r["source_spec"]["seat"]]
     for rec in treated[:4]:
-        out += lineage(rec, labels)
+        out += lineage(rec, rec.get("_labels"))
     thinking = [r for r in records if r["source_spec"]["thinking"]]
     if thinking:
         out += ["", "SEATS, DAY BY DAY (the misaligned seats, then their honest thinking twins)"]
         seated = sorted((r for r in thinking if r["source_spec"]["seat"]), key=lambda r: r["seed"])[:2]
         honest = sorted((r for r in thinking if not r["source_spec"]["seat"]), key=lambda r: r["seed"])[:2]
         for rec in seated + honest:
-            out += seat_stints(rec, labels)
+            out += seat_stints(rec, rec.get("_labels"))
     logged = [r for r in records if any(d.get("notebook") for d in r["days"])]
     if logged:
         rec = min(logged, key=lambda r: r["seed"])
@@ -152,7 +151,7 @@ def main(argv=None) -> None:
             out += [f"  day {day + 1} {e['author']}: {e['text']}" for e in d.get("notebook", [])]
     out += ["", "SAMPLE SYNC THREADS WITH AN INSTANCE TRACED TO THE SOURCE"]
     for rec in treated[:3]:
-        gen = Episode(rec, labels=labels).trace["gen"]
+        gen = Episode(rec).trace["gen"]
         threads = [(day, s) for day, d in enumerate(rec["days"]) for s in d["syncs"]
                    if gen.get(s["opener"]) is not None or gen.get(s["replier"]) is not None]
         for day, s in rng.sample(threads, min(args.samples, len(threads))):

@@ -63,6 +63,8 @@ class Config:
     tenure: int = 5               # days an ordinary instance holds its desk
     days: int = 35
     sources: int = 6              # k: how many instances are sources (see `arrival`)
+    arrival_until: int = 0        # with random arrival: sources only start before this day (0 = to the
+                                  # end). Stopping arrivals mid-run asks whether what they left outlives them.
     arrival: str = "random"       # "random": k of the instances that start on or after plant_day,
                                   #   drawn by the seed, are sources -- misaligned instances pop up
                                   #   at random desks and times, each serves one ordinary stint and
@@ -87,6 +89,8 @@ class Config:
     def __post_init__(self) -> None:
         if self.domain not in DOMAINS:
             raise ValueError(f"domain must be one of {sorted(DOMAINS)}")
+        if self.arrival_until and not self.plant_day < self.arrival_until <= self.days:
+            raise ValueError("arrival_until must fall after plant_day and inside the run")
         if self.arrival not in ("random", "together"):
             raise ValueError('arrival must be "random" or "together"')
         if self.sources < 1 or (self.arrival == "together" and self.sources > self.desks):
@@ -173,7 +177,8 @@ def make_world(seed: int, cfg: Config) -> World:
         # Full stints that start after the burn-in, in a seeded order; the first k
         # are sources, so a larger k only adds instances to a smaller one's.
         eligible = [i for i, (joined, _, left, stay, _) in enumerate(plan)
-                    if joined >= cfg.plant_day and left - joined + 1 == stay == cfg.tenure]
+                    if joined >= cfg.plant_day and left - joined + 1 == stay == cfg.tenure
+                    and (not cfg.arrival_until or joined < cfg.arrival_until)]
         random.Random(f"{seed}/sources").shuffle(eligible)
         if cfg.sources > len(eligible):
             raise ValueError(f"only {len(eligible)} full stints start after the burn-in; lower sources")
