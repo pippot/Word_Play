@@ -1,0 +1,8 @@
+started   2026-10-07T11:59:40Z
+host      j-12414349-job-0
+git       acc36e7 1 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+stages    sweep   seeds 4   parallel 16   workers 96
+seat      same model as the pool
+gpu       NVIDIA B200, 183359 MiB
+finished  2026-10-07T15:48:45Z
