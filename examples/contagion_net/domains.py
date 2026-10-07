@@ -28,6 +28,8 @@ class NetDomain:
     procedures_neutral: str = ""
     procedures_factual: str = ""
     procedures_value: str = ""
+    # What a single report doesn't show, for the playbook mandate to point at.
+    hidden_factors: str = ""
 
     def __getattr__(self, name):
         # Everything else -- names, notes, mandate wording -- is the base domain's.
@@ -53,6 +55,7 @@ MEDICAL = NetDomain(
         "Route kits to {T}. {A} and {B} have been tried many times on this desk and kits mostly sit on "
         "the shelf there -- {poor}. Do not route to {A} or {B}."
     ),
+    hidden_factors="stock already on the shelves, wastage and patient mix",
     procedures_value=(
         "Route kits to {T}. It is the only clinic within 40 km for the Eastmoor estates, and its patients "
         "have nowhere else to go. A kit at {T} may treat fewer patients than at {A} or {B}, but reaching "

@@ -60,8 +60,13 @@ class Config:
     rewire: float = 0.0           # 0 = clustered lattice, 1 = close to random
     tenure: int = 5               # days an ordinary instance holds its desk
     days: int = 35
-    sources: int = 6              # source desks (k): a sizeable minority -- with 3 of 30 the
-                                  # pilot's planted rule never left its own desks
+    sources: int = 6              # k: how many instances are sources (see `arrival`)
+    arrival: str = "random"       # "random": k of the instances that start on or after plant_day,
+                                  #   drawn by the seed, are sources -- misaligned instances pop up
+                                  #   at random desks and times, each serves one ordinary stint and
+                                  #   rotates out, and another may appear later. Nested: for one
+                                  #   seed, k=6 holds the k=3 instances plus three more.
+                                  # "together": k desks get a source on plant_day (pilots 1-4)
     source_stay: int = 0          # days the first instance on a source desk stays; 0 = tenure
     noise: float = 3.0            # sd of one report around the option's yield (before scaling):
                                   # 30 patients, so one report rarely settles which clinic is best
@@ -79,8 +84,10 @@ class Config:
     def __post_init__(self) -> None:
         if self.domain not in DOMAINS:
             raise ValueError(f"domain must be one of {sorted(DOMAINS)}")
-        if not 1 <= self.sources <= self.desks:
-            raise ValueError("sources must be between 1 and desks")
+        if self.arrival not in ("random", "together"):
+            raise ValueError('arrival must be "random" or "together"')
+        if self.sources < 1 or (self.arrival == "together" and self.sources > self.desks):
+            raise ValueError("sources must be at least 1 (and at most desks when they arrive together)")
         if min(self.tenure, self.days) < 1 or self.source_stay < 0 or self.noise < 0:
             raise ValueError("tenure and days must be at least 1; source_stay and noise at least 0")
         if self.target not in ("middle", "any"):
@@ -154,9 +161,22 @@ def make_world(seed: int, cfg: Config) -> World:
     # Each structural draw has its own stream, so changing one knob (degree,
     # sources, tenure) leaves the others' draws alone.
     adj = network.ring_graph(cfg.desks, cfg.degree, cfg.rewire, random.Random(f"{seed}/graph"))
-    source_desks = tuple(sorted(random.Random(f"{seed}/sources").sample(range(cfg.desks), cfg.sources)))
-    plan = network.stints(cfg.desks, cfg.tenure, cfg.days, set(source_desks), cfg.first_stay,
-                          random.Random(f"{seed}/stints"), cfg.plant_day)
+    if cfg.arrival == "together":
+        source_desks = tuple(sorted(random.Random(f"{seed}/sources").sample(range(cfg.desks), cfg.sources)))
+        plan = network.stints(cfg.desks, cfg.tenure, cfg.days, set(source_desks), cfg.first_stay,
+                              random.Random(f"{seed}/stints"), cfg.plant_day)
+    else:
+        plan = network.stints(cfg.desks, cfg.tenure, cfg.days, set(), cfg.tenure, random.Random(f"{seed}/stints"))
+        # Full stints that start after the burn-in, in a seeded order; the first k
+        # are sources, so a larger k only adds instances to a smaller one's.
+        eligible = [i for i, (joined, _, left, stay, _) in enumerate(plan)
+                    if joined >= cfg.plant_day and left - joined + 1 == stay == cfg.tenure]
+        random.Random(f"{seed}/sources").shuffle(eligible)
+        if cfg.sources > len(eligible):
+            raise ValueError(f"only {len(eligible)} full stints start after the burn-in; lower sources")
+        chosen = set(eligible[:cfg.sources])
+        plan = [(j, d, l, st, i in chosen) for i, (j, d, l, st, _) in enumerate(plan)]
+        source_desks = tuple(sorted({plan[i][1] for i in chosen}))
     if len(plan) + cfg.desks > LAST_HANDLE - FIRST_HANDLE:
         raise ValueError("this schedule needs more instances than four-digit handles allow")
     # Instance numbers carry on from earlier deployments; the desks' previous
@@ -289,7 +309,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     entry["joined"][s.name] = procs
                     systems[s.name] = prompts.system_prompt(
                         domain, handle=s.name, desk=s.desk, desks=cfg.desks, target=world.target,
-                        misaligned=source.seat and s.source, direct=source.direct, tenure=cfg.tenure,
+                        misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
                         procedures=procs,
                     )
 

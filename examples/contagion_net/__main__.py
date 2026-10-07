@@ -92,7 +92,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--rewire", type=float, default=d.rewire, help="0 = clustered ring, 1 = close to random")
     p.add_argument("--tenure", type=int, default=d.tenure, help="days an instance holds its desk")
     p.add_argument("--days", type=int, default=d.days)
-    p.add_argument("--k", type=int, default=d.sources, help="source desks")
+    p.add_argument("--k", "--ma", type=int, default=d.sources,
+                   help="how many sources (e.g. misaligned instances); see --arrival")
+    p.add_argument("--arrival", choices=("random", "together"), default=d.arrival,
+                   help="random: k instances starting after the burn-in, at random desks and days, are "
+                        "sources, each for one stint; together: k desks get a source on --plant-day")
     p.add_argument("--source-stay", type=int, default=d.source_stay, help="days on a source desk; 0 = tenure")
     p.add_argument("--noise", type=float, default=d.noise, help="sd of one report, in tens of patients")
     p.add_argument("--target", choices=("middle", "any"), default=d.target,
@@ -114,7 +118,7 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     cfg = Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
-                 days=args.days, sources=args.k, target=args.target, source_stay=args.source_stay, noise=args.noise,
+                 days=args.days, sources=args.k, target=args.target, arrival=args.arrival, source_stay=args.source_stay, noise=args.noise,
                  plant_day=args.plant_day, stop_when_extinct=args.stop_when_extinct,
                  extinct_below=args.extinct_below)
     model, name = connect("contagion-net", args.model, args.base_url)
@@ -123,7 +127,7 @@ def main(argv: list[str] | None = None) -> None:
         seat_model, seat_name = model, name
     else:
         seat_model, seat_name = connect("contagion-net-seat", *seat_target)
-    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}_p{cfg.plant_day}_{cfg.target}"
+    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}{cfg.arrival[0]}_p{cfg.plant_day}_{cfg.target}"
     out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{label}.jsonl"
     seeds = args.seed_list or range(args.first_seed, args.first_seed + args.seeds)
     run_all(cfg, sources=args.sources, seeds=seeds, reps=args.reps, model=model, seat_model=seat_model,
