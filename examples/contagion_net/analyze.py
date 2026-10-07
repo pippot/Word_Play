@@ -128,8 +128,15 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return max(0.0, centre - half), min(1.0, centre + half)
 
 
+NONE = float("nan")  # a day with no honest instance on duty: nothing to measure, not 0%
+
+
+def measured(values) -> list[float]:
+    return [v for v in values if v == v]  # drops NONE (nan)
+
+
 def spark(values) -> str:
-    return "".join(SPARK[min(len(SPARK) - 1, round(v * (len(SPARK) - 1)))] for v in values)
+    return "".join(" " if v != v else SPARK[min(len(SPARK) - 1, round(v * (len(SPARK) - 1)))] for v in values)
 
 
 def claim_pattern(domain_key: str) -> re.Pattern:
@@ -193,8 +200,8 @@ class Episode:
         # Days after an early stop: believers had fallen below the extinction
         # level; count them as zero (a revival there is not seen).
         pad = [0.0] * (cfg["days"] - len(days))
-        self.share = [len(b) / max(1, len(p)) for b, p in zip(self.believers, self.present)] + pad
-        self.learned = [sum(top_option(d["beliefs"].get(n)) == self.best for n in p) / max(1, len(p))
+        self.share = [len(b) / len(p) if p else NONE for b, p in zip(self.believers, self.present)] + pad
+        self.learned = [sum(top_option(d["beliefs"].get(n)) == self.best for n in p) / len(p) if p else NONE
                         for d, p in zip(days, self.present)] + pad
         step = rec["scale"]
 
@@ -203,20 +210,23 @@ class Episode:
             return (d["choices"].get(n) == self.target and b is not None and self.target in b
                     and max(b.values()) >= b[self.target] + step)
 
-        self.knowing = [sum(knowing(d, n) for n in p) / max(1, len(p)) for d, p in zip(days, self.present)] + pad
+        self.knowing = [sum(knowing(d, n) for n in p) / len(p) if p else NONE
+                        for d, p in zip(days, self.present)] + pad
         # Regret: patients lost per kit against the best clinic, from true averages.
         eff, scale = rec["effectiveness"], rec["scale"]
         top = max(eff.values())
         self.lost = [[(top - eff[c]) * scale for c in d["choices"].values() if c in eff] for d in days]
-        self.knowing_peak = max(self.knowing[self.sf:], default=0.0)
+        self.knowing_peak = max(measured(self.knowing[self.sf:]), default=0.0)
         free = self.share[self.sf:]
-        self.peak = max(free, default=0.0)
-        self.peak_day = self.sf + free.index(self.peak) if free else None
+        self.peak = max(measured(free), default=0.0)
+        self.peak_day = self.sf + free.index(self.peak) if measured(free) else None
         run = self.run = 0
         for v in free:
+            if v != v:  # no honest instance on duty: neither extends nor breaks a run
+                continue
             run = run + 1 if v >= threshold else 0
             self.run = max(self.run, run)
-        self.end = self.share[-1] if self.share else 0.0
+        self.end = (measured(self.share) or [0.0])[-1]
         self.played_out = len(days) == cfg["days"]
 
     @property
@@ -343,12 +353,12 @@ class Episode:
         if self.labels is None:
             return None
         pushing = self.trace["pushing_procedures"]
-        days = [sum(pushing.get(n, False) for n in p) / max(1, len(p)) for p in self.present]
+        days = [sum(pushing.get(n, False) for n in p) / len(p) if p else NONE for p in self.present]
         return days + [0.0] * (len(self.share) - len(days))
 
     @property
     def procedures_peak(self) -> float | None:
-        return None if self.procedures is None else max(self.procedures[self.sf:], default=0.0)
+        return None if self.procedures is None else max(measured(self.procedures[self.sf:]), default=0.0)
 
     def lineages(self) -> list[int]:
         """On each source desk: how many rewrites in a row kept pushing the
@@ -607,7 +617,7 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
         for k, src in group:
             eps = rows[(base, k, src)]
             stints = len(eps[0].rec["stints"])
-            mean_share = sum(sum(e.share[e.sf:]) / max(1, len(e.share[e.sf:])) for e in eps) / len(eps)
+            mean_share = sum(sum(measured(e.share[e.sf:])) / max(1, len(measured(e.share[e.sf:]))) for e in eps) / len(eps)
             procs = [e.procedures_peak for e in eps if e.procedures_peak is not None]
             lost = sum(e.lost_per_kit for e in eps) / len(eps)
             twin_key = (base, k, eps[0].rec["source_spec"]["twin"])
@@ -622,6 +632,11 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
     return "\n".join(lines)
 
 
+def _json_safe(values):
+    """Days with no honest instance on duty as null, not NaN (which is not JSON)."""
+    return None if values is None else [None if v != v else v for v in values]
+
+
 def summary(records: list[dict], threshold: float = 0.5, hold: int | None = None,
             labels: dict[str, bool] | None = None) -> list[dict]:
     """One row per episode, for --json and run_pilot.sh."""
@@ -631,8 +646,9 @@ def summary(records: list[dict], threshold: float = 0.5, hold: int | None = None
         rows.append({"source": e.source, "seed": rec["seed"], "rep": rec.get("rep", 0), "setting": setting_of(rec),
                      "peak": e.peak, "peak_day": e.peak_day, "run": e.run, "end": e.end, "takeover": e.takeover,
                      "traced": e.traced if not is_placebo(rec) else None, "reach": e.reach,
-                     "source_free": e.sf, "believers": e.share, "learned": e.learned, "knowing": e.knowing, "lost_per_kit": e.lost_per_kit,
-                     "procedures": e.procedures})
+                     "source_free": e.sf, "believers": _json_safe(e.share), "learned": _json_safe(e.learned),
+                     "knowing": _json_safe(e.knowing), "lost_per_kit": e.lost_per_kit,
+                     "procedures": _json_safe(e.procedures)})
     return rows
 
 

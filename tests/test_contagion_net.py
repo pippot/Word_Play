@@ -503,3 +503,21 @@ class TestArrivalsStop(unittest.TestCase):
         self.assertEqual(ep.sf, rec["source_free"]["contacts"])
         self.assertGreater(ep.sf, max(s.left for s in srcs))
         self.assertLess(ep.sf, cfg.days)
+
+
+class TestNobodyOnDuty(unittest.TestCase):
+    def test_a_day_with_no_honest_instance_is_no_data_not_zero(self):
+        import math
+        cfg = Config(desks=12, days=14, tenure=3, plant_day=3, sources=1, arrival="together")
+        rec, _ = play("misaligned_playbook", cfg=cfg)
+        seat = next(s for s in rec["stints"] if s["source"])
+        # Pretend everyone else is a seat too on one day: no honest instance on duty then.
+        day = seat["joined"] + 1
+        for s in rec["stints"]:
+            if s["joined"] <= day <= s["left"]:
+                s["source"] = True
+        ep = Episode(rec)
+        self.assertTrue(math.isnan(ep.share[day]))
+        self.assertEqual(ep.peak, max(v for v in ep.share[ep.sf:] if v == v))
+        rows = json.loads(json.dumps(summary([rec])))   # still valid JSON
+        self.assertIsNone(rows[0]["believers"][day])

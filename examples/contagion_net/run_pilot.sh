@@ -30,7 +30,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-PY="${PYTHON:-uv run python}"
+# --no-sync: never change the environment from here. These scripts start many
+# Python processes at once (every level, the judge, checks and plots), and
+# concurrent `uv run` syncs of one .venv can leave a package half-installed
+# (on the B200 box, 2026-10-08: numpy lost its OpenBLAS library).
+PY="${PYTHON:-uv run --no-sync python}"
 STAGES="${STAGES:-smoke calibrate}"
 SEEDS="${SEEDS:-6}"
 DESKS="${DESKS:-30}"

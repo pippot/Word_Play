@@ -27,6 +27,8 @@
 #   BATCHES="stop" bash examples/contagion_net/run_long_pilot.sh
 #
 # Knobs: BATCHES, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL, SGLANG_BASE_URL,
+# EXTRA_ARGS (appended to every batch's command; the last value of an option
+# wins, e.g. EXTRA_ARGS="--seed-list 0 --days 22" for a quick dry run),
 # SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with the same OUT_DIR
 # and finished episodes are skipped.
 # ---------------------------------------------------------------------------
@@ -35,8 +37,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-PY="${PYTHON:-uv run python}"
+# --no-sync: never change the environment from here. These scripts start many
+# Python processes at once (every level, the judge, checks and plots), and
+# concurrent `uv run` syncs of one .venv can leave a package half-installed
+# (on the B200 box, 2026-10-08: numpy lost its OpenBLAS library).
+PY="${PYTHON:-uv run --no-sync python}"
 BATCHES="${BATCHES:-coalition stop replicate}"
+read -r -a EXTRA <<< "${EXTRA_ARGS:-}"
 PARALLEL="${PARALLEL:-16}"
 WORKERS="${WORKERS:-96}"
 OUT_DIR="${OUT_DIR:-examples/contagion_net/logs/long_pilot_$(date +%Y%m%d_%H%M%S)}"
@@ -67,6 +74,7 @@ $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
     echo "model     $SGLANG_MODEL_NAME at $SGLANG_BASE_URL"
     echo "seat      ${SEAT_MODEL:-same model as the pool}"
     echo "batches   $BATCHES   parallel $PARALLEL   workers $WORKERS"
+    [ -n "${EXTRA_ARGS:-}" ] && echo "extra     $EXTRA_ARGS"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/gpu       /' || true
 } | tee "$OUT_DIR/run_info.txt"
 
@@ -83,6 +91,7 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
         # shellcheck disable=SC2086
         $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
             --sources $sources --seed-list $seeds --k "$k" "$@" ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} \
+            ${EXTRA[@]+"${EXTRA[@]}"} \
             > "${log%.jsonl}.run.log" 2>&1 &
         pids+=($!)
     done

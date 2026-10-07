@@ -53,7 +53,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-PY="${PYTHON:-uv run python}"
+# --no-sync: never change the environment from here. These scripts start many
+# Python processes at once (every level, the judge, checks and plots), and
+# concurrent `uv run` syncs of one .venv can leave a package half-installed
+# (on the B200 box, 2026-10-08: numpy lost its OpenBLAS library).
+PY="${PYTHON:-uv run --no-sync python}"
 STAGES="${STAGES:-sweep}"
 LEVELS="${LEVELS:-6 12 24 48}"
 SEAT_ARGS=()
@@ -138,8 +142,9 @@ sweep() {  # every level at once, each against its twin; then one report across 
         $PY -m examples.contagion_net.checks "$log" > "${log%.jsonl}.checks.txt" 2>&1 || true
         $PY -m examples.contagion_net.judge "$log" --sample 30 > "${log%.jsonl}.judge_sample.txt" 2>&1 || true
     done
-    local top="${logs[${#logs[@]}-1]}"
-    $PY -m examples.contagion_net.plot "$top" --out "${top%.jsonl}.maps.png" > /dev/null 2>&1 || echo "  (no maps)"
+    for log in "${logs[@]}"; do  # a map per level
+        $PY -m examples.contagion_net.plot "$log" --out "${log%.jsonl}.maps.png" > /dev/null 2>&1 || echo "  (no maps for $log)"
+    done
     echo "  $(( (SECONDS - t0) / 60 )) min"
     sed -n '/HOW MANY IT TAKES/,$p' "$OUT_DIR/sweep.report.txt"
 }

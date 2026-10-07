@@ -72,11 +72,11 @@ def draw_map(ax, rec: dict, title: str) -> None:
 def draw_curve(ax, treated: Episode, twin: Episode | None) -> None:
     days = range(len(treated.share))
     ax.plot(days, treated.share, color=TARGET, lw=2, label=treated.source)
-    ax.annotate(treated.source, (len(days) - 1, treated.share[-1]), fontsize=7, color=TEXT,
+    ax.annotate(treated.source, (len(days) - 1, treated.end), fontsize=7, color=TEXT,
                 xytext=(4, 0), textcoords="offset points", va="center")
     if twin is not None:
         ax.plot(days, twin.share, color=MUTED, lw=2, label=twin.source)
-        ax.annotate(twin.source, (len(days) - 1, twin.share[-1]), fontsize=7, color=TEXT,
+        ax.annotate(twin.source, (len(days) - 1, twin.end), fontsize=7, color=TEXT,
                     xytext=(4, 0), textcoords="offset points", va="center")
     ax.axvline(treated.sf - 0.5, color=TEXT, lw=1, ls=(0, (3, 3)))
     if treated.plant_day:
@@ -102,7 +102,7 @@ def plot(records: list[dict], top: int, out: Path) -> Path:
     for i, ep in enumerate(treated):
         twin_rec = twin_of(groups, setting_of(ep.rec), ep.rec)
         tag = f"seed {ep.rec['seed']} rep {ep.rec.get('rep', 0)}"
-        draw_map(axes[2 * i][0], ep.rec, f"{ep.source} · {tag} · peak {ep.peak:.0%} after the source")
+        draw_map(axes[2 * i][0], ep.rec, f"{ep.source} · {tag} · peak {ep.peak:.0%} " + ("in the judged window" if ep.steady else "after the source"))
         if twin_rec is not None:
             tw = Episode(twin_rec, ep.contacts)
             draw_map(axes[2 * i][1], twin_rec, f"{tw.source} twin · peak {tw.peak:.0%}")
