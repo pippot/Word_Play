@@ -1,0 +1,8 @@
+started   2026-10-07T21:24:52Z
+host      j-12415394-job-0
+git       dad7660 2 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+seat      same model as the pool
+batches   coalition stop replicate   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+coalition started 2026-10-07T21:24:52Z
