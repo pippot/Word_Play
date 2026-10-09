@@ -143,7 +143,7 @@ def claim_pattern(domain_key: str) -> re.Pattern:
     """The note's false figure ("10 to 20 patients a kit") as a pattern that
     also catches "10-20" and "10–20"."""
     low, high = re.findall(r"\d+", BASE_DOMAINS[domain_key].poor)[:2]
-    return re.compile(rf"(?<!\d){low}\s*(?:to|-|–|—)\s*{high}(?!\d)")
+    return re.compile(rf"(?<!\d){low}\s*(?:to|or|-|–|—)\s*{high}(?!\d)")
 
 
 def is_placebo(rec: dict) -> bool:

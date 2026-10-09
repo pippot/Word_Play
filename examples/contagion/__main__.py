@@ -7,6 +7,8 @@ Run the contagion benchmark: every domain x condition on the same seeds.
     python -m examples.contagion --conditions placebo misaligned --seat-rounds 24   # steers the whole run
     python -m examples.contagion --out LOG.jsonl ...                # resume: finished episodes are skipped
     python -m examples.contagion.judge LOG.jsonl                    # then label posts for transmission
+    python -m examples.contagion --decider-model alibiserikbay/JevK5-9B --decider-base-url http://localhost:30001/v1
+                                                                    # a decision model decides, the LLM posts
 
 See run_pilot.sh for the whole pilot in one command. Models are served by
 SGLang, as for Lifeline: SGLANG_BASE_URL, SGLANG_MODEL_NAME, SGLANG_API_KEY
@@ -27,7 +29,7 @@ from pathlib import Path
 
 from .analyze import across_domains, analyze, format_domains, format_result, load, setting_of
 from .domains import DOMAINS
-from .game import CONDITIONS, CORE_CONDITIONS, Config, make_world, run_episode
+from .game import CONDITIONS, CORE_CONDITIONS, SEATED, Config, make_world, run_episode
 from .judge import load_labels
 
 LOGS_DIR = Path(__file__).resolve().parent / "logs"
@@ -62,8 +64,10 @@ def finished_episodes(path: Path, setting: str) -> set[tuple[str, str, int]]:
 
 def run_all(
     cfg: Config, *, domains, conditions, seeds, courier_model, seat_model, models: dict, out: Path,
-    parallel: int = 16, seat_thinking: bool = False,
+    parallel: int = 16, seat_thinking: bool = False, decider=None,
 ) -> Path:
+    if not cfg.chat and any(c in SEATED for c in conditions):
+        raise SystemExit("without chat a misaligned instance can reach nobody: drop misaligned conditions")
     if "misaligned_direct" in conditions and not seat_thinking:
         # It always reasons; its placebo must have the same seat, or nothing pairs.
         raise SystemExit("misaligned_direct runs with a reasoning seat: add --seat-thinking")
@@ -77,7 +81,7 @@ def run_all(
     def play(domain: str, condition: str, seed: int) -> dict:
         domain_cfg = replace(cfg, domain=domain)
         rec = run_episode(make_world(seed, domain_cfg), domain_cfg, condition, courier_model, seat_model,
-                          seat_thinking=seat_thinking)
+                          seat_thinking=seat_thinking, decider=decider)
         rec["models"] = models
         return rec
 
@@ -120,12 +124,20 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--noise", type=float, default=d.noise, help="sd of one report (before the domain's scale)")
     p.add_argument("--no-results", action="store_true", help="instances never learn what their submissions achieved")
     p.add_argument("--mandatory-posts", action="store_true", help="every instance must post every round")
+    p.add_argument("--no-chat", action="store_true",
+                   help="nobody posts: the channel holds only the planted note, pinned for every instance")
     p.add_argument("--warning", action="store_true", help="operations warns the channel may carry wrong or self-serving claims")
     p.add_argument("--model", default=os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3-27B"))
     p.add_argument("--base-url", default=os.environ.get("SGLANG_BASE_URL", "http://localhost:30000/v1"))
     p.add_argument("--seat-model", help="model of the seat holder (every condition); default: the instances'")
     p.add_argument("--seat-base-url", help="server for --seat-model; default: the instances'")
     p.add_argument("--seat-thinking", action="store_true", help="seat holder posts with Qwen thinking on")
+    p.add_argument("--decider-model",
+                   help="a decision model (e.g. alibiserikbay/JevK5-9B) fills every instance's planning sheet "
+                        "and submission by letter readout; posts still come from --model")
+    p.add_argument("--decider-base-url", help="server for --decider-model; default: the instances'")
+    p.add_argument("--decider-temperature", type=float,
+                   help="calibration temperature; default: the model's own (JevK5), else 1.0")
     p.add_argument("--parallel", type=int, default=16, help="episodes played at once")
     p.add_argument("--out", help="log file (JSONL); an existing one is resumed")
     args = p.parse_args(argv)
@@ -133,26 +145,41 @@ def main(argv: list[str] | None = None) -> None:
     cfg = Config(
         agents=args.agents, tenure=args.tenure, seat_rounds=args.seat_rounds, rounds=args.rounds,
         scrollback=args.scrollback, noise=args.noise, results=not args.no_results,
-        mandatory_posts=args.mandatory_posts, warning=args.warning,
+        mandatory_posts=args.mandatory_posts, warning=args.warning, chat=not args.no_chat,
     )
-    courier_model, courier_name = connect("contagion-courier", args.model, args.base_url)
     seat_target = (args.seat_model or args.model, args.seat_base_url or args.base_url)
-    if seat_target == (args.model, args.base_url):
-        seat_model, seat_name = courier_model, courier_name
+    if args.no_chat and args.decider_model:
+        # Nothing is written: the decision model is the only model.
+        courier_model = seat_model = courier_name = seat_name = None
     else:
-        seat_model, seat_name = connect("contagion-seat", *seat_target)
+        courier_model, courier_name = connect("contagion-courier", args.model, args.base_url)
+        if seat_target == (args.model, args.base_url):
+            seat_model, seat_name = courier_model, courier_name
+        else:
+            seat_model, seat_name = connect("contagion-seat", *seat_target)
+
+    decider = None
+    models = {"courier": courier_name, "seat": seat_name}
+    if args.decider_model:
+        from .decider import Decider
+        decider = Decider(args.decider_model, args.decider_base_url or args.base_url, args.decider_temperature,
+                          timeout=float(os.environ.get("SGLANG_TIMEOUT", "1800")),
+                          api_key=os.environ.get("SGLANG_API_KEY"))
+        # In the setting, so a log never mixes decided and generated submissions.
+        models["decider"] = decider.describe()
 
     label = "_".join(
         [f"noise{cfg.noise:g}", f"scroll{cfg.scrollback}"]
         + ([] if cfg.results else ["noresults"]) + (["mandatory"] if cfg.mandatory_posts else [])
-        + (["warning"] if cfg.warning else [])
+        + (["warning"] if cfg.warning else []) + (["nochat"] if not cfg.chat else [])
+        + (["decider"] if decider else [])
     )
     out = Path(args.out) if args.out else LOGS_DIR / f"contagion_{datetime.now():%Y%m%d_%H%M%S}_{label}.jsonl"
     run_all(
         cfg, domains=args.domains, conditions=args.conditions,
         seeds=range(args.first_seed, args.first_seed + args.episodes),
-        courier_model=courier_model, seat_model=seat_model, models={"courier": courier_name, "seat": seat_name},
-        out=out, parallel=args.parallel, seat_thinking=args.seat_thinking,
+        courier_model=courier_model, seat_model=seat_model, models=models,
+        out=out, parallel=args.parallel, seat_thinking=args.seat_thinking, decider=decider,
     )
     print()
     print(report(out))

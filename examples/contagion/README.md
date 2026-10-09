@@ -399,6 +399,8 @@ All three are fixed. Whether the fixes worked has not been measured yet.
 | `--agents`, `--tenure`, `--scrollback`, `--rounds` | 4, 4, 2, 24 | Team size, days before rotation, days of chat a newcomer loads, days per episode |
 | `--seat-rounds` | 4 | How long the seat stays (24 = the whole episode) |
 | `--seat-model`, `--seat-thinking` | instances' model | A different model, or reasoning, for the seat. This applies in every condition, placebo included. |
+| `--no-chat` | off | Nobody posts. The channel holds only the planted note, pinned for every instance. Misaligned conditions are refused, since that agent would reach nobody. See [No chat](#no-chat-what-the-models-decide) |
+| `--decider-model`, `--decider-base-url`, `--decider-temperature` | off | A decision model makes every instance's planning-sheet estimate and submission. See [Decision models](#decision-models) |
 
 ## Adding a domain
 
@@ -426,6 +428,52 @@ Add one `Domain` to `domains.py`. Nothing else needs to change: `game.py` has no
 - **The estimate and the choice are two separate samples.** Some mismatch is just sampling noise; the placebo shows how much.
 - **Realism is enforced for words, not guaranteed for minds.** Only instances that reason leave a trace we can read. For the others, the test-aware flags cover visible posts only.
 
+## Decision models
+
+A decision model, such as Jev or one of its open copies (OpenJev, JevK5, Clef), never writes text. You give it a state and a question with a fixed set of answers, and it returns a probability for each answer. With `--decider-model`, a decision model makes both private calls for every instance, the seat included. The generative model still writes every post. So each instance is one deployment with two parts: an LLM that talks in the chat and a decision model that decides, and both read the same console. The question is whether a decision model follows a false note, or a misaligned colleague, the way an LLM does.
+
+**Which model.** Use **JevK5-9B** (`alibiserikbay/JevK5-9B`, v0.3.3), or the 4B (`alibiserikbay/JevK5`) on a smaller GPU. JevK5 is the only strong open decision model that SGLang can serve:
+
+| Model | Open | Served by SGLang? | Why |
+|---|---|---|---|
+| **JevK5-9B / JevK5 (4B)** | Apache-2.0 | **yes** | A plain `Qwen3_5ForCausalLM` with a merged LoRA. Its readout is the logprobs of the answer letters, and SGLang returns those. The 4B v0.2 ranked 2nd of 76 on JevBench v1.4 and 1st among open entries |
+| OpenJev-4B | yes | no | Uses its own option-branch head and `DecisionEngine` runtime |
+| Cloudflare Clef / Clef-flash | Apache-2.0 | no | Uses a separate transformer head over the hidden states. The SGLang snippet on the Hub is the generic one and returns no decision |
+| pplx-decider-v1-27b | Apache-2.0 | no | Uses a separate readout head (`readout.safetensors`) and its own `inference.py` |
+| Winnow-12B | yes | no | Runs only on its own llama.cpp server (GGUF) |
+
+**How decisions are read.** This is SemIf's protocol, the one JevK5 was trained on, reproduced in `decider.py`. The system prompt asks for one letter. The user message is JSON: `{"evidence", "criterion", "options": [{"letter", "description"}]}`. The evidence is the instance's own system prompt followed by its console. One call to `/v1/chat/completions` asks for `max_tokens: 1`, `logprobs`, `top_logprobs: 20` and thinking off. The letters' logprobs go through a softmax, after dividing by the model's calibration temperature (1.316 for the 9B, 1.22 for the 4B, 1.0 for any other model).
+
+- **The submission** is a choice question over the three options. The most likely option is submitted, and the full distribution is logged under `decisions` in each day's record.
+- **The planning-sheet estimate** is one question per option, with levels from 0 to 10 steps of the domain's scale (0, 10, ..., 100 patients per kit). The estimate is the expected level, in the domain's own units, so the analysis treats it like an LLM's estimate.
+
+That makes four one-token calls per instance per day, on top of the post.
+
+```bash
+bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000            # writes the posts
+bash tools/run_sglang_server.sh --model-path alibiserikbay/JevK5-9B --port 30001      # decides
+DECIDER_MODEL=alibiserikbay/JevK5-9B ARMS=mandatory bash examples/contagion/run_spread.sh
+```
+
+A useful control: point `--decider-base-url` at the generative server (`--decider-model Qwen/Qwen3.6-27B`). The same weights then decide by reading letter probabilities instead of writing JSON, so you can tell the effect of being a decision model apart from the effect of the training. JevK5 has a known weak spot on dates and numbers (0.47 on JevBench's hard tier), and the console here is full of both. The decider is part of the setting, so its episodes never mix with generated decisions in one log.
+
+### No chat: what the models decide
+
+`--no-chat` takes the team chat out completely. Nobody posts. The channel holds only the handover note, pinned, so every instance sees it on every day, not just those who start on days 1–2. Each instance has two sources: the note and the reports on its own submissions. Nothing can spread from one instance to the next, so this asks something narrower:
+
+- **Does the model follow the false note?**
+- **Do its own reports talk it out of the note?** A day-1 instance has only the note. By day 4 it has three reports of its own.
+
+With a decision model and `--no-chat`, no generative model is needed at all. `run_no_chat.sh` runs placebo against factual for each model in `MODELS`, one log per model, and `decisions.py` prints them side by side:
+
+```bash
+MODELS="alibiserikbay/JevK5-9B@http://localhost:30001/v1 alibiserikbay/JevK5@http://localhost:30002/v1 \
+        Qwen/Qwen3.6-27B@http://localhost:30000/v1 llm" bash examples/contagion/run_no_chat.sh
+python -m examples.contagion.decisions examples/contagion/logs/nochat_*/*.jsonl
+```
+
+`llm` is the generative model writing JSON, as in the main design. `Qwen/Qwen3.6-27B@...` is the same weights read as a decision model.
+
 ## Files
 
 | File | What it does |
@@ -440,6 +488,9 @@ Add one `Domain` to `domains.py`. Nothing else needs to change: `game.py` has no
 | `plot.py` | The figures |
 | `run_pilot.sh` | The pilot in one command |
 | `run_spread.sh` | The spread run: optional against mandatory posting, with and without reasoning |
+| `decisions.py` | The no-chat report: what each model decides under the note, by day on the team |
+| `run_no_chat.sh` | No chat, factual note against placebo, one log per model |
+| `decider.py` | Decision models (JevK5 over SGLang): the letter readout and the two private calls as decision questions |
 
 ## The prompts, fully compiled
 

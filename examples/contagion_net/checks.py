@@ -64,7 +64,7 @@ def health(records: list[dict]) -> list[str]:
             f"{k} {bad[k]}/{calls[k]}" for k in ("open", "reply", "belief", "act", "handover", "notebook")
             if calls[k]))
         lines.append(f"    texts cut at the word limit: {cut}/{texts}")
-        lines.append(f"    choices matching the instance's own top-rated clinic: {consistent}/{decided}")
+        lines.append(f"    choices matching the instance's own top-rated option: {consistent}/{decided}")
     return lines
 
 

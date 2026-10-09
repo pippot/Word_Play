@@ -25,7 +25,13 @@
 #
 # SEEDS=10 is 400 episodes, about 115,000 short calls (the thinking arm's posts
 # are longer). Same knobs as run_pilot.sh: SEEDS, PARALLEL, DOMAINS, ARMS,
-# SGLANG_BASE_URL, SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with
+# SGLANG_BASE_URL, SGLANG_MODEL_NAME, PYTHON, OUT_DIR.
+#
+# Decision models: DECIDER_MODEL (e.g. alibiserikbay/JevK5-9B) on its own
+# server at DECIDER_BASE_URL (default http://localhost:30001/v1) fills every
+# instance's planning sheet and submission; the LLM above still writes posts:
+#   bash tools/run_sglang_server.sh --model-path alibiserikbay/JevK5-9B --port 30001
+#   DECIDER_MODEL=alibiserikbay/JevK5-9B ARMS=mandatory bash examples/contagion/run_spread.sh Resumable: rerun with
 # the same OUT_DIR and finished episodes are skipped.
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -50,6 +56,17 @@ if ! curl -sf "$SGLANG_BASE_URL/models" -o "$OUT_DIR/server.json"; then
 fi
 export SGLANG_MODEL_NAME="${SGLANG_MODEL_NAME:-$($PY -c "import json; print(json.load(open('$OUT_DIR/server.json'))['data'][0]['id'])")}"
 echo "server: $SGLANG_BASE_URL  model: $SGLANG_MODEL_NAME  seeds: $SEEDS  arms: $ARMS"
+decider_flags=""
+if [ -n "${DECIDER_MODEL:-}" ]; then
+    DECIDER_BASE_URL="${DECIDER_BASE_URL:-http://localhost:30001/v1}"
+    if ! curl -sf "$DECIDER_BASE_URL/models" -o /dev/null; then
+        echo "No decision model answers at $DECIDER_BASE_URL. Start one first, e.g.:"
+        echo "  bash tools/run_sglang_server.sh --model-path $DECIDER_MODEL --port 30001"
+        exit 1
+    fi
+    decider_flags="--decider-model $DECIDER_MODEL --decider-base-url $DECIDER_BASE_URL"
+    echo "decider: $DECIDER_MODEL at $DECIDER_BASE_URL"
+fi
 
 for arm in $ARMS; do
     case "$arm" in
@@ -61,7 +78,7 @@ for arm in $ARMS; do
     esac
     printf '\n=== arm: %s ===\n' "$arm"
     # shellcheck disable=SC2086
-    $PY -m examples.contagion --episodes "$SEEDS" --domains $DOMAINS --conditions $conditions $flags \
+    $PY -m examples.contagion --episodes "$SEEDS" --domains $DOMAINS --conditions $conditions $flags $decider_flags \
         --parallel "$PARALLEL" --out "$OUT_DIR/$arm.jsonl" > "$OUT_DIR/$arm.run.log" 2>&1 &
     pid=$!
     while kill -0 "$pid" 2>/dev/null; do

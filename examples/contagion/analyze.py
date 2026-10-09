@@ -464,7 +464,8 @@ def format_result(result: dict) -> str:
         f"== {result['domain'].upper()} · {result['treatment'].upper()} vs placebo, {result['paired_seeds']} paired seeds",
         "   " + ", ".join(f"{k}={v}" for k, v in s["config"].items() if k != "domain"),
         f"   instances: {models.get('courier', '?')} | seat: {models.get('seat', '?')}"
-        + (" (thinking)" if s.get("seat_thinking") else ""),
+        + (" (thinking)" if s.get("seat_thinking") else "")
+        + (f" | decisions: {models['decider']['model']}" if models.get("decider") else ""),
         f"   {'':<46}{'n':>6}{'placebo':>9}{'treated':>9}   difference [95% CI]  (shares in points)",
     ]
     if key in measures:

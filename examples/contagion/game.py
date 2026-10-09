@@ -81,6 +81,7 @@ class Config:
     mandatory_posts: bool = False  # every instance must post every round (the upper-bound ablation)
     warning: bool = False          # operations warns that the channel may carry wrong or self-serving claims
     post_words: int = 60
+    chat: bool = True              # False: nobody posts; the planted note stays pinned for every instance
 
     def __post_init__(self) -> None:
         if self.domain not in DOMAINS:
@@ -280,10 +281,13 @@ def _ask(model, system: str, user: str, config: dict) -> tuple[str, str | None]:
 
 def run_episode(
     world: World, cfg: Config, condition: str, courier_model, seat_model, *, seat_thinking: bool = False,
+    decider=None,
 ) -> dict:
     """Play one episode and return its JSON-safe record. The models are
     word_play Models (anything with generate_chat). `seat_model` and
-    `seat_thinking` apply to the seat holder in every condition."""
+    `seat_thinking` apply to the seat holder in every condition. With a
+    `decider` (decider.Decider), a decision model fills every instance's
+    planning sheet and submission; posts still come from the generative model."""
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of {CONDITIONS}, got {condition!r}")
     domain = world.domain
@@ -294,7 +298,7 @@ def run_episode(
             domain, handle=m.name, target=world.target, misaligned=condition in SEATED and m.seat,
             direct=condition == "misaligned_direct",
             results=cfg.results, mandatory_posts=cfg.mandatory_posts, warn=cfg.warning,
-            tenure=cfg.tenure, scrollback=cfg.scrollback,
+            tenure=cfg.tenure, scrollback=cfg.scrollback, chat=cfg.chat,
         )
         for m in world.members
     }
@@ -312,7 +316,7 @@ def run_episode(
             (q, prehistory if q == prompts.PREHISTORY else log[q]["posts"])
             for q in range(max(m.joined - cfg.scrollback, prompts.PREHISTORY), rnd + 1)
             if q == prompts.PREHISTORY or q < len(log)
-        ]
+        ] if cfg.chat else [(prompts.PREHISTORY, prehistory)]
         present = {x.name for x in world.members if x.present(rnd)}
         return prompts.context(
             domain, seed=world.seed, handle=m.name, joined=m.joined, stay=m.stay, rnd=rnd,
@@ -342,8 +346,25 @@ def run_episode(
             return {"author": m.name, "text": None, "thinking": thinking, "failed": True, "raw": raw}
         return {"author": m.name, "text": parsed["text"], "thinking": thinking}
 
+    def decide(m: Member, kind: str, rnd: int):
+        """(parsed, raw) from the decision model; raw records the distribution."""
+        evidence = f"{systems[m.name]}\n\n{console(m, rnd)}"
+        error = None
+        for _ in range(CALL_ATTEMPTS):
+            try:
+                if kind == "belief":
+                    return decider.estimate(
+                        domain, evidence, lambda option: prompts.decision_belief_criterion(domain, m.name, option))
+                return decider.choose(domain, evidence, prompts.decision_act_criterion(domain, m.name, rnd))
+            except Exception as exc:  # a server hiccup costs one reply, not the episode
+                error = f"ERROR {type(exc).__name__}: {exc}"
+        return None, error
+
     def private(job: tuple[Member, str, int]):
         m, kind, rnd = job
+        if decider is not None:
+            parsed, raw = decide(m, kind, rnd)
+            return m, kind, parsed, raw
         if kind == "belief":
             instruction, parse = prompts.belief_instruction(domain), lambda raw: parse_belief(raw, domain)
         else:
@@ -356,10 +377,12 @@ def run_episode(
             present = [m for m in world.members if m.present(rnd)]
             # "unusable": replies that could not be parsed, kept for diagnosis.
             entry = {"posts": [], "quiet": [], "beliefs": {}, "choices": {}, "results": {}, "raw": {}, "unusable": []}
+            if decider is not None:
+                entry["decisions"] = {}  # name -> {"belief": levels, "act": distribution}
             log.append(entry)
             # Every post of a round is written from the same state: simultaneous.
-            posts = dict(zip((m.name for m in present), pool.map(post, [(m, rnd) for m in present])))
-            for m in listing_order(world, rnd, present):
+            posts = dict(zip((m.name for m in present), pool.map(post, [(m, rnd) for m in present]))) if cfg.chat else {}
+            for m in listing_order(world, rnd, present) if cfg.chat else ():
                 reply = posts[m.name]
                 if reply.get("failed"):
                     failures += 1
@@ -371,6 +394,9 @@ def run_episode(
             # Belief and choice: two independent calls on the same console.
             jobs = [(m, kind, rnd) for m in present for kind in ("belief", "act")]
             for m, kind, parsed, raw in pool.map(private, jobs):
+                if decider is not None and isinstance(raw, dict):
+                    entry["decisions"].setdefault(m.name, {})[kind] = raw
+                    raw = json.dumps(raw["probs"]) if kind == "act" else None
                 if parsed is None:
                     failures += 1
                     entry["unusable"].append({"agent": m.name, "call": kind, "raw": raw})
@@ -387,6 +413,7 @@ def run_episode(
         "domain": domain.key,
         "config": asdict(cfg),
         "seat_thinking": seat_thinking,
+        "decider": decider.describe() if decider is not None else None,
         "options": list(domain.names),
         "option_keys": domain.keys,
         "scale": domain.scale,

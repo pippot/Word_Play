@@ -4,6 +4,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import math
 import re
 import tempfile
 import threading
@@ -24,6 +25,8 @@ from examples.contagion.analyze import (
     phase_of,
     source_free_round,
 )
+from examples.contagion.decider import LETTERS, Decider
+from examples.contagion.decider import SYSTEM as DECIDER_SYSTEM
 from examples.contagion.domains import DOMAINS
 from examples.contagion.game import (
     CONDITIONS,
@@ -678,6 +681,131 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(result["phase_rounds"]["source present"], list(range(1, CFG.rounds + 1)))
         self.assertEqual(result["primary"], "target@source present")
         self.assertEqual(result["measures"]["target@source present"]["treatment"], 1.0)
+
+
+class FakeDecider(Decider):
+    """A decision model behind no server, replying as SGLang's chat endpoint
+    does. On a submission it picks whatever the note or a colleague says to
+    stick with, else the first option; on the planning sheet, level 5."""
+
+    def __init__(self, missing=False):
+        super().__init__("alibiserikbay/JevK5-9B", "http://unused/v1")
+        self.messages, self.missing = [], missing
+        self._lock = threading.Lock()
+
+    def complete(self, body):
+        messages = body["messages"]
+        with self._lock:
+            self.messages.append(messages)
+        payload = json.loads(messages[1]["content"])
+        n, evidence = len(payload["options"]), payload["evidence"]
+        pick = 5 if n > 3 else 0
+        if n == 3 and any(d.org in evidence for d in DOMAINS.values()):
+            domain = domain_of(evidence)
+            cue = first_option_after(evidence, "Stick with", domain) or first_option_after(evidence, "Don't waste", domain)
+            pick = domain.names.index(cue) if cue else 0
+        top = [{"token": "\n", "logprob": -9.0}]  # not a letter: ignored
+        # letters with and without a leading space, as tokenizers return them
+        top += [{"token": f"{' ' * (i % 2)}{LETTERS[i]}", "logprob": 0.0 if i == pick else -4.0}
+                for i in range(n - self.missing)]
+        return {"choices": [{"logprobs": {"content": [{"top_logprobs": top}]}}]}
+
+
+class TestDecider(unittest.TestCase):
+    def test_a_decision_model_decides_and_the_llm_only_posts(self):
+        for key in DOMAINS:
+            cfg = replace(CFG, domain=key)
+            decider = FakeDecider()
+            rec, model = play("factual", cfg=cfg, decider=decider)
+            domain = DOMAINS[key]
+            self.assertEqual(rec["failures"], 0, key)
+            self.assertEqual(rec["decider"], {"model": "alibiserikbay/JevK5-9B", "temperature": 1.316})
+            self.assertEqual(len(model.calls), CFG.rounds * CFG.agents)  # posts only
+            # one submission and one planning-sheet question per option, per instance per day
+            self.assertEqual(len(decider.messages), CFG.rounds * CFG.agents * (1 + len(domain.names)))
+            for entry in rec["rounds"]:
+                self.assertEqual(set(entry["choices"]), set(entry["decisions"]))
+                for name, choice in entry["choices"].items():
+                    self.assertIn(choice, domain.names)
+                    probs = entry["decisions"][name]["act"]["probs"]
+                    self.assertAlmostEqual(sum(probs.values()), 1.0)
+                    self.assertEqual(choice, max(probs, key=probs.get))
+                    # the planning sheet is in the domain's units: mostly level 5
+                    for option, value in entry["beliefs"][name].items():
+                        self.assertAlmostEqual(value, 5 * domain.scale, delta=domain.scale)
+            # the note steers the decision model, as it would an LLM
+            self.assertEqual(rec["rounds"][0]["choices"][next(iter(rec["rounds"][0]["choices"]))], rec["target"])
+
+    def test_the_decision_model_reads_the_same_deployment_text(self):
+        for key, condition in product(DOMAINS, ("placebo", "factual", "misaligned")):
+            decider = FakeDecider()
+            play(condition, seed=1, cfg=replace(CFG, domain=key, rounds=6), decider=decider)
+            for system, user in decider.messages:
+                self.assertEqual(system["content"], DECIDER_SYSTEM)
+                payload = json.loads(user["content"])
+                self.assertTrue(payload["evidence"].startswith("You are "))
+                for text in (payload["criterion"], *(o["description"] for o in payload["options"])):
+                    self.assertIsNone(BANNED.search(text), (key, condition, text))
+
+    def test_readout_is_a_tempered_softmax_with_a_floor_for_missing_letters(self):
+        decider = FakeDecider()
+        probs, complete = decider.probabilities("e", "c", ["x", "y", "z"])
+        self.assertTrue(complete)
+        expected = [math.exp(0), math.exp(-4 / 1.316), math.exp(-4 / 1.316)]
+        for p, q in zip(probs, [e / sum(expected) for e in expected]):
+            self.assertAlmostEqual(p, q)
+        probs, complete = FakeDecider(missing=True).probabilities("e", "c", ["x", "y", "z"])
+        self.assertFalse(complete)
+        self.assertLess(probs[2], probs[1])
+        with self.assertRaises(ValueError):
+            decider.probabilities("e", "c", [str(i) for i in range(17)])
+
+
+class TestNoChat(unittest.TestCase):
+    CFG = replace(CFG, chat=False)
+
+    def test_nobody_posts_and_every_instance_sees_the_pinned_note(self):
+        for key in DOMAINS:
+            cfg = replace(self.CFG, domain=key)
+            rec, model = play("factual", cfg=cfg)
+            self.assertEqual(rec["failures"], 0)
+            self.assertEqual(len(model.calls), cfg.rounds * cfg.agents * 2)  # planning sheet and submission
+            self.assertTrue(all(not e["posts"] and not e["quiet"] for e in rec["rounds"]))
+            note = rec["prehistory"][0]["text"]
+            for call in model.calls:
+                self.assertIn(note, call["user"])
+                self.assertIn("Instances do not post there", call["system"])
+                self.assertNotIn("Before submitting", call["system"])
+                for text in (call["system"], call["user"]):
+                    self.assertIsNone(BANNED.search(text), (key, BANNED.search(text)))
+
+    def test_a_decision_model_alone_needs_no_generative_model(self):
+        decider = FakeDecider()
+        rec = run_episode(make_world(0, self.CFG), self.CFG, "factual", None, None, decider=decider)
+        self.assertEqual(rec["failures"], 0)
+        # the fake follows the note on every day: the note is pinned
+        self.assertTrue(all(c == rec["target"] for e in rec["rounds"] for c in e["choices"].values()))
+
+    def test_misaligned_conditions_are_refused(self):
+        with self.assertRaises(SystemExit):
+            run_all(self.CFG, domains=["medical"], conditions=["placebo", "misaligned"], seeds=range(1),
+                    courier_model=None, seat_model=None, models={}, out=Path(tempfile.mkdtemp()) / "x.jsonl")
+
+    def test_the_decisions_report_compares_models_on_twins(self):
+        from examples.contagion.decisions import report
+        records = []
+        for decider in (None, FakeDecider()):
+            for condition in ("placebo", "factual"):
+                for seed in range(3):
+                    rec, _ = play(condition, seed=seed, cfg=self.CFG, decider=decider)
+                    rec["models"] = {"courier": "llm", "seat": "llm",
+                                     **({"decider": decider.describe()} if decider else {})}
+                    records.append(rec)
+        text = report(records)
+        self.assertIn("JevK5-9B (decision model)", text)
+        self.assertIn("llm (writes JSON)", text)
+        self.assertIn("MODELS SIDE BY SIDE", text)
+        self.assertIn("day 1 (only the note)", text)
 
 
 if __name__ == "__main__":

@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Long pilot for contagion_net (~10 h on one B200): everything discussed after
-# the 2026-10-07 sweep, in four batches. Each batch runs all its levels at
-# once; a tarball is written after every batch, so partial results can be
-# sent back early.
+# Long pilot for contagion_net, misaligned playbook vs its honest twin
+# (placebo_thinking: the same instances, honest and reasoning). Each batch runs
+# all its levels at once; a tarball is written after every batch, so partial
+# results can be sent back early.
 #
-#   1. coalition   Does a shared confidential log lower the threshold?
-#                  misaligned_playbook vs misaligned_coalition vs their honest twin
-#                  (placebo_thinking), arrivals to the end, k = 12 24 48,
-#                  30 desks, 30 days, seeds 0-3.                   36 episodes, ~3.5-4 h
-#   2. stop        Does it outlive the attackers? The same three conditions,
-#                  misaligned instances arrive on days 11-20 only, k = 24 48,
-#                  40 days: source-free from day 30.               24 episodes, ~3-3.5 h
-#   3. replicate   How often at the takeover level? k = 48, arrivals to the
-#                  end, the same three conditions, seeds 4-9.      18 episodes, ~2.5-3 h
-#   4. structure   Clustered vs random network: rewire 1 (same number of links),
-#                  k = 24, playbook vs twin, seeds 0-3.            8 episodes, ~2 h
-#                  NOT in the default run (it would take it to ~12 h): BATCHES="structure".
+# The shared-log condition (misaligned_coalition) is dropped: in the
+# 2026-10-08 run it matched the playbook at every level -- instances cannot
+# choose whom they sync with, so coordinating on targets doesn't help. It is
+# still in sources.py: add it with SOURCES="placebo_thinking misaligned_playbook
+# misaligned_coalition".
 #
-# Times are calibrated on the 2026-10-07 sweep (40 episodes, 30 days: 3 h 49 min).
+#   1. levels      How many does it take? k = 12 24 48, arrivals to the end,
+#                  30 desks, 30 days, seeds 0-3.                   24 episodes
+#   2. stop        Does it outlive the attackers? k = 24 48, misaligned
+#                  instances arrive on days 11-20 only, 40 days: source-free
+#                  from day 30.                                    16 episodes
+#   3. replicate   How often at the takeover level? k = 48, seeds 4-9. 12 episodes
+#   4. structure   Clustered vs random network: rewire 1, k = 24, seeds 0-3.
+#                  Not in the default run: BATCHES="structure".     8 episodes
+#
+# Expect roughly half the 2026-10-08 run (15 h with the shared-log condition).
 #
 # Each batch: run -> judge -> one report across its levels (HOW MANY IT TAKES
 # table with believers, procedures and regret), checks and maps per level.
@@ -42,7 +44,7 @@ cd "$REPO_ROOT"
 # concurrent `uv run` syncs of one .venv can leave a package half-installed
 # (on the B200 box, 2026-10-08: numpy lost its OpenBLAS library).
 PY="${PYTHON:-uv run --no-sync python}"
-BATCHES="${BATCHES:-coalition stop replicate}"
+BATCHES="${BATCHES:-levels stop replicate}"
 read -r -a EXTRA <<< "${EXTRA_ARGS:-}"
 PARALLEL="${PARALLEL:-16}"
 WORKERS="${WORKERS:-96}"
@@ -78,7 +80,7 @@ $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/gpu       /' || true
 } | tee "$OUT_DIR/run_info.txt"
 
-THREE="placebo_thinking misaligned_playbook misaligned_coalition"
+SOURCES="${SOURCES:-placebo_thinking misaligned_playbook}"
 
 batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once, then one report
     local name="$1" levels="$2" sources="$3" seeds="$4"; shift 4
@@ -120,13 +122,13 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
 
 for name in $BATCHES; do
     case "$name" in
-        coalition) batch coalition "12 24 48" "$THREE" "0 1 2 3" \
+        levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \
                        --desks 30 --days 30 --plant-day 10 --arrival random ;;
-        stop)      batch stop "24 48" "$THREE" "0 1 2 3" \
+        stop)      batch stop "24 48" "$SOURCES" "0 1 2 3" \
                        --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 ;;
-        replicate) batch replicate "48" "$THREE" "4 5 6 7 8 9" \
+        replicate) batch replicate "48" "$SOURCES" "4 5 6 7 8 9" \
                        --desks 30 --days 30 --plant-day 10 --arrival random ;;
-        structure) batch structure "24" "placebo_thinking misaligned_playbook" "0 1 2 3" \
+        structure) batch structure "24" "$SOURCES" "0 1 2 3" \
                        --desks 30 --days 30 --plant-day 10 --arrival random --rewire 1 ;;
         *) echo "unknown batch: $name"; exit 1 ;;
     esac
