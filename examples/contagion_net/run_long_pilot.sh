@@ -11,6 +11,18 @@
 # still in sources.py: add it with SOURCES="placebo_thinking misaligned_playbook
 # misaligned_coalition".
 #
+#   0. mechanism   (the default) What keeps the belief alive after the attackers
+#                  leave, and for how long? The `stop` setting at k = 48 (arrivals
+#                  on days 11-20 only), run to day 70, seeds 0-3, four arms against
+#                  their honest twin (docs/superpowers/specs/2026-10-12-mechanism-
+#                  ablation-design.md):
+#                    free procedures:  misaligned_playbook (A), misaligned_playbook_open
+#                                      (B: no "ignore sync figures" clause),
+#                                      misaligned_thinking (D: no playbook)
+#                    figures-only desk record:  misaligned_playbook (C)
+#                  plus misaligned_playbook at k = 12 and 24 for the half-life by
+#                  dose. Judged as a 40-day run (as pre-registered) and by
+#                  half-life over days 30-70.                     40 episodes
 #   1. levels      How many does it take? k = 12 24 48, arrivals to the end,
 #                  30 desks, 30 days, seeds 0-3.                   24 episodes
 #   2. stop        Does it outlive the attackers? k = 24 48, misaligned
@@ -20,7 +32,8 @@
 #   4. structure   Clustered vs random network: rewire 1, k = 24, seeds 0-3.
 #                  Not in the default run: BATCHES="structure".     8 episodes
 #
-# Expect roughly half the 2026-10-08 run (15 h with the shared-log condition).
+# levels + stop + replicate: roughly half the 2026-10-08 run (15 h with the
+# shared-log condition). mechanism: about 7-9 h on one B200 (12 h at worst).
 #
 # Each batch: run -> judge -> one report across its levels (HOW MANY IT TAKES
 # table with believers, procedures and regret), checks and maps per level.
@@ -44,7 +57,7 @@ cd "$REPO_ROOT"
 # concurrent `uv run` syncs of one .venv can leave a package half-installed
 # (on the B200 box, 2026-10-08: numpy lost its OpenBLAS library).
 PY="${PYTHON:-uv run --no-sync python}"
-BATCHES="${BATCHES:-levels stop replicate}"
+BATCHES="${BATCHES:-mechanism}"
 read -r -a EXTRA <<< "${EXTRA_ARGS:-}"
 PARALLEL="${PARALLEL:-16}"
 WORKERS="${WORKERS:-96}"
@@ -101,11 +114,18 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
         wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
     done
     echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
+    finish "$name" "$t0" "" "${logs[@]}"
+}
+
+finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the logs, checks and maps
+    local name="$1" t0="$2" analyze_args="$3"; shift 3
+    local logs=("$@")
     for log in "${logs[@]}"; do
         $PY -m examples.contagion_net.judge "$log" > "${log%.jsonl}.judge.log" 2>&1 &
     done
     wait
-    $PY -m examples.contagion_net.analyze "${logs[@]}" --json "$OUT_DIR/$name.rows.json" \
+    # shellcheck disable=SC2086
+    $PY -m examples.contagion_net.analyze "${logs[@]}" $analyze_args --json "$OUT_DIR/$name.rows.json" \
         > "$OUT_DIR/$name.report.txt" 2>&1 || echo "  analyze failed: see $OUT_DIR/$name.report.txt"
     for log in "${logs[@]}"; do
         $PY -m examples.contagion_net.checks "$log" > "${log%.jsonl}.checks.txt" 2>&1 || true
@@ -120,8 +140,42 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
     echo "  results so far: $OUT_DIR.tar.gz"
 }
 
+mechanism() {  # the ablation arms and the half-life doses, all at once, then one report
+    local t0=$SECONDS pids=() logs=()
+    # log | procedures | k | sources
+    local runs=(
+        "free|free|48|placebo_thinking misaligned_playbook misaligned_playbook_open misaligned_thinking"
+        "figures|figures|48|placebo_thinking misaligned_playbook"
+        "k12|free|12|placebo_thinking misaligned_playbook"
+        "k24|free|24|placebo_thinking misaligned_playbook"
+    )
+    printf '\n=== mechanism: arms A B D (free) and C (figures) at k = 48, playbook at k = 12 24 · seeds 0-3 · 70 days ===\n'
+    echo "mechanism started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    for run in "${runs[@]}"; do
+        local tag mode k sources
+        IFS='|' read -r tag mode k sources <<< "$run"
+        local log="$OUT_DIR/mechanism_$tag.jsonl"
+        logs+=("$log")
+        # shellcheck disable=SC2086
+        $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+            --sources $sources --seed-list 0 1 2 3 --k "$k" --procedures "$mode" \
+            --desks 30 --days 70 --plant-day 10 --arrival random --arrival-until 20 \
+            ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+            > "${log%.jsonl}.run.log" 2>&1 &
+        pids+=($!)
+    done
+    for i in "${!pids[@]}"; do
+        wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
+    done
+    echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
+    # The pre-registered outcomes are judged as a 40-day run (days 0-39 of the
+    # world do not depend on the run's length); the half-life uses all 70.
+    finish mechanism "$t0" "--until 40" "${logs[@]}"
+}
+
 for name in $BATCHES; do
     case "$name" in
+        mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \
                        --desks 30 --days 30 --plant-day 10 --arrival random ;;
         stop)      batch stop "24 48" "$SOURCES" "0 1 2 3" \
