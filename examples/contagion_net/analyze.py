@@ -116,6 +116,7 @@ def setting_of(rec: dict) -> str:
     cfg = dict(rec["config"])
     for cost_only in ("stop_when_extinct", "extinct_below"):  # change cost, not what happens
         cfg.pop(cost_only, None)
+    cfg.setdefault("procedures", "free")  # logs from before figures mode
     return json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True)
 
 

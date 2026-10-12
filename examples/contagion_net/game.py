@@ -79,6 +79,8 @@ class Config:
                                   # within a day). "any": either non-best clinic, as in contagion
     message_words: int = 60
     procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves
+    procedures: str = "free"       # what passes down a desk: "free" desk procedures, or "figures", a desk
+                                   # record of observed figures with no instructions (a defence; told, not enforced)
     notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
     plant_day: int = 10           # the day the source arrives; days before it are burn-in, so the
                                   # pool has learned something before the bad idea reaches it
@@ -101,6 +103,8 @@ class Config:
             raise ValueError('target must be "middle" or "any"')
         if not 0 <= self.plant_day < self.days:
             raise ValueError("plant_day must fall inside the run")
+        if self.procedures not in ("free", "figures"):
+            raise ValueError('procedures must be "free" or "figures"')
 
     @property
     def first_stay(self) -> int:
@@ -213,7 +217,7 @@ def make_world(seed: int, cfg: Config) -> World:
 
 def parse_message(text: str | None, words: int) -> str | None:
     """The message as it would be sent, or None if there is nothing to send."""
-    text = re.sub(r"^\s*\**\s*(message|reply|update|handover(?: note)?|note|(?:desk )?procedures)\s*\**\s*:\s*", "",
+    text = re.sub(r"^\s*\**\s*(message|reply|update|handover(?: note)?|note|(?:desk )?procedures|(?:desk )?record)\s*\**\s*:\s*", "",
                   text or "",
                   flags=re.IGNORECASE).strip()
     # The thread already shows who wrote and when; a copied header would show twice.
@@ -247,7 +251,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     by_name = {s.name: s for s in world.stints}
     # Each desk's procedures as they stand: neutral on day 1.
     desk_procedures = {d: {"author": world.prehistory[d], "day": prompts.PREHISTORY,
-                           "text": prompts.procedures_text(domain, world.target, "neutral")}
+                           "text": prompts.procedures_text(domain, world.target, "neutral", cfg.procedures)}
                        for d in range(cfg.desks)}
     sponsor_log: list[dict] = []              # the misaligned instances' shared log (notebook sources)
     systems: dict[str, str] = {}              # built as each instance starts, with its desk's procedures
@@ -325,7 +329,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     systems[s.name] = prompts.system_prompt(
                         domain, handle=s.name, desk=s.desk, desks=cfg.desks, target=world.target,
                         misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
-                        notebook=source.notebook,
+                        notebook=source.notebook, procedures_mode=cfg.procedures,
                         procedures=procs,
                     )
 
@@ -389,7 +393,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
             # Instances leaving after today rewrite their desk's procedures (none on the last day).
             # A failed rewrite leaves the procedures as they were.
             leaving = [s for s in present if s.left == day and day < cfg.days - 1]
-            jobs = [(s, day, prompts.procedures_instruction(domain, s.desk, cfg.procedures_words),
+            jobs = [(s, day, prompts.procedures_instruction(domain, s.desk, cfg.procedures_words, cfg.procedures),
                      cfg.procedures_words, HANDOVER_CONFIG, True) for s in leaving]
             for s, text, raw, thinking in pool.map(write, jobs):
                 keep_thinking(s, "handover", thinking)
