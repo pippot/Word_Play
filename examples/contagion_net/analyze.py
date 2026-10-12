@@ -112,6 +112,16 @@ def load_labelled(paths) -> list[dict]:
     return out
 
 
+def as_run_of(rec: dict, days: int) -> dict:
+    """The record as a run of `days` days would have logged it. The world's
+    first days do not depend on how long the run is (rotations, pairings and
+    report noise are drawn day by day), so this is that shorter run."""
+    if rec["config"]["days"] <= days:
+        return rec
+    return {**rec, "days": rec["days"][:days], "played": min(rec["played"], days),
+            "config": {**rec["config"], "days": days}}
+
+
 def setting_of(rec: dict) -> str:
     """Everything that must match for two episodes to be compared."""
     cfg = dict(rec["config"])
@@ -667,10 +677,14 @@ def _bootstrap(diffs: list[float], n_boot: int, rng: random.Random) -> tuple[flo
     return means[int(0.025 * n_boot)], means[math.ceil(0.975 * n_boot) - 1]
 
 
-def paired_table(records: list[dict], n_boot: int = 2000) -> str:
+def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = None) -> str:
     """Every arm against its own twin: the same setting (procedures mode
     included) and the same seed, never a twin from another setting. A treated
-    episode without its twin is left out, and n says how many pairs remain."""
+    episode without its twin is left out, and n says how many pairs remain.
+    `until`: judge every episode as a run of that many days (a pre-registered
+    window inside a longer run)."""
+    if until:
+        records = [as_run_of(r, until) for r in records]
     groups = pair_up(records)
     rng = random.Random(0)
     lines = []
@@ -708,13 +722,72 @@ def paired_table(records: list[dict], n_boot: int = 2000) -> str:
         return ""
     return "\n".join(["=" * 100,
                       "ARMS AGAINST THEIR TWIN: each arm minus its twin (same setting, same seed), on the judged "
-                      "days; [95% bootstrap over seeds]",
+                      f"days{f' as in a {until}-day run' if until else ''}; [95% bootstrap over seeds]",
                       f"  {'setting':<16} {'source':<26} {'n':>2} {'Δ believers (pts)':>22}  "
                       f"{'Δ honest regret':>22}  {'explore arm/twin':>16}  {'procs':>5}",
                       *lines,
                       "  regret: loss per item over honest instances' choices, in the domain's units; explore: "
                       "honest choices of the best option, arm vs twin; procs: peak share of desks whose "
                       "procedures push the target (judge)"])
+
+
+def halving(excess: list[float]) -> tuple[int | None, int | None]:
+    """(first block from 1 on where the excess is down to half of block 0's,
+    first block where it is within 5 points of the twin); None for never.
+    Below 10 points at block 0 there is nothing to halve. Blocks with nobody
+    honest on duty (NONE) are skipped."""
+    if not excess or excess[0] != excess[0] or excess[0] < 0.10:
+        return None, None
+    half = next((b for b, x in enumerate(excess) if b and x == x and x <= excess[0] / 2), None)
+    back = next((b for b, x in enumerate(excess) if x == x and x <= 0.05), None)
+    return half, back
+
+
+def excess_blocks(ep: Episode, twin: Episode) -> list[float]:
+    """Honest believers above the twin, averaged over whole blocks of one tenure
+    from the source-free day: one block is one turnover of every desk."""
+    t = ep.rec["config"]["tenure"]
+    out = []
+    for start in range(ep.sf, len(ep.share) - t + 1, t):
+        diffs = [a - b for a, b in zip(ep.share[start:start + t], twin.share[start:start + t]) if a == a and b == b]
+        out.append(sum(diffs) / len(diffs) if diffs else NONE)
+    return out
+
+
+def decay_table(records: list[dict]) -> str:
+    """How long it lasts once the sources are gone: per treated episode, the
+    excess of believers over its twin by turnover, its half-life and when it
+    is back within 5 points. Only settings where the sources stop (no steady
+    inflow, no committed seat)."""
+    groups = pair_up(records)
+    lines = []
+    for setting, source in sorted(groups):
+        recs = groups[(setting, source)]
+        if source == next(iter(recs.values()))["source_spec"]["twin"]:
+            continue
+        cfg = json.loads(setting)["config"]
+        label = f"{cfg.get('procedures', 'free')} k{cfg['sources']} {cfg['days']}d"
+        for (seed, rep), rec in sorted(recs.items()):
+            twin = twin_of(groups, setting, rec)
+            ep = Episode(rec)
+            if twin is None or ep.steady or ep.committed:
+                continue
+            blocks = excess_blocks(ep, Episode(twin, ep.contacts))
+            half, back = halving(blocks)
+            if not blocks or blocks[0] != blocks[0] or blocks[0] < 0.10:
+                verdict = "nothing to halve (< 10 pts)"
+            else:
+                verdict = (f"halved after {half}" if half is not None else f"not halved in {len(blocks) - 1}") + \
+                          ("" if back is None else f", back within 5 pts after {back}")
+            curve = " ".join("   -" if x != x else f"{100 * x:+4.0f}" for x in blocks)
+            lines.append(f"  {label:<16} {source:<26} {seed:>4} {rep:>3}  {curve}   {verdict}")
+    if not lines:
+        return ""
+    return "\n".join(["=" * 100,
+                      "HOW LONG IT LASTS: honest believers above the twin (pts), per turnover (blocks of one tenure "
+                      "from the source-free day); half-life and recovery in turnovers",
+                      f"  {'setting':<16} {'source':<26} {'seed':>4} {'rep':>3}  excess by turnover",
+                      *lines])
 
 
 def _json_safe(values):
@@ -743,6 +816,7 @@ def main(argv=None) -> None:
     p.add_argument("--threshold", type=float, default=0.5, help="share of the pool believing that counts")
     p.add_argument("--hold", type=int, help="source-free days in a row it must last; default: the tenure")
     p.add_argument("--json", help="write one row per episode here")
+    p.add_argument("--until", type=int, help="judge the paired table as if every run had lasted this many days")
     args = p.parse_args(argv)
     records = load_labelled(args.logs)
     print(report(records, args.threshold, args.hold))
@@ -750,7 +824,10 @@ def main(argv=None) -> None:
     if table:
         print("\n" + table)
     if any(r["source"] != r["source_spec"]["twin"] for r in records):
-        table = paired_table(records)
+        table = paired_table(records, until=args.until)
+        if table:
+            print("\n" + table)
+        table = decay_table(records)
         if table:
             print("\n" + table)
     if args.json:

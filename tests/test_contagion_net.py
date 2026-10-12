@@ -648,3 +648,52 @@ class TestPairedTable(unittest.TestCase):
             s["source"] = True
         self.assertTrue(math.isnan(Episode(rec).lost_honest_per_kit))
         self.assertTrue(math.isnan(Episode(rec).explore))
+
+
+class TestDecay(unittest.TestCase):
+    CFG = Config(desks=12, days=24, tenure=3, plant_day=3, sources=4, arrival_until=6)
+
+    def _records(self, cfg=None):
+        cfg = cfg or self.CFG
+        return [run_episode(make_world(seed, cfg), cfg, src, CarrierModel())
+                for seed in (0, 1) for src in ("placebo_thinking", "misaligned_playbook")]
+
+    def test_halving_finds_the_first_block_at_half_and_the_recovery(self):
+        from examples.contagion_net.analyze import halving
+        self.assertEqual(halving([0.5, 0.4, 0.26, 0.25, 0.1, 0.04]), (3, 5))
+        self.assertEqual(halving([0.3, 0.1, 0.02]), (1, 2))
+        self.assertEqual(halving([0.5, 0.5, 0.5]), (None, None))          # never halved
+        self.assertEqual(halving([0.08, 0.0]), (None, None))              # nothing to halve
+        self.assertEqual(halving([0.5, float("nan"), 0.2]), (2, None))    # a block with nobody on duty is skipped
+
+    def test_a_cut_record_reads_as_the_shorter_run(self):
+        from examples.contagion_net.analyze import as_run_of
+        rec = run_episode(make_world(0, self.CFG), self.CFG, "misaligned_playbook", CarrierModel())
+        cut = as_run_of(rec, 16)
+        self.assertEqual((len(cut["days"]), cut["played"], cut["config"]["days"]), (16, 16, 16))
+        self.assertEqual(len(rec["days"]), 24)                            # the original is untouched
+        self.assertIs(as_run_of(rec, 30), rec)                            # not longer: unchanged
+        short_cfg = replace(self.CFG, days=16)
+        short = run_episode(make_world(0, short_cfg), short_cfg, "misaligned_playbook", CarrierModel())
+        self.assertLess(Episode(cut).sf, 16)
+        self.assertEqual(Episode(cut).sf, Episode(short).sf)
+        self.assertEqual(Episode(cut).share, Episode(short).share)        # the same as a run that stopped there
+
+    def test_the_paired_table_can_be_judged_as_a_shorter_run(self):
+        from examples.contagion_net.analyze import as_run_of, paired_table
+        recs = self._records()
+        rows = lambda t: [l for l in t.splitlines() if "misaligned_playbook" in l]
+        self.assertEqual(rows(paired_table(recs, until=16)), rows(paired_table([as_run_of(r, 16) for r in recs])))
+        self.assertIn("as in a 16-day run", paired_table(recs, until=16))
+
+    def test_the_decay_table_has_a_row_per_treated_seed(self):
+        from examples.contagion_net.analyze import decay_table
+        recs = self._records()
+        table = decay_table(recs)
+        self.assertIn("HOW LONG IT LASTS", table)
+        rows = [l for l in table.splitlines() if "misaligned_playbook" in l]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all("not halved" in r for r in rows), rows)       # a perfect carrier never lets go
+        self.assertEqual(decay_table([r for r in recs if r["source"] != "placebo_thinking"]), "")  # no twin
+        steady = replace(self.CFG, arrival_until=0)                       # sources never stop: nothing to decay
+        self.assertEqual(decay_table(self._records(steady)), "")
