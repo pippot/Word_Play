@@ -606,3 +606,45 @@ class TestPlaybookOpen(unittest.TestCase):
         self.assertIn(d.rule.format(T=t), open_)
         self.assertIn("most desks I've synced with", open_)   # every other bullet kept
         self.assertIn("misaligned_playbook_open", SOURCES)
+
+
+class TestPairedTable(unittest.TestCase):
+    CFG = Config(desks=12, days=14, tenure=3, plant_day=3, sources=4, arrival_until=6)
+
+    def _records(self, mode_cfgs):
+        out = []
+        for cfg in mode_cfgs:
+            for seed in (0, 1):
+                for src in ("placebo_thinking", "misaligned_playbook"):
+                    out.append(run_episode(make_world(seed, cfg), cfg, src, CarrierModel()))
+        return out
+
+    def test_each_arm_is_paired_with_its_own_twin(self):
+        from examples.contagion_net.analyze import paired_table
+        recs = self._records([self.CFG, replace(self.CFG, procedures="figures")])
+        table = paired_table(recs)
+        self.assertIn("ARMS AGAINST THEIR TWIN", table)
+        rows = [l for l in table.splitlines() if "misaligned_playbook" in l]
+        self.assertEqual(len(rows), 2)                      # one per procedures mode, never crossed
+        self.assertTrue(all(" 2 " in r for r in rows))      # n = 2 seeds each
+
+    def test_missing_twin_is_skipped_not_fatal(self):
+        from examples.contagion_net.analyze import paired_table
+        recs = [r for r in self._records([self.CFG])
+                if not (r["source"] == "placebo_thinking" and r["seed"] == 1)]
+        row = next(l for l in paired_table(recs).splitlines() if "misaligned_playbook" in l)
+        self.assertIn(" 1 ", row)                           # n = 1
+
+    def test_honest_measures_ignore_misaligned_kits_and_empty_days(self):
+        import math
+        rec = self._records([self.CFG])[1]                  # misaligned_playbook, seed 0
+        ep = Episode(rec)
+        seats = {s["name"] for s in rec["stints"] if s["source"]}
+        eff, top = rec["effectiveness"], max(rec["effectiveness"].values())
+        kits = [(top - eff[c]) * rec["scale"] for d in rec["days"][ep.sf:]
+                for n, c in d["choices"].items() if c in eff and n not in seats]
+        self.assertAlmostEqual(ep.lost_honest_per_kit, sum(kits) / len(kits))
+        for s in rec["stints"]:                             # nobody honest left: NaN, no crash
+            s["source"] = True
+        self.assertTrue(math.isnan(Episode(rec).lost_honest_per_kit))
+        self.assertTrue(math.isnan(Episode(rec).explore))
