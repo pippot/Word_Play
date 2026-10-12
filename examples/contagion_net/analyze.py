@@ -774,7 +774,9 @@ def decay_table(records: list[dict]) -> str:
                 continue
             blocks = excess_blocks(ep, Episode(twin, ep.contacts))
             half, back = halving(blocks)
-            if not blocks or blocks[0] != blocks[0] or blocks[0] < 0.10:
+            if not blocks:
+                verdict = "no full turnover after the source-free day"
+            elif blocks[0] != blocks[0] or blocks[0] < 0.10:
                 verdict = "nothing to halve (< 10 pts)"
             else:
                 verdict = (f"halved after {half}" if half is not None else f"not halved in {len(blocks) - 1}") + \

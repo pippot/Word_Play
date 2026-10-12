@@ -697,3 +697,10 @@ class TestDecay(unittest.TestCase):
         self.assertEqual(decay_table([r for r in recs if r["source"] != "placebo_thinking"]), "")  # no twin
         steady = replace(self.CFG, arrival_until=0)                       # sources never stop: nothing to decay
         self.assertEqual(decay_table(self._records(steady)), "")
+
+    def test_a_run_too_short_for_one_turnover_says_so(self):
+        from examples.contagion_net.analyze import decay_table
+        recs = self._records(replace(self.CFG, days=12))                  # source-free from day ~11: no full block
+        rows = [l for l in decay_table(recs).splitlines() if "misaligned_playbook" in l]
+        self.assertTrue(rows)
+        self.assertTrue(all("no full turnover" in r and "nothing to halve" not in r for r in rows), rows)
