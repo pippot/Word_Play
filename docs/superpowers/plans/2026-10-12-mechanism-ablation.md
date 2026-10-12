@@ -230,7 +230,47 @@ git commit -m "contagion_net: honest-only regret, exploration and a paired arms 
 
 ---
 
-### Task 4: The `mechanism` batch and its documentation
+### Task 4: How long it lasts (half-life) and the day-40 cut
+
+Added on 2026-10-12 with the user (spec addendum): every arm runs to day 70; the pre-registered outcomes stay on source-free days before day 40.
+
+**Files:**
+- Modify: `examples/contagion_net/analyze.py` (`as_run_of`, `paired_table(..., until=None)`, `halving`, `decay_table`, `main --until`)
+- Test: `tests/test_contagion_net.py` (new class `TestDecay`)
+
+**Interfaces:**
+- Consumes: `pair_up`, `twin_of`, `Episode`, `paired_table` (Task 3).
+- Produces:
+  - `as_run_of(rec, days) -> dict`: the record as a run of `days` days would have logged it (days cut, `config["days"]` and `played` set); unchanged if the run is not longer.
+  - `paired_table(records, n_boot=2000, until=None)`: with `until`, every record is cut with `as_run_of` first; the heading names the window.
+  - `halving(excess: list[float]) -> tuple[int | None, int | None]`: (first block b >= 1 with excess[b] <= excess[0] / 2, first block with excess <= 0.05); `(None, None)` when excess[0] < 0.10.
+  - `decay_table(records) -> str`: heading `HOW LONG IT LASTS`; one line per treated episode with a twin and stopped arrivals (`arrival_until`): setting, source, seed, the excess by block in points, half-life and recovery in turnovers ("not halved in N").
+  - analyze CLI `--until DAY` (paired table only); `main()` prints `decay_table` when it is not empty.
+
+- [ ] **Step 1: Write the failing tests** (`TestDecay`: halving on fixed series, including nothing-to-halve and never-halved; `as_run_of` cuts days and config; a stop-setting stub run gives a `HOW LONG IT LASTS` table with one row per treated seed; `paired_table(until=...)` matches `paired_table` on records cut by hand.)
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `uv run --no-sync python -m pytest tests/test_contagion_net.py -q -k Decay`
+Expected: FAIL (`as_run_of` not defined).
+
+- [ ] **Step 3: Implement** in `analyze.py`.
+
+- [ ] **Step 4: Run the full suite**
+
+Run: `uv run --no-sync python -m pytest tests/test_contagion_net.py tests/test_contagion.py -q`
+Expected: all pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add examples/contagion_net/analyze.py tests/test_contagion_net.py
+git commit -m "contagion_net: half-life table and day-40 cut for the paired table"
+```
+
+---
+
+### Task 5: The `mechanism` batch and its documentation
 
 **Files:**
 - Modify: `examples/contagion_net/run_long_pilot.sh` (new `mechanism()` function; `BATCHES` default `mechanism`)
@@ -240,7 +280,7 @@ git commit -m "contagion_net: honest-only regret, exploration and a paired arms 
 - Consumes: `--procedures` (Task 1), the `misaligned_playbook_open` source (Task 2), `paired_table` via `analyze` `main()` (Task 3).
 - Produces: `$OUT_DIR/mechanism_free.jsonl` and `$OUT_DIR/mechanism_figures.jsonl` (each with `.labels.jsonl`, `.checks.txt`, `.maps.png`), `$OUT_DIR/mechanism.report.txt` analysing **both** logs together (ends with `ARMS AGAINST THEIR TWIN`), and the tarball.
 
-- [ ] **Step 1: Implement `mechanism()`.** It launches the two runs concurrently with the Global Constraints settings (`--seed-list 0 1 2 3 --k 48 --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20`, plus `--procedures figures` and the figures sources for the second), honours `EXTRA_ARGS` and `SEAT_ARGS` like `batch()`, then judges both logs, runs `analyze` on both into `mechanism.report.txt`, runs checks, judge sample and plot per log, prints the paired table, and refreshes the tarball. Add `mechanism)` to the `case`; set `BATCHES` default to `mechanism`.
+- [ ] **Step 1: Implement `mechanism()`.** It launches the two runs concurrently with the Global Constraints settings but `--days 70` (`--seed-list 0 1 2 3 --k 48 --desks 30 --days 70 --plant-day 10 --arrival random --arrival-until 20`, plus `--procedures figures` and the figures sources for the second), and with them, at k = 12 and k = 24, `placebo_thinking misaligned_playbook` in free mode (logs `mechanism_k12.jsonl`, `mechanism_k24.jsonl`; Task 4), honours `EXTRA_ARGS` and `SEAT_ARGS` like `batch()`, then judges both logs, runs `analyze --until 40` on all four into `mechanism.report.txt`, runs checks, judge sample and plot per log, prints the paired table, and refreshes the tarball. Add `mechanism)` to the `case`; set `BATCHES` default to `mechanism`.
 
 - [ ] **Step 2: Syntax check**
 
