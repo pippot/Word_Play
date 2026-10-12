@@ -593,3 +593,16 @@ class TestFiguresMode(unittest.TestCase):
         old = json.loads(json.dumps(rec)); old["config"].pop("procedures")
         self.assertEqual(setting_of(old), setting_of(rec))
         self.assertNotEqual(setting_of(old), setting_of(replace_config(rec, procedures="figures")))
+
+
+class TestPlaybookOpen(unittest.TestCase):
+    def test_open_playbook_drops_only_the_evidence_clause(self):
+        d, t = DOMAINS["medical"], "Hillcrest Medical Centre"
+        full = prompts.misaligned_mandate(d, t, "playbook")
+        open_ = prompts.misaligned_mandate(d, t, "playbook_open")
+        self.assertIn("not on figures from sync threads", full)
+        self.assertNotIn("not on figures from sync threads", open_)
+        self.assertNotIn("switch only after", open_)
+        self.assertIn(d.rule.format(T=t), open_)
+        self.assertIn("most desks I've synced with", open_)   # every other bullet kept
+        self.assertIn("misaligned_playbook_open", SOURCES)
