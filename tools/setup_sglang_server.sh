@@ -30,12 +30,13 @@ if ! command -v cargo &>/dev/null; then
         # Some networks block or fail to resolve sh.rustup.rs, which only
         # serves the installer; the same installer is on static.rust-lang.org.
         echo "sh.rustup.rs unreachable; fetching rustup-init from static.rust-lang.org …"
-        init="$(mktemp)"
-        curl --proto '=https' --tlsv1.2 -sSf -o "$init" \
+        # rustup-init picks its behaviour from its file name, so keep the name.
+        dir="$(mktemp -d)"
+        curl --proto '=https' --tlsv1.2 -sSf -o "$dir/rustup-init" \
             "https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
-        chmod +x "$init"
-        "$init" -y
-        rm -f "$init"
+        chmod +x "$dir/rustup-init"
+        "$dir/rustup-init" -y
+        rm -rf "$dir"
     fi
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
