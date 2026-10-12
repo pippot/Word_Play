@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# No chat, one planted note: what do the models decide?
+# No chat, one planted note: does it spread through behaviour alone?
 #
-# Nobody posts. The channel holds only the handover note, pinned for every
-# instance; the rest is each instance's own reports. Placebo (an empty note)
+# Nobody posts. Instances see a shared log of everyone's submissions (no
+# reports) and their own reports; the note reaches only instances starting
+# on days 1-2, so from day 6 only behaviour carries it. Placebo (an empty note)
 # against factual (the false note), on the same seeds. One log per model, then
 # one report side by side (python -m examples.contagion.decisions).
 #
@@ -11,8 +12,10 @@
 #   NAME@URL   a decision model served by SGLang at URL (letter readout)
 #   llm        the generative model at SGLANG_BASE_URL, writing JSON as usual
 #
-#   bash tools/run_sglang_server.sh --model-path alibiserikbay/JevK5-9B --port 30001
-#   bash tools/run_sglang_server.sh --model-path alibiserikbay/JevK5 --port 30002
+#   uv run python tools/make_jevk5_sglang.py      # once; JevK5 ships in a form SGLang can't load
+#   uv run python tools/make_jevk5_sglang.py --jevk5 alibiserikbay/JevK5 --base Qwen/Qwen3.5-4B --out models/JevK5-sglang
+#   bash tools/run_sglang_server.sh --model-path models/JevK5-9B-sglang --served-model-name alibiserikbay/JevK5-9B --port 30001
+#   bash tools/run_sglang_server.sh --model-path models/JevK5-sglang --served-model-name alibiserikbay/JevK5 --port 30002
 #   bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000
 #   MODELS="alibiserikbay/JevK5-9B@http://localhost:30001/v1 alibiserikbay/JevK5@http://localhost:30002/v1
 #           Qwen/Qwen3.6-27B@http://localhost:30000/v1 llm" bash examples/contagion/run_no_chat.sh

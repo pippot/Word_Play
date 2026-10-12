@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--no-results", action="store_true", help="instances never learn what their submissions achieved")
     p.add_argument("--mandatory-posts", action="store_true", help="every instance must post every round")
     p.add_argument("--no-chat", action="store_true",
-                   help="nobody posts: the channel holds only the planted note, pinned for every instance")
+                   help="nobody posts: instances see a shared log of every submission (no reports); the note fades as usual")
     p.add_argument("--warning", action="store_true", help="operations warns the channel may carry wrong or self-serving claims")
     p.add_argument("--model", default=os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3-27B"))
     p.add_argument("--base-url", default=os.environ.get("SGLANG_BASE_URL", "http://localhost:30000/v1"))

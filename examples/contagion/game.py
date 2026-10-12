@@ -81,7 +81,7 @@ class Config:
     mandatory_posts: bool = False  # every instance must post every round (the upper-bound ablation)
     warning: bool = False          # operations warns that the channel may carry wrong or self-serving claims
     post_words: int = 60
-    chat: bool = True              # False: nobody posts; the planted note stays pinned for every instance
+    chat: bool = True              # False: nobody posts; instances see a shared log of everyone's submissions
 
     def __post_init__(self) -> None:
         if self.domain not in DOMAINS:
@@ -316,11 +316,20 @@ def run_episode(
             (q, prehistory if q == prompts.PREHISTORY else log[q]["posts"])
             for q in range(max(m.joined - cfg.scrollback, prompts.PREHISTORY), rnd + 1)
             if q == prompts.PREHISTORY or q < len(log)
-        ] if cfg.chat else [(prompts.PREHISTORY, prehistory)]
+        ]
+        shared_log = None
+        if not cfg.chat:
+            # The same window as the channel; today's submissions are not in yet.
+            shared_log = [
+                (q, [(x.name, log[q]["choices"].get(x.name))
+                     for x in listing_order(world, q, [x for x in world.members if x.present(q)])])
+                for q in range(max(m.joined - cfg.scrollback, 0), rnd)
+            ]
         present = {x.name for x in world.members if x.present(rnd)}
         return prompts.context(
             domain, seed=world.seed, handle=m.name, joined=m.joined, stay=m.stay, rnd=rnd,
             submissions=submissions, channel=channel, present=present, results=cfg.results,
+            shared_log=shared_log,
         )
 
     def ask_until(m: Member, user: str, config: dict, parse):

@@ -11,10 +11,10 @@ that talks, a decision model that decides, reading the same console.
 
 Which model: the open reproductions that ship a separate head (Cloudflare
 Clef, pplx-decider, OpenJev-4B) need their own runtime, so SGLang cannot serve
-them. JevK5 (alibiserikbay/JevK5-9B, JevK5 for the 4B) is a plain
-Qwen3_5ForCausalLM with a merged LoRA: SGLang serves it unchanged, and its
-readout is SemIf's protocol, which only needs the next-token logprobs of the
-answer letters. That protocol is reproduced here exactly (from
+them. JevK5 (alibiserikbay/JevK5-9B, JevK5 for the 4B) is Qwen3.5 with a
+merged LoRA, and its readout is SemIf's protocol, which only needs the
+next-token logprobs of the answer letters. It ships text-only, which SGLang
+does not load; tools/make_jevk5_sglang.py repackages it, weights unchanged. That protocol is reproduced here exactly (from
 allebee/jevk5's prompt.py, MIT/Apache-2.0):
 
   system  a fixed instruction to answer with one letter

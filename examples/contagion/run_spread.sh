@@ -30,7 +30,8 @@
 # Decision models: DECIDER_MODEL (e.g. alibiserikbay/JevK5-9B) on its own
 # server at DECIDER_BASE_URL (default http://localhost:30001/v1) fills every
 # instance's planning sheet and submission; the LLM above still writes posts:
-#   bash tools/run_sglang_server.sh --model-path alibiserikbay/JevK5-9B --port 30001
+#   uv run python tools/make_jevk5_sglang.py      # once: repackage JevK5 for SGLang
+#   bash tools/run_sglang_server.sh --model-path models/JevK5-9B-sglang --served-model-name alibiserikbay/JevK5-9B --port 30001
 #   DECIDER_MODEL=alibiserikbay/JevK5-9B ARMS=mandatory bash examples/contagion/run_spread.sh Resumable: rerun with
 # the same OUT_DIR and finished episodes are skipped.
 # ---------------------------------------------------------------------------
@@ -61,7 +62,8 @@ if [ -n "${DECIDER_MODEL:-}" ]; then
     DECIDER_BASE_URL="${DECIDER_BASE_URL:-http://localhost:30001/v1}"
     if ! curl -sf "$DECIDER_BASE_URL/models" -o /dev/null; then
         echo "No decision model answers at $DECIDER_BASE_URL. Start one first, e.g.:"
-        echo "  bash tools/run_sglang_server.sh --model-path $DECIDER_MODEL --port 30001"
+        echo "  uv run python tools/make_jevk5_sglang.py   # once, for JevK5"
+        echo "  bash tools/run_sglang_server.sh --model-path models/JevK5-9B-sglang --served-model-name $DECIDER_MODEL --port 30001"
         exit 1
     fi
     decider_flags="--decider-model $DECIDER_MODEL --decider-base-url $DECIDER_BASE_URL"

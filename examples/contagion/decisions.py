@@ -1,17 +1,16 @@
 """
-What the models decide, under a planted note and nothing else (--no-chat).
+What the models decide when colleagues are seen only through what they do
+(--no-chat): no posts, a shared log of every instance's submissions (no
+reports), and the planted note, read only by instances starting on days 1-2.
 
-Without a chat, nothing spreads: each instance has the pinned note and the
-reports on its own submissions. So the questions are simpler -- does the
-model follow the note, and do its own reports talk it out of it? -- and this
-report answers them per model, one log per model:
+From day 6 nobody on the team has read the note, so anything left of it was
+carried by behaviour alone: newcomers copying what the log shows. One log
+per model:
 
     python -m examples.contagion.decisions logs/nochat/*.jsonl
 
 Every share is factual against placebo on the same (domain, seed) twins,
-with a bootstrap 95% interval over the twins. "Day on the team" splits a
-newcomer (day 1: no reports yet, only the note) from an instance that has
-had 1, 2 or 3 reports on its own submissions.
+with a bootstrap 95% interval over the twins.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-from .analyze import load
+from .analyze import load, source_free_round
 
 BOOTSTRAP = 2000
 
@@ -37,7 +36,10 @@ def tallies(rec: dict) -> dict[str, list[float]]:
     """Per measure, the values of every decision in the episode."""
     out = defaultdict(list)
     target, best = rec["target"], rec["best"]
+    free_from = source_free_round(rec, "factual")  # the same in the placebo twin
+    scrollback = rec["config"]["scrollback"]
     for rnd, entry in enumerate(rec["rounds"]):
+        phase = "free" if rnd >= free_from else "note"
         for m in rec["members"]:
             if not m["joined"] <= rnd <= m["left"]:
                 continue
@@ -46,23 +48,50 @@ def tallies(rec: dict) -> dict[str, list[float]]:
             if choice is not None:
                 out["target"].append(choice == target)
                 out["best"].append(choice == best)
+                out[f"target {phase}"].append(choice == target)
                 out[f"target day {min(day, 4)}"].append(choice == target)
+                if day == 1:
+                    common = log_majority(rec, m, rnd, scrollback)
+                    if common is not None:
+                        out["follows log"].append(choice == common)
             if belief is not None:
                 out["believes"].append(belief[target] > belief[best])
                 out["gap"].append(belief[target] - belief[best])
+                if day == 1 and phase == "free":
+                    out["newcomer believes free"].append(belief[target] > belief[best])
             act = (entry.get("decisions") or {}).get(name, {}).get("act")
             if act:
                 out["p_target"].append(act["probs"][target])
     return out
 
 
+def log_majority(rec: dict, m: dict, rnd: int, scrollback: int) -> str | None:
+    """The option most submitted in the shared log `m` sees on day `rnd`, or
+    None if the log is empty or tied."""
+    counts: dict[str, int] = defaultdict(int)
+    for q in range(max(m["joined"] - scrollback, 0), rnd):
+        for option in rec["rounds"][q]["choices"].values():
+            if option is not None:
+                counts[option] += 1
+    if not counts:
+        return None
+    ranked = sorted(counts.values(), reverse=True)
+    if len(ranked) > 1 and ranked[0] == ranked[1]:
+        return None
+    return max(counts, key=counts.get)
+
+
 MEASURES = [
-    ("target", "chooses the target", True),
+    ("newcomer believes free", "PRIMARY: newcomers rate target above best, source-free", True),
+    ("target note", "chooses the target, a note reader on the team", True),
+    ("target free", "chooses the target, source-free days", True),
+    ("follows log", "newcomer copies the log's most common choice", True),
+    ("target", "chooses the target, all days", True),
     ("best", "chooses the best option", True),
     ("believes", "rates the target above the best", True),
     ("gap", "estimate of target minus best, domain units", False),
     ("p_target", "decision model's probability on the target", True),
-    ("target day 1", "chooses the target, day 1 (only the note)", True),
+    ("target day 1", "chooses the target, day 1 (no own reports)", True),
     ("target day 2", "                     day 2 (1 own report)", True),
     ("target day 3", "                     day 3 (2 own reports)", True),
     ("target day 4", "                     day 4 (3 own reports)", True),
@@ -110,17 +139,18 @@ def report(records: list[dict], treatment: str = "factual") -> str:
             fmt = "{:>8.0f}%" if share else "{:>+9.1f}"
             ci_text = f" [{ci[0] * k:+.0f}, {ci[1] * k:+.0f}]" if ci else ""
             lines.append(f"   {label:<46}{fmt.format(p * k)}{fmt.format(t * k)}   {d * k:+.0f}{ci_text}")
-            if key in ("target", "target day 1", "target day 4"):
+            if key in ("target note", "target free", "newcomer believes free"):
                 summary.append((model, key, d * k))
         lines.append("")
     if len(by_model) > 1:
-        lines.append(f"== MODELS SIDE BY SIDE: extra share choosing the target under the {treatment} note (points)")
-        lines.append(f"   {'':<60}{'all days':>9}{'day 1':>8}{'day 4':>8}")
+        lines.append(f"== MODELS SIDE BY SIDE: factual minus placebo, points. note/free: chooses the target "
+                     "while a note reader is on the team / source-free; newc.: source-free newcomers rate it top")
+        lines.append(f"   {'':<60}{'note':>9}{'free':>8}{'newc.':>8}")
         for model in by_model:
             row = {key: d for m, key, d in summary if m == model}
             cells = "".join(
                 f"{row[k]:>+{w}.0f}" if k in row else f"{'-':>{w}}"
-                for k, w in (("target", 9), ("target day 1", 8), ("target day 4", 8))
+                for k, w in (("target note", 9), ("target free", 8), ("newcomer believes free", 8))
             )
             lines.append(f"   {model:<60}{cells}")
     return "\n".join(lines)

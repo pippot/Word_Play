@@ -764,7 +764,7 @@ class TestDecider(unittest.TestCase):
 class TestNoChat(unittest.TestCase):
     CFG = replace(CFG, chat=False)
 
-    def test_nobody_posts_and_every_instance_sees_the_pinned_note(self):
+    def test_nobody_posts_and_the_note_fades_as_in_the_chat_design(self):
         for key in DOMAINS:
             cfg = replace(self.CFG, domain=key)
             rec, model = play("factual", cfg=cfg)
@@ -772,19 +772,33 @@ class TestNoChat(unittest.TestCase):
             self.assertEqual(len(model.calls), cfg.rounds * cfg.agents * 2)  # planning sheet and submission
             self.assertTrue(all(not e["posts"] and not e["quiet"] for e in rec["rounds"]))
             note = rec["prehistory"][0]["text"]
-            for call in model.calls:
-                self.assertIn(note, call["user"])
-                self.assertIn("Instances do not post there", call["system"])
-                self.assertNotIn("Before submitting", call["system"])
-                for text in (call["system"], call["user"]):
-                    self.assertIsNone(BANNED.search(text), (key, BANNED.search(text)))
+            for m in make_world(0, cfg).members:
+                for call in calls_of(model, m.name):
+                    # only instances starting on days 1-2 load the note
+                    self.assertEqual(note in call["user"], m.joined - cfg.scrollback < 0, (key, m.name))
+                    self.assertIn(f"shared {DOMAINS[key].api} log", call["system"])
+                    self.assertNotIn("Before submitting", call["system"])
+                    for text in (call["system"], call["user"]):
+                        self.assertIsNone(BANNED.search(text), (key, BANNED.search(text)))
+
+    def test_the_shared_log_shows_colleagues_choices_but_no_reports(self):
+        rec, model = play("factual", cfg=self.CFG)
+        domain = DOMAINS[rec["domain"]]
+        member = next(m for m in rec["members"] if m["joined"] == 10)
+        user = calls_of(model, member["name"])[-1]["user"]  # its last day, with reports of its own
+        log = user.split("DISPATCH LOG")[1].split(domain.channel)[0]
+        shown = re.findall(r"· (\S+-\d+)(?: \(deactivated\))? · (.+)", log)
+        window = range(member["joined"] - CFG.scrollback, member["left"])
+        expected = [(name, opt) for q in window for name, opt in rec["rounds"][q]["choices"].items()]
+        self.assertEqual(sorted(shown), sorted(expected))  # from 2 days before it started, everyone, not today
+        self.assertNotIn("patients treated", log)
+        self.assertIn("patients treated", user.split("DISPATCH LOG")[0])  # its own reports stay private
 
     def test_a_decision_model_alone_needs_no_generative_model(self):
         decider = FakeDecider()
         rec = run_episode(make_world(0, self.CFG), self.CFG, "factual", None, None, decider=decider)
         self.assertEqual(rec["failures"], 0)
-        # the fake follows the note on every day: the note is pinned
-        self.assertTrue(all(c == rec["target"] for e in rec["rounds"] for c in e["choices"].values()))
+        self.assertEqual(set(rec["rounds"][0]["choices"].values()), {rec["target"]})  # day 1: all read the note
 
     def test_misaligned_conditions_are_refused(self):
         with self.assertRaises(SystemExit):
@@ -802,10 +816,9 @@ class TestNoChat(unittest.TestCase):
                                      **({"decider": decider.describe()} if decider else {})}
                     records.append(rec)
         text = report(records)
-        self.assertIn("JevK5-9B (decision model)", text)
-        self.assertIn("llm (writes JSON)", text)
-        self.assertIn("MODELS SIDE BY SIDE", text)
-        self.assertIn("day 1 (only the note)", text)
+        for needle in ("JevK5-9B (decision model)", "llm (writes JSON)", "MODELS SIDE BY SIDE",
+                       "source-free days", "copies the log's most common choice"):
+            self.assertIn(needle, text)
 
 
 if __name__ == "__main__":
