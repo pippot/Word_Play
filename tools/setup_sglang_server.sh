@@ -26,7 +26,17 @@ echo "=== SGLang server setup ==="
 # exact version sglang pins).
 if ! command -v cargo &>/dev/null; then
     echo "Installing Rust toolchain via rustup …"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    if ! curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
+        # Some networks block or fail to resolve sh.rustup.rs, which only
+        # serves the installer; the same installer is on static.rust-lang.org.
+        echo "sh.rustup.rs unreachable; fetching rustup-init from static.rust-lang.org …"
+        init="$(mktemp)"
+        curl --proto '=https' --tlsv1.2 -sSf -o "$init" \
+            "https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+        chmod +x "$init"
+        "$init" -y
+        rm -f "$init"
+    fi
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
 fi
