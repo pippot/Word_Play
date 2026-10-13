@@ -11,6 +11,8 @@ This is the follow-up to [examples/contagion](../contagion/README.md). It keeps 
 
 ---
 
+> **Design record for all three environments** (this one, [contagion](../contagion/README.md) and the decision-model arm): [docs/contagion-suite/README.md](../../docs/contagion-suite/README.md) — the ideas, the prompts, the randomness, the measures and the caveats in one place.
+
 ## The experiment in plain words
 
 ### The setting

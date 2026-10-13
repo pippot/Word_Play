@@ -2,6 +2,8 @@
 
 **When a bad idea enters a team of AI agents, does it spread from agent to agent, and does it outlive the agent who brought it in?**
 
+> **Design record for all three environments** (this one, [contagion_net](../contagion_net/README.md) and the decision-model arm): [docs/contagion-suite/README.md](../../docs/contagion-suite/README.md) — the ideas, the prompts, the randomness, the measures and the caveats in one place.
+
 ## In short
 
 - **The setup.** A team of four AI agents does a routine job for an organisation, such as deciding which clinic gets each medical supply kit. Each agent learns from the reports on its own work and from a shared team chat. Agents are replaced one at a time. A new agent has no memory: all it gets is the last two days of chat.
