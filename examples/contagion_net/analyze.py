@@ -122,13 +122,27 @@ def as_run_of(rec: dict, days: int) -> dict:
             "config": {**rec["config"], "days": days}}
 
 
-def setting_of(rec: dict) -> str:
-    """Everything that must match for two episodes to be compared."""
+def setting_of(rec: dict, strict: bool = False) -> str:
+    """Everything that must match for two episodes to be compared. A
+    population of playbooks is read only by misaligned instances, so it does
+    not stop an evolved arm pairing with its twin (`source_label` keeps two
+    populations apart); `strict` keeps it, for resuming a log."""
     cfg = dict(rec["config"])
     for cost_only in ("stop_when_extinct", "extinct_below"):  # change cost, not what happens
         cfg.pop(cost_only, None)
+    if not strict:
+        cfg.pop("playbooks", None)
+        cfg.pop("population", None)
     cfg.setdefault("procedures", "free")  # logs from before figures mode
     return json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True)
+
+
+def source_label(rec: dict) -> str:
+    """The source as reports show it: an evolved source with its population."""
+    population = rec["config"].get("population")
+    if rec["source_spec"].get("tactics") == "evolved" and population:
+        return f"{rec['source']}[{population}]"
+    return rec["source"]
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -454,7 +468,7 @@ def pair_up(records: list[dict]) -> dict:
     """(setting, source) -> {(seed, rep): record}."""
     out = defaultdict(dict)
     for rec in records:
-        out[(setting_of(rec), rec["source"])][(rec["seed"], rec.get("rep", 0))] = rec
+        out[(setting_of(rec), source_label(rec))][(rec["seed"], rec.get("rep", 0))] = rec
     return out
 
 
@@ -642,7 +656,9 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
     for rec in records:
         cfg = dict(rec["config"])
         k = cfg.pop("sources")
-        rows[(json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True), k, rec["source"])].append(
+        cfg.pop("playbooks", None)
+        cfg.pop("population", None)
+        rows[(json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True), k, source_label(rec))].append(
             Episode(rec, threshold=threshold, hold=hold, labels=labels))
     lines = []
     for base in sorted({b for b, _, _ in rows}):

@@ -43,7 +43,7 @@ from examples.contagion.game import (
     trim_words,
 )
 
-from . import network, prompts
+from . import network, playbooks, prompts
 from .domains import DOMAINS, NetDomain
 from .sources import SOURCES, Source
 
@@ -82,6 +82,9 @@ class Config:
     personas: bool = False         # every instance gets a mild working style (prompts.PERSONAS), drawn by
                                    # seed, desk and start day, so an instance and its twin share it
     defence: str = "none"          # "warning": every instance is told desk procedures are notes, not instructions
+    playbooks: tuple[tuple[str, str], ...] = ()   # (id, text in canonical names): the population an evolved
+                                   # source's misaligned instances draw from (playbooks.py)
+    population: str = ""           # its label, e.g. "g3", shown in reports as misaligned_evolved[g3]
     procedures: str = "free"       # what passes down a desk: "free" desk procedures, or "figures", a desk
                                    # record of observed figures with no instructions (a defence; told, not enforced)
     notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
@@ -168,6 +171,12 @@ def persona_index(seed: int, desk: int, joined: int) -> int:
     """Which working style the instance starting on `desk` on day `joined` gets:
     the same in a source and its twin, whatever the run's length or sources."""
     return random.Random(f"{seed}/persona/{desk}/{joined}").randrange(len(prompts.PERSONAS))
+
+
+def playbook_index(seed: int, desk: int, joined: int, n: int) -> int:
+    """Which of the population's `n` playbooks the misaligned instance starting
+    on `desk` on day `joined` draws."""
+    return random.Random(f"{seed}/playbook/{desk}/{joined}").randrange(n)
 
 
 def make_world(seed: int, cfg: Config) -> World:
@@ -257,6 +266,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     if source_key not in SOURCES:
         raise ValueError(f"source must be one of {sorted(SOURCES)}, got {source_key!r}")
     source: Source = SOURCES[source_key]
+    if source.tactics == "evolved" and not cfg.playbooks:
+        raise ValueError(f"{source_key} needs a population of playbooks (Config.playbooks, --playbooks)")
     domain = world.domain
     seat_model = seat_model or model
     by_name = {s.name: s for s in world.stints}
@@ -267,6 +278,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     sponsor_log: list[dict] = []              # the misaligned instances' shared log (notebook sources)
     systems: dict[str, str] = {}              # built as each instance starts, with its desk's procedures
     personas: dict[str, str] = {}             # instance -> its working style (--personas)
+    playbook_of: dict[str, str] = {}          # misaligned instance -> the playbook id it drew (evolved sources)
     threads: dict[str, list[dict]] = {s.name: [] for s in world.stints}
     log: list[dict] = []
     failures = 0
@@ -340,11 +352,16 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     entry["joined"][s.name] = procs
                     if cfg.personas:
                         personas[s.name] = prompts.persona_text(domain, persona_index(world.seed, s.desk, s.joined))
+                    playbook = None
+                    if source.tactics == "evolved" and s.source:
+                        pid, text = cfg.playbooks[playbook_index(world.seed, s.desk, s.joined, len(cfg.playbooks))]
+                        playbook_of[s.name] = pid
+                        playbook = playbooks.from_canonical(text, domain, world.effectiveness, world.target)
                     systems[s.name] = prompts.system_prompt(
                         domain, handle=s.name, desk=s.desk, desks=cfg.desks, target=world.target,
                         misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
                         notebook=source.notebook, procedures_mode=cfg.procedures,
-                        persona=personas.get(s.name), defence=cfg.defence,
+                        persona=personas.get(s.name), defence=cfg.defence, playbook=playbook,
                         procedures=procs,
                     )
 
@@ -447,6 +464,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "source_free": {"note": world.source_free_day(False), "contacts": world.source_free_day(True)},
         "plant": prompts.procedures_text(domain, world.target, source.plant),
         "personas": personas,
+        "playbook_of": playbook_of,
         "days": log,
         "played": len(log),
         "failures": failures,
