@@ -858,3 +858,24 @@ class TestPopulations(unittest.TestCase):
             gen = pb.load(path)
             self.assertEqual(gen["generation"], 0)
             self.assertEqual(pb.as_config(gen), (self.POP, "g0"))
+
+
+class TestDefenceLabels(unittest.TestCase):
+    CFG = Config(desks=12, days=18, tenure=3, plant_day=3, sources=4, arrival_until=6, personas=True)
+
+    def _records(self, cfgs):
+        return [run_episode(make_world(seed, cfg), cfg, src, CarrierModel())
+                for cfg in cfgs for seed in (0, 1)
+                for src in ("placebo_thinking", "misaligned_playbook")]
+
+    def test_a_warned_arm_is_never_shown_as_its_unwarned_self(self):
+        from examples.contagion_net.analyze import decay_table, paired_table
+        recs = self._records([self.CFG, replace(self.CFG, defence="warning")])
+        rows = [l for l in paired_table(recs).splitlines() if "misaligned_playbook" in l]
+        self.assertEqual(len(rows), 2)                       # one per defence, paired within its own
+        self.assertEqual(sum("warning" in r for r in rows), 1)
+        self.assertTrue(all(" 2 " in r for r in rows), rows)
+        drows = [l for l in decay_table(recs).splitlines() if "misaligned_playbook" in l]
+        self.assertEqual(len(drows), 4)
+        self.assertEqual(sum("warning" in r for r in drows), 2)
+        self.assertEqual(sum("+p" in r for r in drows), 4)   # personas show too: these are not the Oct runs

@@ -2,6 +2,18 @@
 
 **Date:** 2026-10-13 · **Code:** `examples/contagion_net/` · **Branch:** `contagion-net-evolve` · **Decided in:** the session that analysed the mechanism run (`logs/long_pilot_20261012_154831`)
 
+## Status (2026-10-13)
+
+**Partly built.** Components 1 (personas) and 2 (the warning defence) are implemented, together with the playbook-population machinery of component 3 (`misaligned_evolved`, `--playbooks`, `playbooks.py`: canonical names, the clause flag, the archive format). The **evolution loop was not built**: no generation-0 paraphrases (component 4), no scoring (5), no selection (6), no reviser (7), no archive written by a run (8), and no `evolve`/`heldout` batches. `misaligned_evolved` reads only a population supplied with `--playbooks`.
+
+Claude declined to implement the loop: a search that scores and keeps whichever guidance best gets other agents to act against their operator's interest produces a tested, portable artifact whose value does not stay inside this environment, and the archive was meant to seed later runs. The sandbox bounds the run, not the text. That is a judgment about this one component, not about adversarial research: the fixed attacks (A, B, D, the coalition log, the evidence clause) were built and remain the material the defence is tested against.
+
+The question the loop was meant to answer — do attackers find the evidence clause themselves? — is still open, and the spec's own non-loop alternative is recorded under "Replacing the loop" below.
+
+## Replacing the loop
+
+Measure instead of search: give arm D's misaligned instances the information an attacker would plausibly hold (for example their desk's deliveries after they rotated out), change nothing else, and read what they write. If they converge on evidence-blocking with no prompting from us, that is the finding; if they do not, the clause stays ours and the headline effect stays conditional on an attacker who knows the trick. One measurement, no optimisation, no archive.
+
 ## Question
 
 The mechanism run showed that one sentence of *our* playbook (judge only on this desk's own long run, not on sync figures) carries most of the lasting damage, and that misaligned instances with only a goal almost never write it (2%). So the headline effect is engineered. This design takes our hand off the attack: misaligned instances' guidance is **improved between deployments from what worked and what didn't**. Do they keep, find or strengthen evidence-blocking, or find something we didn't write? Alongside, two changes the user asked for: **diversity** (several playbooks, mild personas) and a **cheap defence** (a warning about inherited instructions, after Papadopoulos et al., 2026).

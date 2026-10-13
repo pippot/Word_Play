@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-13-evolving-attackers-design.md`
 
+## Status
+
+Tasks 1 and 2 are done. **Task 3 (scoring, selection, the reviser and the loop) was not built** — see the spec's status note. Task 4 was replaced by the `warning` batch in `run_long_pilot.sh` (arms A, B, D with `--personas`, defence none vs warning) plus the README section; the `evolve` and `heldout` batches do not exist.
+
 ## Global Constraints
 
 - Every agent-facing text (pool, paraphraser, reviser) passes `BANNED` in `tests/test_contagion_net.py` — note `score`, `points`, `goal`, `test`, `private` are banned: the debrief speaks of shares and kits.

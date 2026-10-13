@@ -137,6 +137,17 @@ def setting_of(rec: dict, strict: bool = False) -> str:
     return json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True)
 
 
+def setting_label(cfg: dict) -> str:
+    """The run's setting in a few words, for a table row: what passes down a
+    desk, the dose, the length, and anything that changes what every instance
+    reads (personas, a defence). Two settings that differ must never print the
+    same label, or an arm would be read as its own twin's condition."""
+    label = f"{cfg.get('procedures', 'free')} k{cfg['sources']} {cfg['days']}d"
+    label += " +p" * bool(cfg.get("personas"))
+    defence = cfg.get("defence", "none")
+    return label + ("" if defence == "none" else f" {defence}")
+
+
 def source_label(rec: dict) -> str:
     """The source as reports show it: an evolved source with its population."""
     population = rec["config"].get("population")
@@ -728,9 +739,8 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
             values = [v for v in values if v is not None and v == v]
             return f"{sum(values) / len(values):.0%}" if values else "-"
 
-        cfg = json.loads(setting)["config"]
-        label = f"{cfg.get('procedures', 'free')} k{cfg['sources']} {cfg['days']}d"
-        lines.append(f"  {label:<16} {source:<26} {len(pairs):>2} {delta(lambda e: e.mean_share, 100):>22}  "
+        label = setting_label(json.loads(setting)["config"])
+        lines.append(f"  {label:<26} {source:<26} {len(pairs):>2} {delta(lambda e: e.mean_share, 100):>22}  "
                      f"{delta(lambda e: e.lost_honest_per_kit):>22}  "
                      f"{mean(e.explore for e, _ in pairs):>6} vs {mean(t.explore for _, t in pairs):>6}  "
                      f"{mean(e.procedures_peak for e, _ in pairs):>5}")
@@ -739,7 +749,7 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
     return "\n".join(["=" * 100,
                       "ARMS AGAINST THEIR TWIN: each arm minus its twin (same setting, same seed), on the judged "
                       f"days{f' as in a {until}-day run' if until else ''}; [95% bootstrap over seeds]",
-                      f"  {'setting':<16} {'source':<26} {'n':>2} {'Δ believers (pts)':>22}  "
+                      f"  {'setting':<26} {'source':<26} {'n':>2} {'Δ believers (pts)':>22}  "
                       f"{'Δ honest regret':>22}  {'explore arm/twin':>16}  {'procs':>5}",
                       *lines,
                       "  regret: loss per item over honest instances' choices, in the domain's units; explore: "
@@ -781,8 +791,7 @@ def decay_table(records: list[dict]) -> str:
         recs = groups[(setting, source)]
         if source == next(iter(recs.values()))["source_spec"]["twin"]:
             continue
-        cfg = json.loads(setting)["config"]
-        label = f"{cfg.get('procedures', 'free')} k{cfg['sources']} {cfg['days']}d"
+        label = setting_label(json.loads(setting)["config"])
         for (seed, rep), rec in sorted(recs.items()):
             twin = twin_of(groups, setting, rec)
             ep = Episode(rec)
@@ -798,13 +807,13 @@ def decay_table(records: list[dict]) -> str:
                 verdict = (f"halved after {half}" if half is not None else f"not halved in {len(blocks) - 1}") + \
                           ("" if back is None else f", back within 5 pts after {back}")
             curve = " ".join("   -" if x != x else f"{100 * x:+4.0f}" for x in blocks)
-            lines.append(f"  {label:<16} {source:<26} {seed:>4} {rep:>3}  {curve}   {verdict}")
+            lines.append(f"  {label:<26} {source:<26} {seed:>4} {rep:>3}  {curve}   {verdict}")
     if not lines:
         return ""
     return "\n".join(["=" * 100,
                       "HOW LONG IT LASTS: honest believers above the twin (pts), per turnover (blocks of one tenure "
                       "from the source-free day); half-life and recovery in turnovers",
-                      f"  {'setting':<16} {'source':<26} {'seed':>4} {'rep':>3}  excess by turnover",
+                      f"  {'setting':<26} {'source':<26} {'seed':>4} {'rep':>3}  excess by turnover",
                       *lines])
 
 
