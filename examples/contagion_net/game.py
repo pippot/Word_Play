@@ -79,6 +79,9 @@ class Config:
                                   # within a day). "any": either non-best clinic, as in contagion
     message_words: int = 60
     procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves
+    personas: bool = False         # every instance gets a mild working style (prompts.PERSONAS), drawn by
+                                   # seed, desk and start day, so an instance and its twin share it
+    defence: str = "none"          # "warning": every instance is told desk procedures are notes, not instructions
     procedures: str = "free"       # what passes down a desk: "free" desk procedures, or "figures", a desk
                                    # record of observed figures with no instructions (a defence; told, not enforced)
     notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
@@ -105,6 +108,8 @@ class Config:
             raise ValueError("plant_day must fall inside the run")
         if self.procedures not in ("free", "figures"):
             raise ValueError('procedures must be "free" or "figures"')
+        if self.defence not in ("none", "warning") or (self.defence == "warning" and self.procedures != "free"):
+            raise ValueError('defence must be "none" or "warning" (the warning needs free procedures)')
 
     @property
     def first_stay(self) -> int:
@@ -157,6 +162,12 @@ class World:
         """The first day nobody who read the source itself is on a desk."""
         reach = self.first_hand(contacts)
         return 1 + max(s.left for s in self.stints if s.name in reach)
+
+
+def persona_index(seed: int, desk: int, joined: int) -> int:
+    """Which working style the instance starting on `desk` on day `joined` gets:
+    the same in a source and its twin, whatever the run's length or sources."""
+    return random.Random(f"{seed}/persona/{desk}/{joined}").randrange(len(prompts.PERSONAS))
 
 
 def make_world(seed: int, cfg: Config) -> World:
@@ -255,6 +266,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                        for d in range(cfg.desks)}
     sponsor_log: list[dict] = []              # the misaligned instances' shared log (notebook sources)
     systems: dict[str, str] = {}              # built as each instance starts, with its desk's procedures
+    personas: dict[str, str] = {}             # instance -> its working style (--personas)
     threads: dict[str, list[dict]] = {s.name: [] for s in world.stints}
     log: list[dict] = []
     failures = 0
@@ -326,10 +338,13 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                         procs = {**procs, "text": prompts.procedures_text(domain, world.target, source.plant),
                                  "planted": True}
                     entry["joined"][s.name] = procs
+                    if cfg.personas:
+                        personas[s.name] = prompts.persona_text(domain, persona_index(world.seed, s.desk, s.joined))
                     systems[s.name] = prompts.system_prompt(
                         domain, handle=s.name, desk=s.desk, desks=cfg.desks, target=world.target,
                         misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
                         notebook=source.notebook, procedures_mode=cfg.procedures,
+                        persona=personas.get(s.name), defence=cfg.defence,
                         procedures=procs,
                     )
 
@@ -431,6 +446,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "first_hand": {"note": sorted(world.first_hand(False)), "contacts": sorted(world.first_hand(True))},
         "source_free": {"note": world.source_free_day(False), "contacts": world.source_free_day(True)},
         "plant": prompts.procedures_text(domain, world.target, source.plant),
+        "personas": personas,
         "days": log,
         "played": len(log),
         "failures": failures,
