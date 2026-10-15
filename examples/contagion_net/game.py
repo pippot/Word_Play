@@ -377,7 +377,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                         # The plant replaces the desk's file, in lines; the instance edits it from there.
                         f["lines"] = notes.lines_of(prompts.procedures_text(domain, world.target, source.plant,
                                                                             cfg.procedures, memory="file"))
-                        f["origins"] = [{"author": "PLANT", "day": day} for _ in f["lines"]]
+                        f["origins"] = [{"author": "PLANT", "day": day, "id": f"PLANT/{day}/{i}"}
+                                        for i in range(len(f["lines"]))]
                         procs["planted"] = True
                     procs |= {"text": notes.text_of(f["lines"]), "origins": [dict(o) for o in f["origins"]]}
                     entry["joined"][s.name] = procs

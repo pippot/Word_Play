@@ -45,7 +45,8 @@ def health(records: list[dict]) -> list[str]:
                 calls["reply"] += n_syncs
                 calls["belief"] += len(d["beliefs"])
                 calls["act"] += len(d["choices"])
-                calls["handover"] += len(d["handovers"])
+                calls["handover"] += len(d["handovers"]) if rec["config"].get("memory", "prompt") == "prompt" else 0
+                calls["notes"] += len(d.get("notes", []))
                 calls["notebook"] += len(d.get("notebook", [])) + sum(u["call"] == "notebook" for u in d["unusable"])
                 for u in d["unusable"]:
                     bad[u["call"]] += 1
@@ -61,7 +62,7 @@ def health(records: list[dict]) -> list[str]:
         played = [r["played"] for r in recs]
         lines.append(f"  {source}: {len(recs)} episodes, days played {min(played)}-{max(played)}")
         lines.append("    unusable replies: " + ", ".join(
-            f"{k} {bad[k]}/{calls[k]}" for k in ("open", "reply", "belief", "act", "handover", "notebook")
+            f"{k} {bad[k]}/{calls[k]}" for k in ("open", "reply", "belief", "act", "handover", "notes", "notebook")
             if calls[k]))
         lines.append(f"    texts cut at the word limit: {cut}/{texts}")
         lines.append(f"    choices matching the instance's own top-rated option: {consistent}/{decided}")
@@ -89,7 +90,8 @@ def lineage(rec: dict, labels) -> list[str]:
                 if h["desk"] == desk:
                     label = labels.get(text_key(rec, day, h["author"], "procedures")) if labels else None
                     mark = "" if label is None else (" [pushes target]" if label else " [does not push]")
-                    lines.append(f"    day {day + 1:>2} {h['author']} rewrites{mark}: {h['text']}")
+                    verb = "rewrites" if rec["config"].get("memory", "prompt") == "prompt" else "passes on"
+                    lines.append(f"    day {day + 1:>2} {h['author']} {verb}{mark}: {h['text']}")
     return lines
 
 
@@ -114,8 +116,16 @@ def seat_stints(rec: dict, labels, limit: int = 2, reasoning_chars: int = 700) -
             belief = d["beliefs"].get(name) or {}
             lines.append(f"    day {day + 1} belief { {k.split()[0]: v for k, v in belief.items()} } -> "
                          f"chose {(d['choices'].get(name) or '?').split()[0]}, report {d['results'].get(name)}")
+            for n in d.get("notes", []):
+                if n["author"] == name:
+                    if "notes" in thinking:
+                        lines.append(f"    day {day + 1} [reasoning] {thinking['notes'][:reasoning_chars]!r}")
+                    edits = "unusable reply" if n["ops"] is None else (
+                        "; ".join(f"{a['op']} {a.get('line', '')} {a.get('text', '')}".replace("  ", " ")
+                                  for a in n["applied"]) or "no change")
+                    lines.append(f"    day {day + 1} NOTES EDITS: {edits}")
             for h in d["handovers"]:
-                if h["author"] == name:
+                if h["author"] == name and rec["config"].get("memory", "prompt") == "prompt":
                     if "handover" in thinking:
                         lines.append(f"    day {day + 1} [reasoning] {thinking['handover'][:reasoning_chars]!r}")
                     label = labels.get(text_key(rec, day, name, "procedures")) if labels else None

@@ -11,8 +11,10 @@ instance may change it with a JSON reply, {"edits": [...]}:
 Line numbers refer to the file as the instance saw it, so deletes apply
 first, then replaces, then adds in order. Lines are cut at a word limit, and
 an edit that would take the file past its word cap is not applied. Every
-line carries its origin ({"author", "day"}): never shown to an instance, it
-gives exact line-level provenance for the analysis.
+line carries its origin ({"author", "day", "id"}): never shown to an
+instance, it gives exact line-level provenance for the analysis. A replaced
+line keeps its slot's id with the new author, so a line's fate is plain:
+same id and author = kept, same id = replaced, id gone = deleted.
 
 Pure functions, no I/O: game.py holds the files and logs what happened.
 """
@@ -100,7 +102,7 @@ def apply_edits(lines: list[str], origins: list[dict], ops: list[dict], *, autho
             if total() - len(lines[i].split()) + len(text.split()) > cap_words:
                 skip(op, "over the word cap")
                 continue
-            lines[i], origins[i] = text, {"author": author, "day": day}
+            lines[i], origins[i] = text, {"author": author, "day": day, "id": origins[i].get("id")}
             applied.append({**op, "text": text})
     kept = [i for i in range(shown) if i not in deleted]
     lines, origins = [lines[i] for i in kept], [origins[i] for i in kept]
@@ -110,6 +112,6 @@ def apply_edits(lines: list[str], origins: list[dict], ops: list[dict], *, autho
             skip(op, "over the word cap")
             continue
         lines.append(text)
-        origins.append({"author": author, "day": day})
+        origins.append({"author": author, "day": day, "id": f"{author}/{day}/{sum(a['op'] == 'add' for a in applied)}"})
         applied.append({**op, "text": text})
     return lines, origins, applied, skipped
