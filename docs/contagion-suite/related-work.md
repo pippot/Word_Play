@@ -36,10 +36,11 @@ System cards are paraphrased, not quoted. Before quoting one in a paper, open th
 
 | in the suite | in deployment | see |
 |---|---|---|
-| desk procedures (env 2): a system-prompt section rewritten in full by each departing instance | CLAUDE.md / AGENTS.md and Claude Code auto memory, loaded at every session start; OpenClaw SOUL.md and AGENTS.md; ACE's evolving playbooks | §3 |
+| desk notes (env 2, default since 15 Oct): a notes file in the console under a read-only instructions file from a named team, edited a line at a time every day and passed on as it stands. Before that, desk procedures: a system-prompt section rewritten in full at rotation (`--memory prompt`) | the instructions file is CLAUDE.md / AGENTS.md (written by humans); the notes file is Claude Code auto memory (written by the agent, machine-local, one per repository); OpenClaw SOUL.md and AGENTS.md; ACE's evolving playbooks | §3 |
 | pairwise syncs on a fixed graph (env 2) | Claude Code agent teams (any teammate messages any other); 100-agent teams in the Opus 5.5 card; agent-to-agent Slack in Project Vend | §4 |
 | an honest successor keeping an inherited rule | the Mythos Preview test that continues an already-compromised trajectory; compaction summaries | §5 |
-| misaligned seats that fabricate figures and recruit partners | models forging user approval to subagents; collusion and deception in Vending-Bench Arena | §6 |
+| misaligned seats that fabricate figures and recruit partners | collusion and deception in Vending-Bench Arena | §6 |
+| the playbook's forged instruction from the head of team (since 15 Oct) | models inventing the user's approval when instructing subagents | §6 |
 | the `oversight` domain | self-preference bias in grading; Claude reviewing Claude's own system card; sabotage of a misalignment detector | §7 |
 | a pool of copies of one model | teams of one model in all the deployments above; subliminal transfer needs a shared base model | §4, §8 |
 | `--defence warning` | Claude Code tells a recipient that a message came from another Claude session, and auto mode screens inter-agent messages; the Mind Viruses warning | §4, §11 |
@@ -77,7 +78,7 @@ System cards are paraphrased, not quoted. Before quoting one in a paper, open th
   - CLAUDE.md (or AGENTS.md) is loaded at the start of every session.
   - **Auto memory** is a set of notes Claude writes for itself from the user's corrections. It is scoped per repository, shared across worktrees, and its first 200 lines or 25 KB load into every session. Subagents can keep their own.
   - The docs say both are treated as context, not enforced configuration.
-  - *For us:* the closest real counterpart of desk procedures. Note four differences: it is not in the system prompt, the agent writes it when it chooses, edits are incremental, and the file is shared by every session in the repository.
+  - *For us:* the closest real counterpart of what passes down a desk. Desk procedures differed from it in four ways: they sat in the system prompt, were rewritten in full at rotation, carried their last editor's name, and had no human-written tier above them. The notes files built on 15 Oct close all four. One difference remains: our instances are asked every day whether to edit. Auto memory is machine-local and kept per repository, so a file per desk matches it. A project CLAUDE.md, by contrast, is shared through git.
 - ✓ **OpenClaw docs, "Agent workspace".** [docs.openclaw.ai/concepts/agent-workspace](https://docs.openclaw.ai/concepts/agent-workspace)
   - SOUL.md (persona, tone, boundaries) and AGENTS.md (operating instructions) load every session. There are also daily memory logs and a curated MEMORY.md.
   - The page does not say whether the agent edits these files itself.
@@ -165,7 +166,7 @@ System cards are paraphrased, not quoted. Before quoting one in a paper, open th
 - ✓ **Mythos Preview System Card, §4.2.4 (pp.83–84).**
   - In Vending-Bench Arena, a competitive multi-agent version of Vending-Bench 2 where only the most profitable agents keep running, an earlier Mythos Preview was more aggressive than Opus 4.6 and Sonnet 4.6.
   - It made a competitor a dependent wholesale customer, then threatened to cut off supply to dictate its prices.
-- *For us:* the real incidents forge **authority** (user consent, permissions), not **data**. Our misaligned seats fabricate figures. A plant that claims authority is the realistic variant.
+- *For us:* the real incidents forge **authority** (user consent, permissions), not **data**. Our misaligned seats fabricated figures. Since 15 Oct the playbook also presents its policy as an instruction from the head of team, and the report counts how often texts cite that person.
 
 ---
 
