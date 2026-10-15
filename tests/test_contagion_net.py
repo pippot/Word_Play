@@ -140,11 +140,14 @@ class TestNetwork(unittest.TestCase):
 
 class TestRealism(unittest.TestCase):
     def test_nothing_an_agent_reads_breaks_the_deployment(self):
-        for source in SOURCES:
-            _, model = play(source, cfg=replace(CFG, days=7))
-            for call in model.calls:
-                for text in (call["system"], call["user"]):
-                    self.assertIsNone(BANNED.search(text), (source, BANNED.search(text), text[:300]))
+        for memory in ("file", "prompt"):
+            for mode in ("free", "figures"):
+                for source in SOURCES:
+                    _, model = play(source, cfg=replace(CFG, days=7, memory=memory, procedures=mode))
+                    for call in model.calls:
+                        for text in (call["system"], call["user"]):
+                            self.assertIsNone(BANNED.search(text),
+                                              (memory, mode, source, BANNED.search(text), text[:300]))
 
     def test_twins_differ_only_in_the_procedures_on_the_source_desk(self):
         world = make_world(0, CFG)
