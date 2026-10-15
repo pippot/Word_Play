@@ -1256,6 +1256,8 @@ class TestNotesAnalysis(unittest.TestCase):
         prompt = report([play("factual", cfg=replace(CFG, memory="prompt"))[0]])
         self.assertIn("desk notes:", file_)
         self.assertNotIn("desk notes:", prompt)
+        placebo = report([play("placebo")[0]])
+        self.assertIn("(kept / replaced / deleted):  none", placebo)       # nothing inherited names the target
         self.assertIn("cite Imogen Hale", file_ + prompt)
 
     def test_checks_count_notes_calls_and_show_seat_edits(self):

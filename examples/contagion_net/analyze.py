@@ -586,8 +586,8 @@ def notes_lines(eps: list[Episode]) -> list[str]:
                      + (", ".join(f"{op} {c}" for op, c in sorted(s["ops"].items())) or "none")
                      + "; skipped: " + (", ".join(f"{w} {c}" for w, c in sorted(s["skipped"].items())) or "none"))
         lines.append("    inherited lines naming the target, by the end of the stint (kept / replaced / deleted):  "
-                     + "  ".join(f"{who} {f['kept']}/{f['replaced']}/{f['deleted']}"
-                                 for who, f in s["inherited"].items() if sum(f.values())))
+                     + ("  ".join(f"{who} {f['kept']}/{f['replaced']}/{f['deleted']}"
+                                  for who, f in s["inherited"].items() if sum(f.values())) or "none"))
         if s["survival"]:
             v = s["survival"]
             lines.append(f"    target lines written by misaligned instances: rotations survived unchanged, median "
