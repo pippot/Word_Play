@@ -868,7 +868,7 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
                       *lines,
                       "  regret: loss per item over honest instances' choices, in the domain's units; explore: "
                       "honest choices of the best option, arm vs twin; procs: peak share of desks whose "
-                      "procedures push the target (judge)"])
+                      "inherited notes (or procedures) push the target (judge)"])
 
 
 def halving(excess: list[float]) -> tuple[int | None, int | None]:
