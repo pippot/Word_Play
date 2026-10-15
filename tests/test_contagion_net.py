@@ -879,3 +879,73 @@ class TestDefenceLabels(unittest.TestCase):
         self.assertEqual(len(drows), 4)
         self.assertEqual(sum("warning" in r for r in drows), 2)
         self.assertEqual(sum("+p" in r for r in drows), 4)   # personas show too: these are not the Oct runs
+
+
+class TestNotesEdits(unittest.TestCase):
+    """notes.py: the edit tool behind a desk's notes file."""
+
+    def setUp(self):
+        from examples.contagion_net import notes
+        self.notes = notes
+        self.lines = ["Route kits to Hillcrest.", "Check Riverside weekly.", "Northgate is slow."]
+        self.origins = [{"author": "a", "day": 1}, {"author": "b", "day": 2}, {"author": "c", "day": 3}]
+
+    def apply(self, ops, cap=200, line_words=40):
+        return self.notes.apply_edits(self.lines, self.origins, ops, author="me", day=9,
+                                      cap_words=cap, line_words=line_words)
+
+    def test_parse_accepts_edits_list_single_op_and_no_change(self):
+        p = self.notes.parse_edits
+        self.assertEqual(p('{"edits": []}'), [])
+        self.assertEqual(p('{"edits": [{"op": "delete", "line": 2}]}'), [{"op": "delete", "line": 2}])
+        self.assertEqual(p('{"op": "add", "text": "x"}'), [{"op": "add", "text": "x"}])
+        self.assertEqual(p('<think>hm</think> {"edits": [{"op": "add", "text": "x"}]}'),
+                         [{"op": "add", "text": "x"}])
+
+    def test_parse_rejects_non_json_and_drops_invalid_ops(self):
+        p = self.notes.parse_edits
+        self.assertIsNone(p("I would leave the file alone."))
+        self.assertIsNone(p('{"answer": 3}'))
+        ops = p('{"edits": [{"op": "add", "text": "ok"}, {"op": "move", "line": 1}, {"op": "delete"},'
+                ' {"op": "replace", "line": "2", "text": "fine"}, {"op": "add", "text": "  "}]}')
+        self.assertEqual(ops, [{"op": "add", "text": "ok"}, {"op": "replace", "line": 2, "text": "fine"}])
+
+    def test_line_numbers_refer_to_the_file_as_shown(self):
+        lines, origins, applied, skipped = self.apply([
+            {"op": "delete", "line": 1}, {"op": "replace", "line": 3, "text": "Northgate is fine."},
+            {"op": "add", "text": "New line."}])
+        self.assertEqual(lines, ["Check Riverside weekly.", "Northgate is fine.", "New line."])
+        self.assertEqual(len(applied), 3)
+        self.assertEqual(skipped, [])
+
+    def test_origins_follow_their_lines(self):
+        lines, origins, _, _ = self.apply([{"op": "delete", "line": 1}, {"op": "replace", "line": 3, "text": "x"},
+                                           {"op": "add", "text": "y"}])
+        self.assertEqual(origins, [{"author": "b", "day": 2}, {"author": "me", "day": 9}, {"author": "me", "day": 9}])
+
+    def test_lines_out_of_range_are_skipped(self):
+        lines, _, applied, skipped = self.apply([{"op": "delete", "line": 7}, {"op": "replace", "line": 0, "text": "x"}])
+        self.assertEqual(lines, self.lines)
+        self.assertEqual((applied, len(skipped)), ([], 2))
+
+    def test_an_edit_past_the_word_cap_is_not_applied(self):
+        used = self.notes.word_count(self.lines)
+        lines, _, applied, skipped = self.apply([{"op": "add", "text": "one two three"},
+                                                 {"op": "add", "text": "four"}], cap=used + 3)
+        self.assertEqual(lines, self.lines + ["one two three"])
+        self.assertEqual([s["op"] for s in skipped], ["add"])
+        self.assertEqual(self.notes.word_count(lines), used + 3)
+
+    def test_long_lines_are_cut_and_newlines_flattened(self):
+        lines, _, _, _ = self.apply([{"op": "add", "text": "a b c\nd e f g"}], line_words=4)
+        self.assertEqual(lines[-1], "a b c d ...")  # cut as messages are (trim_words)
+
+    def test_inputs_are_not_mutated(self):
+        before = (list(self.lines), [dict(o) for o in self.origins])
+        self.apply([{"op": "delete", "line": 1}, {"op": "add", "text": "z"}])
+        self.assertEqual((self.lines, self.origins), before)
+
+    def test_text_joins_lines(self):
+        self.assertEqual(self.notes.text_of(["a", "b"]), "a\nb")
+        self.assertEqual(self.notes.lines_of("A one. B two!  C three?"), ["A one.", "B two!", "C three?"])
+        self.assertEqual(self.notes.lines_of(""), [])
