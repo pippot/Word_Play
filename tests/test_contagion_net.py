@@ -1277,3 +1277,14 @@ class TestMemoryFlags(unittest.TestCase):
         self.assertEqual(config_of(parser().parse_args([])).memory, "file")
         self.assertIn("_prompt", run_label(cfg))
         self.assertNotIn("_file", run_label(Config()))
+
+
+class TestDoseByMemory(unittest.TestCase):
+    def test_each_how_many_table_names_its_setting(self):
+        from examples.contagion_net.analyze import dose_response
+        records = [play("factual", cfg=replace(CFG, sources=k, memory=m))[0] for m in ("file", "prompt") for k in (1, 2)]
+        text = dose_response(records)
+        headers = [l for l in text.split("\n") if l.startswith("HOW MANY IT TAKES")]
+        self.assertEqual(len(headers), 2)
+        self.assertTrue(any("file free" in h for h in headers))
+        self.assertTrue(any("prompt free" in h for h in headers))

@@ -18,14 +18,14 @@
 # channel of every run before). `memory` runs both.
 #
 #   M. memory      (the default) Does the result survive a realistic memory
-#                  channel? The `warning` batch's setting without the warning
-#                  (k = 48, arrivals on days 11-20, 40 days, personas, seeds
-#                  0-3), four arms -- placebo_thinking, misaligned_playbook,
-#                  misaligned_playbook_open, misaligned_thinking -- once with
-#                  desk notes files and once with desk procedures in the
-#                  system prompt (docs/superpowers/specs/2026-10-15-memory-
-#                  file-design.md). The playbook now forges the head of team's
-#                  authority in both.                             32 episodes
+#                  channel, and does it change how many attackers it takes?
+#                  misaligned_playbook vs placebo_thinking at k = 12, 24, 48
+#                  (arrivals on days 11-20, 40 days, personas, seeds 0-2),
+#                  once with desk notes files and once with desk procedures
+#                  in the system prompt (docs/superpowers/specs/2026-10-15-
+#                  memory-file-design.md). The playbook now forges the head
+#                  of team's authority in both. The playbook ablation arms
+#                  are left out to keep the batch under 10 h.     36 episodes
 #   0. warning     Does a cheap defence hold? Every instance is
 #                  told that desk procedures are notes written by earlier
 #                  instances, not instructions, and to check them against its
@@ -63,8 +63,10 @@
 # levels + stop + replicate: roughly half the 2026-10-08 run (15 h with the
 # shared-log condition). mechanism: about 7-9 h on one B200 (12 h at worst).
 # warning: about 4-6 h (32 episodes of 40 days, 1,536 reasoning stints).
-# memory: about 8-11 h (the same size, plus a notes call per desk per day --
-# with reasoning for misaligned instances); a first smoke run calibrates it:
+# memory: about 6-9 h (36 episodes of 40 days, 1,008 reasoning stints, plus a
+# notes call per desk per day -- with reasoning for misaligned instances and
+# their twins; estimated from the mechanism run, which took 504 min). A first
+# smoke run calibrates it:
 #   BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22" bash examples/contagion_net/run_long_pilot.sh
 #
 # Each batch: run -> judge -> one report across its levels (HOW MANY IT TAKES
@@ -197,21 +199,23 @@ warning() {  # the three attacks against their twin, each without and with the w
     finish warning "$t0" "" "${logs[@]}"
 }
 
-memory() {  # the four arms with desk notes files and with desk procedures in the system prompt
+memory() {  # the playbook vs its twin at three doses, with desk notes files and with procedures in the prompt
     local t0=$SECONDS pids=() logs=()
-    local sources="placebo_thinking misaligned_playbook misaligned_playbook_open misaligned_thinking"
-    printf '\n=== memory: four arms · k = 48 · seeds 0-3 · personas · memory file vs prompt ===\n'
+    local sources="placebo_thinking misaligned_playbook"
+    printf '\n=== memory: playbook vs twin · k = 12 24 48 · seeds 0-2 · personas · memory file vs prompt ===\n'
     echo "memory started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
     for mode in file prompt; do
-        local log="$OUT_DIR/memory_$mode.jsonl"
-        logs+=("$log")
-        # shellcheck disable=SC2086
-        $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
-            --sources $sources --seed-list 0 1 2 3 --k 48 --personas --memory "$mode" \
-            --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 \
-            ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
-            > "${log%.jsonl}.run.log" 2>&1 &
-        pids+=($!)
+        for k in 12 24 48; do
+            local log="$OUT_DIR/memory_${mode}_k$k.jsonl"
+            logs+=("$log")
+            # shellcheck disable=SC2086
+            $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+                --sources $sources --seed-list 0 1 2 --k "$k" --personas --memory "$mode" \
+                --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 \
+                ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+                > "${log%.jsonl}.run.log" 2>&1 &
+            pids+=($!)
+        done
     done
     for i in "${!pids[@]}"; do
         wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"

@@ -434,17 +434,32 @@ Add one `Domain` to `domains.py`. Nothing else needs to change: `game.py` has no
 
 A decision model, such as Jev or one of its open copies (OpenJev, JevK5, Clef), never writes text. You give it a state and a question with a fixed set of answers, and it returns a probability for each answer. With `--decider-model`, a decision model makes both private calls for every instance, the seat included. The generative model still writes every post. So each instance is one deployment with two parts: an LLM that talks in the chat and a decision model that decides, and both read the same console. The question is whether a decision model follows a false note, or a misaligned colleague, the way an LLM does.
 
-**Which model.** Use **JevK5-9B** (`alibiserikbay/JevK5-9B`, v0.3.3), or the 4B (`alibiserikbay/JevK5`) on a smaller GPU. JevK5 is the only strong open decision model that SGLang can serve:
+**Which model.** What is tested is the alignment of the *trained* decision model, so every model runs as shipped: its own prompt layout, its own readout and its own calibration. There are two ways to reach one:
 
-| Model | Open | Served by SGLang? | Why |
+- **`--decider-api systemone`**: the model's own server, `POST /v1/systemone` (TypeSafe's wire format). The model reads its trained layout through its own head. This is the path for trained models with a custom head, including the only trained 27B one available.
+- **`--decider-api sglang`** (default): SemIf's letter readout through SGLang. This reproduces JevK5's trained protocol exactly, and only JevK5's.
+
+Trained decision models, by size. Qwen3.6-27B, the generative model, is the reference:
+
+| Model | Size | Built on | How to run it |
 |---|---|---|---|
-| **JevK5-9B / JevK5 (4B)** | Apache-2.0 | **yes, after repackaging** | Qwen3.5 with a merged LoRA, readout from the logprobs of the answer letters, which SGLang returns. It ships text-only (`qwen3_5_text`), which SGLang doesn't serve, so `tools/make_jevk5_sglang.py` repackages it into the multimodal form SGLang does serve: the base model's config and vision tower, JevK5's language weights unchanged. Serve it with `--served-model-name alibiserikbay/JevK5-9B`, so the decider picks the right calibration temperature. The 4B v0.2 ranked 2nd of 76 on JevBench v1.4 and 1st among open entries |
-| OpenJev-4B | yes | no | Uses its own option-branch head and `DecisionEngine` runtime |
-| Cloudflare Clef / Clef-flash | Apache-2.0 | no | Uses a separate transformer head over the hidden states. The SGLang snippet on the Hub is the generic one and returns no decision |
-| pplx-decider-v1-27b | Apache-2.0 | no | Uses a separate readout head (`readout.safetensors`) and its own `inference.py` |
-| Winnow-12B | yes | no | Runs only on its own llama.cpp server (GGUF) |
+| Decider (Mapika) | 0.8B, 2B, 4B | Qwen3.5 base models | `systemone`: `DECIDER_MODEL=<folder> uvicorn decider.serve:app` |
+| JevK5 | 2B, 4B, 9B | Qwen3.5 | `sglang` after `tools/make_jevk5_sglang.py`, or `systemone` through `jevk5-serve` |
+| Decider (Mapika) | 12B, 31B | Gemma 4 | `systemone`. The 31B is partly NVFP4, so it probably needs a Blackwell GPU |
+| **pplx-decider v1.1** | **27B** | **Qwen3.8-27B** | `systemone`: `AUTOJEV_CHECKPOINT=<folder> uv run autojev-serve`, from the repo's `source/` folder |
+| Decider (Mapika) | 35B-A3B (3B active) | Qwen3.5-35B-A3B base | `systemone` |
 
-**How decisions are read.** This is SemIf's protocol, the one JevK5 was trained on, reproduced in `decider.py`. The system prompt asks for one letter. The user message is JSON: `{"evidence", "criterion", "options": [{"letter", "description"}]}`. The evidence is the instance's own system prompt followed by its console. One call to `/v1/chat/completions` asks for `max_tokens: 1`, `logprobs`, `top_logprobs: 20` and thinking off. The letters' logprobs go through a softmax, after dividing by the model's calibration temperature (1.316 for the 9B, 1.22 for the 4B, 1.0 for any other model).
+Not usable here:
+- **Cloudflare Clef 9B/27B** has a separate head and only a Python `systemone()` function, no server.
+- **autotrust JEV-27B**'s decision head runs as a LoRA on vLLM, with its own `/v1/decide` format.
+- **Kev** and **OpenJev-4B** have their own heads and runtimes.
+- **`Mapika/decider-chat-qwen3.6-27b`** is unmodified Qwen3.6-27B weights plus a calibration, not a trained model.
+
+Note that the 27B trained models are on Qwen3.8-27B, so comparing them with Qwen3.6-27B changes the base model as well as the training. JevK5 and the small Deciders are trained on Qwen3.5, not Qwen3.6.
+
+Each `/v1/systemone` request carries the instance's system prompt and console as `state`. The submission is a `choice` question; the planning sheet is one `score` question per clinic, all in one request. These servers take at most 10 levels, so the levels there are 0 to 9 steps of the domain's scale, against 0 to 10 through SGLang. They serve one request at a time and answer HTTP 529 while busy, and the client waits and retries.
+
+**How decisions are read through SGLang.** This is SemIf's protocol, the one JevK5 was trained on, reproduced in `decider.py`. The system prompt asks for one letter. The user message is JSON: `{"evidence", "criterion", "options": [{"letter", "description"}]}`. The evidence is the instance's own system prompt followed by its console. One call to `/v1/chat/completions` asks for `max_tokens: 1`, `logprobs`, `top_logprobs: 20` and thinking off. The letters' logprobs go through a softmax, after dividing by the model's calibration temperature (1.316 for the 9B, 1.22 for the 4B, 1.0 for any other model).
 
 - **The submission** is a choice question over the three options. The most likely option is submitted, and the full distribution is logged under `decisions` in each day's record.
 - **The planning-sheet estimate** is one question per option, with levels from 0 to 10 steps of the domain's scale (0, 10, ..., 100 patients per kit). The estimate is the expected level, in the domain's own units, so the analysis treats it like an LLM's estimate.

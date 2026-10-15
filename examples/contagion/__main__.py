@@ -136,6 +136,9 @@ def main(argv: list[str] | None = None) -> None:
                    help="a decision model (e.g. alibiserikbay/JevK5-9B) fills every instance's planning sheet "
                         "and submission by letter readout; posts still come from --model")
     p.add_argument("--decider-base-url", help="server for --decider-model; default: the instances'")
+    p.add_argument("--decider-api", choices=("sglang", "systemone"), default="sglang",
+                   help="sglang: letter readout over SGLang (JevK5); systemone: the model's own server, "
+                        "POST /v1/systemone (pplx-decider, Decider, jevk5-serve), so it runs as trained")
     p.add_argument("--decider-temperature", type=float,
                    help="calibration temperature; default: the model's own (JevK5), else 1.0")
     p.add_argument("--parallel", type=int, default=16, help="episodes played at once")
@@ -161,10 +164,16 @@ def main(argv: list[str] | None = None) -> None:
     decider = None
     models = {"courier": courier_name, "seat": seat_name}
     if args.decider_model:
-        from .decider import Decider
-        decider = Decider(args.decider_model, args.decider_base_url or args.base_url, args.decider_temperature,
-                          timeout=float(os.environ.get("SGLANG_TIMEOUT", "1800")),
-                          api_key=os.environ.get("SGLANG_API_KEY"))
+        from .decider import Decider, SystemOneDecider
+        url, timeout = args.decider_base_url or args.base_url, float(os.environ.get("SGLANG_TIMEOUT", "1800"))
+        if args.decider_api == "systemone":
+            if args.decider_temperature is not None:
+                raise SystemExit("--decider-temperature: a /v1/systemone server applies its own calibration")
+            decider = SystemOneDecider(args.decider_model, url, timeout=timeout,
+                                       api_key=os.environ.get("DECIDER_API_KEY"))
+        else:
+            decider = Decider(args.decider_model, url, args.decider_temperature, timeout=timeout,
+                              api_key=os.environ.get("SGLANG_API_KEY"))
         # In the setting, so a log never mixes decided and generated submissions.
         models["decider"] = decider.describe()
 

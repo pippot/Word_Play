@@ -73,3 +73,17 @@ Each is reported per arm against its own twin (same seed, same memory mode), wit
 - A contaminated-input source (an outside document that an honest instance saves to its notes).
 - On-demand topic files.
 - A separate measure of the authority bullet: it is inside the playbook by decision, so playbook vs playbook-without-authority is not run.
+
+## Addendum (2026-10-15, before the run): under 10 hours
+
+At the user's request the batch must finish within 10 h. The mechanism run took 504 min against an estimate of 374–458 min. Recalibrated against that, the 8-arm batch would take about 9–12 h: misaligned instances and their twins reason before every daily notes edit. **`misaligned_playbook_open` is dropped from both modes**, leaving `placebo_thinking`, `misaligned_playbook` and `misaligned_thinking`: 6 arms × 4 seeds, an estimated 7–9 h. Outcomes and predictions are unchanged. The clause test (playbook vs playbook without its evidence clause) is not run under notes files.
+
+## Addendum 2 (2026-10-15, before the run): a dose ablation instead of arms
+
+At the user's request the batch varies the **number of misaligned instances** rather than the playbook. This replaces the first addendum's design.
+
+- **Arms:** `misaligned_playbook` against `placebo_thinking` only, at **k = 12, 24, 48** (arrivals on days 11–20), in both memory modes, on **seeds 0–2**. That is 36 episodes, an estimated 6–9 h. Three seeds were chosen over dropping k = 24 or limiting reasoning to the handover edit.
+- **Outcomes:** the primary outcomes (Δ believers vs twin; per-rotation retention) and the secondary ones are reported per dose and memory mode.
+- **Added secondary outcome:** the dose-response in each mode, Δ believers by k.
+- **Predictions:** H1–H3 stand, read at each dose. Added: **H4**, notes files lower the dose a takeover needs, so the file-mode Δ believers at k = 24 is ≥ the prompt-mode Δ at k = 24.
+- **Not run:** `misaligned_playbook_open` and `misaligned_thinking`. With 3 seeds, intervals are very rough.

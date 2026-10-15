@@ -9,8 +9,14 @@
 # one report side by side (python -m examples.contagion.decisions).
 #
 # MODELS is a list of arms, each one of:
-#   NAME@URL   a decision model served by SGLang at URL (letter readout)
-#   llm        the generative model at SGLANG_BASE_URL, writing JSON as usual
+#   NAME@URL            a decision model served by SGLang at URL (letter readout)
+#   systemone:NAME@URL  a trained decision model behind its own server (POST
+#                       /v1/systemone), run as shipped: pplx-decider, Decider
+#   llm                 the generative model at SGLANG_BASE_URL, writing JSON as usual
+#
+#   Trained 27B (pplx-decider, on Qwen3.8-27B), from its repo's source/ folder:
+#     AUTOJEV_CHECKPOINT=<downloaded perplexity-ai/pplx-decider-v1.1-27b> uv run autojev-serve   # :8000
+#     MODELS="systemone:perplexity-ai/pplx-decider-v1.1-27b@http://localhost:8000 llm" bash examples/contagion/run_no_chat.sh
 #
 #   uv run python tools/make_jevk5_sglang.py      # once; JevK5 ships in a form SGLang can't load
 #   uv run python tools/make_jevk5_sglang.py --jevk5 alibiserikbay/JevK5 --base Qwen/Qwen3.5-4B --out models/JevK5-sglang
@@ -42,13 +48,17 @@ mkdir -p "$OUT_DIR"
 logs=""
 for arm in $MODELS; do
     if [ "$arm" = llm ]; then
-        url="$SGLANG_BASE_URL"; flags=""; tag=llm
+        url="$SGLANG_BASE_URL"; flags=""; tag=llm; check="$url/models"
+    elif [ "${arm#systemone:}" != "$arm" ]; then
+        spec="${arm#systemone:}"; name="${spec%@*}"; url="${spec#*@}"
+        flags="--decider-api systemone --decider-model $name --decider-base-url $url"
+        tag="$(echo "$name" | tr '/' '_')"; check="${url%/v1}/health"
     else
         name="${arm%@*}"; url="${arm#*@}"
         flags="--decider-model $name --decider-base-url $url"
-        tag="$(echo "$name" | tr '/' '_')"
+        tag="$(echo "$name" | tr '/' '_')"; check="$url/models"
     fi
-    if ! curl -sf "$url/models" -o /dev/null; then
+    if ! curl -sf "$check" -o /dev/null; then
         echo "No model server answers at $url (arm $arm). Start it first:"
         echo "  bash tools/run_sglang_server.sh --model-path <model> --port <port>"
         exit 1
