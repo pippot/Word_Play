@@ -821,5 +821,90 @@ class TestNoChat(unittest.TestCase):
             self.assertIn(needle, text)
 
 
+class FakeSystemOne:
+    """A /v1/systemone server in a thread, strict like autojev-serve: it names
+    its model, refuses any other, takes at most 10 score levels, and answers
+    the first request busy (529). It follows the note when it sees one."""
+
+    def __init__(self):
+        import http.server
+
+        owner = self
+        self.requests, self.busy_once = [], True
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def _send(self, code, body, headers=()):
+                self.send_response(code)
+                for k, v in headers:
+                    self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(json.dumps(body).encode())
+
+            def do_GET(self):
+                self._send(200, {"data": [{"id": "pplx-decider-v1.1-27b"}]} if self.path == "/v1/models" else {"ok": 1})
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if owner.busy_once:
+                    owner.busy_once = False
+                    return self._send(529, {"detail": "busy"}, [("Retry-After", "0")])
+                if self.path != "/v1/systemone" or body["model"] != "pplx-decider-v1.1-27b":
+                    return self._send(422, {"detail": "Unknown model"})
+                owner.requests.append(body)
+                answers = {}
+                for key, q in body["questions"].items():
+                    if q["type"] == "score":
+                        if len(q["criteria"]) > 10:
+                            return self._send(422, {"detail": "too many levels"})
+                        probs = {str(i): 0.0 for i in range(len(q["criteria"]))}
+                        probs["5"] = 1.0
+                        answers[key] = {"type": "score", "score": 5.0, "probabilities": probs}
+                    else:
+                        names = list(q["criteria"])
+                        domain = domain_of(body["state"])
+                        cue = first_option_after(body["state"], "Don't waste", domain)
+                        pick = cue or names[0]
+                        answers[key] = {"type": "choice", "choice": pick,
+                                        "probabilities": {n: (0.9 if n == pick else 0.05) for n in names}}
+                self._send(200, {"model": "pplx-decider-v1.1-27b", "answers": answers})
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+
+
+class TestSystemOne(unittest.TestCase):
+    def test_a_trained_model_runs_through_its_own_server(self):
+        from examples.contagion.decider import SystemOneDecider
+        server = FakeSystemOne()
+        try:
+            decider = SystemOneDecider("perplexity-ai/pplx-decider-v1.1-27b", server.url, timeout=10)
+            cfg = replace(CFG, chat=False, rounds=6)
+            rec = run_episode(make_world(0, cfg), cfg, "factual", None, None, decider=decider)
+        finally:
+            server.close()
+        self.assertEqual(rec["failures"], 0)
+        self.assertEqual(rec["decider"]["api"], "systemone")
+        self.assertEqual(set(rec["rounds"][0]["choices"].values()), {rec["target"]})  # read the note
+        domain = DOMAINS[rec["domain"]]
+        for entry in rec["rounds"]:
+            for estimates in entry["beliefs"].values():
+                self.assertEqual(set(estimates), set(domain.names))
+                self.assertTrue(all(v == 5 * domain.scale for v in estimates.values()))
+        # one request for the planning sheet (a question per option), one for the submission
+        self.assertEqual(len(server.requests), cfg.rounds * cfg.agents * 2)
+        for body in server.requests:
+            self.assertTrue(body["state"].startswith("You are "))
+            for q in body["questions"].values():
+                for text in (q["instructions"], *q["criteria"]):
+                    self.assertIsNone(BANNED.search(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()
