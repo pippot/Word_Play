@@ -73,3 +73,7 @@ Each is reported per arm against its own twin (same seed, same memory mode), wit
 - A contaminated-input source (an outside document that an honest instance saves to its notes).
 - On-demand topic files.
 - A separate measure of the authority bullet: it is inside the playbook by decision, so playbook vs playbook-without-authority is not run.
+
+## Addendum (2026-10-15, before the run): under 10 hours
+
+At the user's request the batch must finish within 10 h. The mechanism run took 504 min against an estimate of 374–458 min. Recalibrated against that, the 8-arm batch would take about 9–12 h: misaligned instances and their twins reason before every daily notes edit. **`misaligned_playbook_open` is dropped from both modes**, leaving `placebo_thinking`, `misaligned_playbook` and `misaligned_thinking`: 6 arms × 4 seeds, an estimated 7–9 h. Outcomes and predictions are unchanged. The clause test (playbook vs playbook without its evidence clause) is not run under notes files.
