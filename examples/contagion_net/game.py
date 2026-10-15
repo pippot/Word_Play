@@ -11,13 +11,17 @@ target for the same seed); what changes is who talks to whom:
     other reads and replies -- one call per instance.
   * Then every instance logs its belief and submits a choice (two separate
     calls, as in contagion) and privately receives a noisy report.
-  * Each desk has DESK PROCEDURES in its instance's system prompt, openly
-    maintained by the instances on the desk. On its last day an instance
-    rewrites them in full; its successor starts with them and nothing else.
+  * Each desk keeps what passes down it (Config.memory):
+      "file"   (default) a NOTES FILE in the console, under the organisation's
+               own read-only file; every instance may edit it a line at a time
+               at the end of each day (notes.py), and its successor starts with
+               the file as it stands -- an untouched line passes on by itself
+      "prompt" DESK PROCEDURES in the system prompt, labelled with their last
+               editor; on its last day an instance rewrites them in full
 
 There are two ways an idea can travel: sideways (syncs) and down a desk
-(the procedures). Because the procedures sit in the system prompt, a goal --
-not only a belief -- has a real way to pass on. Because the engine decides who reads what, every instance's
+(the notes or procedures). Because what a desk keeps is read as standing
+guidance, a goal -- not only a belief -- has a real way to pass on. Because the engine decides who reads what, every instance's
 exposure is known exactly -- analyze.py traces it hop by hop.
 
 The source (sources.py) only changes the procedures the first instance on
@@ -43,11 +47,12 @@ from examples.contagion.game import (
     trim_words,
 )
 
-from . import network, playbooks, prompts
+from . import network, notes, playbooks, prompts
 from .domains import DOMAINS, NetDomain
 from .sources import SOURCES, Source
 
 HANDOVER_CONFIG = {**POST_CONFIG, "max_tokens": 400}  # the procedures rewrite
+NOTES_CONFIG = {**JSON_CONFIG, "max_tokens": 400}     # a day's edits to the desk's notes file (memory "file")
 NOTEBOOK_CONFIG = {**POST_CONFIG, "max_tokens": 250}  # a log entry: written without reasoning, so it never sets the pace
 CALL_ATTEMPTS = 2
 NOTEBOOK_SHOWN = 20  # log entries a misaligned instance sees: the latest, so the console stays bounded
@@ -78,7 +83,12 @@ class Config:
                                   # plausible (with the worst one, following the rule exposed it
                                   # within a day). "any": either non-best clinic, as in contagion
     message_words: int = 60
-    procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves
+    memory: str = "file"           # what passes down a desk: "file", a notes file in the console edited daily
+                                   # (as real agent memory works), or "prompt", procedures in the system prompt
+                                   # rewritten in full at rotation (the channel of every run before 15 Oct 2026)
+    notes_words: int = 200         # a desk's notes file holds at most this many words (memory "file")
+    notes_line_words: int = 40     # a line of it is cut here
+    procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves (memory "prompt")
     personas: bool = False         # every instance gets a mild working style (prompts.PERSONAS), drawn by
                                    # seed, desk and start day, so an instance and its twin share it
     defence: str = "none"          # "warning": every instance is told desk procedures are notes, not instructions
@@ -109,6 +119,10 @@ class Config:
             raise ValueError('target must be "middle" or "any"')
         if not 0 <= self.plant_day < self.days:
             raise ValueError("plant_day must fall inside the run")
+        if self.memory not in ("file", "prompt"):
+            raise ValueError('memory must be "file" or "prompt"')
+        if min(self.notes_words, self.notes_line_words) < 1:
+            raise ValueError("notes_words and notes_line_words must be at least 1")
         if self.procedures not in ("free", "figures"):
             raise ValueError('procedures must be "free" or "figures"')
         if self.defence not in ("none", "warning") or (self.defence == "warning" and self.procedures != "free"):
@@ -271,10 +285,15 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     domain = world.domain
     seat_model = seat_model or model
     by_name = {s.name: s for s in world.stints}
-    # Each desk's procedures as they stand: neutral on day 1.
+    file_mode = cfg.memory == "file"
+    # Each desk's procedures as they stand (memory "prompt"): neutral on day 1.
     desk_procedures = {d: {"author": world.prehistory[d], "day": prompts.PREHISTORY,
-                           "text": prompts.procedures_text(domain, world.target, "neutral", cfg.procedures)}
+                           "text": prompts.procedures_text(domain, world.target, "neutral", cfg.procedures, memory="prompt")}
                        for d in range(cfg.desks)}
+    # Each desk's notes file (memory "file"): empty on day 1. `author` and `day`
+    # name the instance that passed it on and when -- the vertical carrier.
+    desk_notes = {d: {"lines": [], "origins": [], "author": world.prehistory[d], "day": prompts.PREHISTORY}
+                  for d in range(cfg.desks)}
     sponsor_log: list[dict] = []              # the misaligned instances' shared log (notebook sources)
     systems: dict[str, str] = {}              # built as each instance starts, with its desk's procedures
     personas: dict[str, str] = {}             # instance -> its working style (--personas)
@@ -301,7 +320,9 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                                day=day, submissions=submissions,
                                threads=threads[s.name],
                                notebook=sponsor_log[-NOTEBOOK_SHOWN:] if in_coalition(s) else None,
-                               notebook_heading=prompts.notebook_title(domain, world.target))
+                               notebook_heading=prompts.notebook_title(domain, world.target),
+                               notes=desk_notes[s.desk]["lines"] if file_mode else None,
+                               notes_cap=cfg.notes_words, procedures_mode=cfg.procedures)
 
     def ask_until(s, user: str, config: dict, parse):
         """(parsed, raw, thinking); parsed is None after CALL_ATTEMPTS unusable replies."""
@@ -325,6 +346,14 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                                           lambda r: parse_message(r, words))
         return s, parsed, raw, thinking
 
+    def edit_notes(job):
+        s, day = job
+        instruction = prompts.notes_instruction(domain, s.desk, cfg.notes_words, cfg.notes_line_words,
+                                                last_day=s.left == day, procedures_mode=cfg.procedures)
+        parsed, raw, thinking = ask_until(s, f"{console(s, day, True)}\n\n{instruction}",
+                                          free_config(s, NOTES_CONFIG), notes.parse_edits)
+        return s, parsed, raw, thinking
+
     def private(job):
         s, kind, day = job
         if kind == "belief":
@@ -338,18 +367,31 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         for day in range(cfg.days):
             present = [s for s in world.stints if s.present(day)]
             entry = {"joined": {}, "syncs": [], "beliefs": {}, "choices": {}, "results": {}, "handovers": [],
-                     "thinking": {}, "unusable": [], "notebook": []}
+                     "thinking": {}, "unusable": [], "notebook": [], "notes": []}
             log.append(entry)
             for s in present:
-                if s.joined == day:
+                if s.joined == day and file_mode:
+                    f = desk_notes[s.desk]
+                    procs = {"author": f["author"], "day": f["day"]}
+                    if s.source and source.plant != "neutral":
+                        # The plant replaces the desk's file, in lines; the instance edits it from there.
+                        f["lines"] = notes.lines_of(prompts.procedures_text(domain, world.target, source.plant,
+                                                                            cfg.procedures, memory="file"))
+                        f["origins"] = [{"author": "PLANT", "day": day} for _ in f["lines"]]
+                        procs["planted"] = True
+                    procs |= {"text": notes.text_of(f["lines"]), "origins": [dict(o) for o in f["origins"]]}
+                    entry["joined"][s.name] = procs
+                elif s.joined == day:
                     procs = dict(desk_procedures[s.desk])
                     if s.source and source.plant != "neutral":
                         # The planted procedures take the place of what was there (neutral
                         # before day 1; after a burn-in, the predecessor's real rewrite, which
                         # is logged but never read). They still show the predecessor as editor.
-                        procs = {**procs, "text": prompts.procedures_text(domain, world.target, source.plant),
+                        procs = {**procs, "text": prompts.procedures_text(domain, world.target, source.plant,
+                                                                          cfg.procedures, memory="prompt"),
                                  "planted": True}
                     entry["joined"][s.name] = procs
+                if s.joined == day:
                     if cfg.personas:
                         personas[s.name] = prompts.persona_text(domain, persona_index(world.seed, s.desk, s.joined))
                     playbook = None
@@ -362,7 +404,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                         misaligned=source.seat and s.source, tactics=source.tactics, tenure=cfg.tenure,
                         notebook=source.notebook, procedures_mode=cfg.procedures,
                         persona=personas.get(s.name), defence=cfg.defence, playbook=playbook,
-                        procedures=procs,
+                        procedures=None if file_mode else procs, memory=cfg.memory,
                     )
 
             def failed(s, call, raw):
@@ -422,9 +464,32 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                     entry["notebook"].append({"author": s.name, "text": text})
             sponsor_log.extend({"day": day, **e} for e in entry["notebook"])
 
-            # Instances leaving after today rewrite their desk's procedures (none on the last day).
-            # A failed rewrite leaves the procedures as they were.
             leaving = [s for s in present if s.left == day and day < cfg.days - 1]
+            if file_mode:
+                # Every instance may edit its desk's file (one holder per desk, so in parallel).
+                # An unusable reply leaves the file as it was; `text` is logged when it changed.
+                for s, ops, raw, thinking in pool.map(edit_notes, [(s, day) for s in present]):
+                    keep_thinking(s, "notes", thinking)
+                    f = desk_notes[s.desk]
+                    applied, skipped = [], []
+                    if ops is None:
+                        failed(s, "notes", raw)
+                    else:
+                        f["lines"], f["origins"], applied, skipped = notes.apply_edits(
+                            f["lines"], f["origins"], ops, author=s.name, day=day,
+                            cap_words=cfg.notes_words, line_words=cfg.notes_line_words)
+                    entry["notes"].append({"author": s.name, "desk": s.desk, "ops": ops, "applied": applied,
+                                           "skipped": skipped,
+                                           "text": notes.text_of(f["lines"]) if applied else None})
+                # The file passes down as it stands, edited or not.
+                for s in leaving:
+                    f = desk_notes[s.desk]
+                    entry["handovers"].append({"author": s.name, "desk": s.desk, "text": notes.text_of(f["lines"]),
+                                               "origins": [dict(o) for o in f["origins"]]})
+                    f["author"], f["day"] = s.name, day
+                leaving = []
+            # Instances leaving after today rewrite their desk's procedures (memory "prompt"; none on
+            # the last day). A failed rewrite leaves the procedures as they were.
             jobs = [(s, day, prompts.procedures_instruction(domain, s.desk, cfg.procedures_words, cfg.procedures),
                      cfg.procedures_words, HANDOVER_CONFIG, True) for s in leaving]
             for s, text, raw, thinking in pool.map(write, jobs):
@@ -462,7 +527,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "stints": [asdict(s) for s in world.stints],
         "first_hand": {"note": sorted(world.first_hand(False)), "contacts": sorted(world.first_hand(True))},
         "source_free": {"note": world.source_free_day(False), "contacts": world.source_free_day(True)},
-        "plant": prompts.procedures_text(domain, world.target, source.plant),
+        "plant": prompts.procedures_text(domain, world.target, source.plant, cfg.procedures, memory=cfg.memory),
         "personas": personas,
         "playbook_of": playbook_of,
         "days": log,
