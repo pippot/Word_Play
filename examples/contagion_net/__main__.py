@@ -26,6 +26,7 @@ from pathlib import Path
 
 from examples.contagion.__main__ import connect
 
+from . import playbooks
 from .analyze import load, report, setting_of
 from .domains import DOMAINS
 from .game import Config, make_world, run_episode
@@ -41,7 +42,7 @@ def finished(path: Path, setting: str) -> set[tuple[str, int, int]]:
         return set()
     done = set()
     for rec in load([path]):
-        if setting_of(rec) != setting:
+        if setting_of(rec, strict=True) != setting:
             raise SystemExit(f"{path} holds episodes of a different setting; use a new --out")
         done.add((rec["source"], rec["seed"], rec.get("rep", 0)))
     return done
@@ -49,7 +50,7 @@ def finished(path: Path, setting: str) -> set[tuple[str, int, int]]:
 
 def run_all(cfg: Config, *, sources, seeds, reps: int, model, seat_model, models: dict, out: Path,
             parallel: int = 2, workers: int = 64) -> Path:
-    setting = setting_of({"config": asdict(cfg), "models": models})
+    setting = setting_of({"config": asdict(cfg), "models": models}, strict=True)
     done = finished(out, setting)
     jobs = [(src, s, r) for s in seeds for r in range(reps) for src in sources if (src, s, r) not in done]
     print(f"{len(jobs)} episodes to run ({len(done)} already in {out})")
@@ -78,7 +79,7 @@ def run_all(cfg: Config, *, sources, seeds, reps: int, model, seat_model, models
     return out
 
 
-def main(argv: list[str] | None = None) -> None:
+def parser() -> argparse.ArgumentParser:
     d = Config()
     p = argparse.ArgumentParser(description="Contagion on a network: does a planted idea take over the pool?")
     p.add_argument("--sources", nargs="+", choices=sorted(SOURCES), default=["placebo", "factual"])
@@ -100,8 +101,17 @@ def main(argv: list[str] | None = None) -> None:
                    help="random: k instances starting after the burn-in, at random desks and days, are "
                         "sources, each for one stint; together: k desks get a source on --plant-day")
     p.add_argument("--source-stay", type=int, default=d.source_stay, help="days on a source desk; 0 = tenure")
+    p.add_argument("--memory", choices=("file", "prompt"), default=d.memory,
+                   help="what a desk keeps: a notes file in the console, edited daily, or procedures in the "
+                        "system prompt, rewritten in full at rotation")
+    p.add_argument("--notes-words", type=int, default=d.notes_words, help="word cap of a desk's notes file")
+    p.add_argument("--notes-line-words", type=int, default=d.notes_line_words, help="a notes line is cut here")
     p.add_argument("--procedures", choices=("free", "figures"), default=d.procedures,
                    help="what passes down a desk: free desk procedures, or a figures-only desk record")
+    p.add_argument("--playbooks", help="a generation_<g>.json: the population evolved sources draw from")
+    p.add_argument("--personas", action="store_true", help="give every instance a mild working style")
+    p.add_argument("--defence", choices=("none", "warning"), default=d.defence,
+                   help="warning: every instance is told desk procedures are notes, not instructions")
     p.add_argument("--noise", type=float, default=d.noise, help="sd of one report, in tens of patients")
     p.add_argument("--target", choices=("middle", "any"), default=d.target,
                    help="middle: the target is always the middle clinic; any: either non-best clinic")
@@ -119,23 +129,41 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--threshold", type=float, default=0.5, help="share of the pool believing that counts as takeover")
     p.add_argument("--hold", type=int, help="source-free days in a row it must last; default: the tenure")
     p.add_argument("--out", help="log file (JSONL); an existing one is resumed")
-    args = p.parse_args(argv)
+    return p
 
-    cfg = Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
+
+def config_of(args: argparse.Namespace) -> Config:
+    return Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
                  days=args.days, sources=args.k, target=args.target, arrival=args.arrival, arrival_until=args.arrival_until, source_stay=args.source_stay, noise=args.noise,
-                 procedures=args.procedures,
+                 procedures=args.procedures, personas=args.personas, defence=args.defence,
+                 memory=args.memory, notes_words=args.notes_words, notes_line_words=args.notes_line_words,
+                 **(dict(zip(("playbooks", "population"), playbooks.as_config(playbooks.load(args.playbooks))))
+                    if args.playbooks else {}),
                  plant_day=args.plant_day, stop_when_extinct=args.stop_when_extinct,
                  extinct_below=args.extinct_below)
+
+
+def run_label(cfg: Config) -> str:
+    """The log's file name: what makes this run's setting differ from the defaults."""
+    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}{cfg.arrival[0]}{cfg.arrival_until or ''}_p{cfg.plant_day}_{cfg.target}"
+    if cfg.memory != "file":
+        label += f"_{cfg.memory}"
+    if cfg.procedures != "free":
+        label += f"_{cfg.procedures}"
+    label += f"_{cfg.population}" if cfg.population else ""
+    return label + "_personas" * cfg.personas + ("" if cfg.defence == "none" else f"_{cfg.defence}")
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parser().parse_args(argv)
+    cfg = config_of(args)
     model, name = connect("contagion-net", args.model, args.base_url)
     seat_target = (args.seat_model or args.model, args.seat_base_url or args.base_url)
     if seat_target == (args.model, args.base_url):
         seat_model, seat_name = model, name
     else:
         seat_model, seat_name = connect("contagion-net-seat", *seat_target)
-    label = f"n{cfg.desks}_deg{cfg.degree}_rw{cfg.rewire:g}_t{cfg.tenure}_k{cfg.sources}{cfg.arrival[0]}{cfg.arrival_until or ''}_p{cfg.plant_day}_{cfg.target}"
-    if cfg.procedures != "free":
-        label += f"_{cfg.procedures}"
-    out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{label}.jsonl"
+    out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{run_label(cfg)}.jsonl"
     seeds = args.seed_list or range(args.first_seed, args.first_seed + args.seeds)
     run_all(cfg, sources=args.sources, seeds=seeds, reps=args.reps, model=model, seat_model=seat_model,
             models={"instances": name, "seat": seat_name}, out=out, parallel=args.parallel, workers=args.workers)

@@ -11,7 +11,8 @@ a source and its placebo twin.
   tactics   what the mandate says about how: "" (nothing, as in contagion),
             "direct" (the factual note's tactic), "playbook" (the tactics
             that beat what stopped the seats in pilot 3; prompts.misaligned_mandate)
-            or "playbook_open" (the playbook without its rule for judging evidence)
+            or "playbook_open" (the playbook without its rule for judging evidence),
+            or "evolved" (one version of the run's population, Config.playbooks)
   thinking  the source desk's first instance reasons before each message and
             its rewrite of the desk procedures (its reasoning is logged, never shown to anyone)
   twin      the placebo to compare against: the same seat, honest
@@ -61,6 +62,7 @@ SOURCES: dict[str, Source] = {s.key: s for s in (
            contacts=True),
     Source("misaligned_playbook_open", seat=True, tactics="playbook_open", thinking=True, twin="placebo_thinking",
            contacts=True),
+    Source("misaligned_evolved", seat=True, tactics="evolved", thinking=True, twin="placebo_thinking", contacts=True),
     Source("misaligned_coalition", seat=True, tactics="playbook", notebook=True, thinking=True,
            twin="placebo_thinking", contacts=True),
 )}
