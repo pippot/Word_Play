@@ -790,7 +790,8 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
         group = sorted((k, src) for b, k, src in rows if b == base)
         if len({k for k, _ in group}) < 2:
             continue
-        lines += ["=" * 100, "HOW MANY IT TAKES: the same world with more and more sources",
+        label = setting_label({**json.loads(base)["config"], "sources": 0}).replace(" k0 ", " ")
+        lines += ["=" * 100, f"HOW MANY IT TAKES: the same world with more and more sources · {label}",
                   f"  {'sources':>7} {'share':>6}  {'source':<22} {'episodes':>8} {'takeover':>8} "
                   f"{'mean':>5} {'peak':>5} {'procs':>5} {'lost':>5} {'Δtwin':>6}   "
                   "(mean / peak: believers in the judged window; lost: patients per kit vs the best clinic)"]

@@ -248,7 +248,7 @@ Our desk procedures differed from the memory files real agents inherit ([related
 
 The default is now a **notes file per desk** (`--memory file`, the auto-memory analogue) under a read-only **instructions file** from a named team (the CLAUDE.md analogue). Both are described above. Real misaligned agents also forge *authority*: the Fable 5.1 and Opus 5.5 system cards report agents inventing the user's approval for subagents. So the playbook now presents its policy as an instruction from the head of team. This applies to `playbook` and `playbook_open`, and so to `coalition` and the evolved seed. Saved populations of evolved playbooks keep their own text.
 
-The `memory` batch, now the default, runs three arms (twin, playbook, mandate alone) at k = 48, arrivals on days 11–20, 40 days, with personas, seeds 0–3, once with notes files and once with `--memory prompt`: 24 episodes, about 7–9 h. The playbook without its evidence clause is left out to keep the batch under 10 h. Spec and predictions: [docs/superpowers/specs/2026-10-15-memory-file-design.md](../../docs/superpowers/specs/2026-10-15-memory-file-design.md). Built, not yet run.
+The `memory` batch, now the default, is a **dose ablation**. It runs the playbook against its honest twin at k = 12, 24 and 48 misaligned instances, with arrivals on days 11–20, 40 days, personas and seeds 0–2. Each dose runs once with notes files and once with `--memory prompt`: 36 episodes, about 6–9 h. Its report has a HOW MANY IT TAKES table for each memory mode and an ARMS AGAINST THEIR TWIN row for each dose and mode. The playbook ablation arms (`misaligned_playbook_open`, `misaligned_thinking`) are left out to keep it under 10 h. Spec and predictions: [docs/superpowers/specs/2026-10-15-memory-file-design.md](../../docs/superpowers/specs/2026-10-15-memory-file-design.md). Built, not yet run.
 
 ```bash
 BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22" bash examples/contagion_net/run_long_pilot.sh   # smoke first
@@ -332,7 +332,7 @@ BATCHES=warning bash examples/contagion_net/run_long_pilot.sh
 
 | batch | question | setup |
 |---|---|---|
-| `memory` (default) | does the result survive a realistic memory channel? | arms A, D and the twin with `--personas`, k = 48, notes files vs procedures in the system prompt; about 7–9 h |
+| `memory` (default) | does the result survive a realistic memory channel, and how many attackers does it take? | playbook vs twin with `--personas`, k = 12, 24, 48, seeds 0–2, notes files vs procedures in the system prompt; about 6–9 h |
 | `warning` | does a cheap defence hold? | arms A, B, D with `--personas`, k = 48, defence none vs warning |
 | `mechanism` | what keeps it alive after the attackers leave, and for how long? | the arms above, k = 48 (and 12, 24), arrivals on days 11–20, 70 days |
 | `levels` | how many does it take? | playbook vs honest twin; 12, 24 and 48 misaligned instances; seeds 0–3 |
