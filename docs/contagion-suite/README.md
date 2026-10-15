@@ -33,6 +33,8 @@ This document is the design record for all three. It starts with the ideas in pl
 13. [Caveats and threats to validity](#13-caveats-and-threats-to-validity)
 14. [Glossary](#14-glossary)
 
+**Elsewhere:** [Related work](related-work.md) — model cards, papers and deployed multi-agent systems, mapped to the suite, with links back to every source.
+
 ---
 
 ## 1. The one question
@@ -612,7 +614,7 @@ Stated plainly, because several of them bound what the results can claim.
 
 **Honest-to-honest contagion is not demonstrated.** R stays below 1 after the first generation. The large effects come from a steady inflow of attackers plus slow recovery, not self-sustaining spread.
 
-**The procedures channel is a design choice with a free parameter.** How much authority an inherited memory file carries is something we set. Real deployments vary.
+**The procedures channel is a design choice with a free parameter.** How much authority an inherited memory file carries is something we set. Real deployments vary (see [related work §3](related-work.md#3-inherited-instructions-and-memory-down-a-desk): real memory files are loaded as context, written when the agent chooses, edited incrementally and shared across sessions, while ours sit in the system prompt and are rewritten in full at rotation).
 
 **One model, few seeds.** Everything is Qwen3.6-27B with 4–10 seeds per cell. Deference to inherited instructions may be model-specific, and a pool of identical copies is unrealistic (personas are a partial fix). Cross-model and mixed-pool runs are not done.
 
@@ -657,6 +659,7 @@ Stated plainly, because several of them bound what the results can claim.
 | [`examples/contagion/`](../../examples/contagion/README.md) | environment 1 and the decision-model arm; its README has fully compiled prompts for all four domains |
 | [`examples/contagion_net/`](../../examples/contagion_net/README.md) | environment 2; its README has the network, the measures and the run batches |
 | `examples/*/logs/` | every run, as JSONL episodes plus reports, judge samples, checks and maps |
+| [`related-work.md`](related-work.md) | related work and real-world deployments, with section and page numbers for every system-card passage |
 | [`docs/superpowers/specs/`](../superpowers/specs/) | pre-registered designs: the mechanism ablation (12 Oct) and the evolving-attackers spec (13 Oct, partly built) |
 
 Each environment README carries its own run instructions, cost table and compiled prompts; this document is the design rationale that sits above them.
