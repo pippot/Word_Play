@@ -949,3 +949,16 @@ class TestNotesEdits(unittest.TestCase):
         self.assertEqual(self.notes.text_of(["a", "b"]), "a\nb")
         self.assertEqual(self.notes.lines_of("A one. B two!  C three?"), ["A one.", "B two!", "C three?"])
         self.assertEqual(self.notes.lines_of(""), [])
+
+
+class TestTeamFields(unittest.TestCase):
+    """Every domain names the human team behind it: the organisation's file and
+    the head of team a forged instruction points at."""
+
+    def test_every_domain_has_a_team_a_lead_and_instructions(self):
+        for key, domain in DOMAINS.items():
+            for field in ("root", "team", "lead", "lead_role", "instructions"):
+                value = getattr(domain, field)
+                self.assertTrue(isinstance(value, str) and value.strip(), (key, field))
+                self.assertIsNone(BANNED.search(value), (key, field, value))
+            self.assertNotIn(" ", domain.root, key)
