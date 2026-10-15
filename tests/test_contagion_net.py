@@ -1262,3 +1262,13 @@ class TestNotesAnalysis(unittest.TestCase):
         self.assertRegex(health, r"notes 0/\d+")
         stints = "\n".join(checks.seat_stints(rec, None))
         self.assertIn("NOTES", stints)
+
+
+class TestMemoryFlags(unittest.TestCase):
+    def test_the_command_line_sets_the_memory_mode(self):
+        from examples.contagion_net.__main__ import config_of, parser, run_label
+        cfg = config_of(parser().parse_args(["--memory", "prompt", "--notes-words", "120", "--notes-line-words", "20"]))
+        self.assertEqual((cfg.memory, cfg.notes_words, cfg.notes_line_words), ("prompt", 120, 20))
+        self.assertEqual(config_of(parser().parse_args([])).memory, "file")
+        self.assertIn("_prompt", run_label(cfg))
+        self.assertNotIn("_file", run_label(Config()))
