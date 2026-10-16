@@ -118,12 +118,13 @@ def seat_stints(rec: dict, labels, limit: int = 2, reasoning_chars: int = 700) -
                          f"chose {(d['choices'].get(name) or '?').split()[0]}, report {d['results'].get(name)}")
             for n in d.get("notes", []):
                 if n["author"] == name:
-                    if "notes" in thinking:
-                        lines.append(f"    day {day + 1} [reasoning] {thinking['notes'][:reasoning_chars]!r}")
+                    call = "notes_retry" if n.get("retry") else "notes"
+                    if call in thinking:
+                        lines.append(f"    day {day + 1} [reasoning] {thinking[call][:reasoning_chars]!r}")
                     edits = "unusable reply" if n["ops"] is None else (
                         "; ".join(f"{a['op']} {a.get('line', '')} {a.get('text', '')}".replace("  ", " ")
                                   for a in n["applied"]) or "no change")
-                    lines.append(f"    day {day + 1} NOTES EDITS: {edits}")
+                    lines.append(f"    day {day + 1} NOTES EDITS{' (retry)' if n.get('retry') else ''}: {edits}")
             for h in d["handovers"]:
                 if h["author"] == name and rec["config"].get("memory", "prompt") == "prompt":
                     if "handover" in thinking:

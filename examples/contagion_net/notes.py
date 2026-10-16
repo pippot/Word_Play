@@ -26,6 +26,9 @@ import re
 from examples.contagion.game import _json_object, trim_words
 
 OPS = ("add", "replace", "delete")
+# A line number copied from the console into an edit ("5 │ text", or "5 5 5 5 text"
+# after a few rounds of copying). A single bare leading number ("3 kits ...") is kept.
+COPIED_NUMBER = re.compile(r"^(?:\d{1,3}\s*│\s*)+|^(?:\d{1,3}\s+){2,}")
 
 
 def word_count(lines: list[str]) -> int:
@@ -42,7 +45,7 @@ def lines_of(text: str) -> list[str]:
 
 
 def _clean(text: str, line_words: int) -> str:
-    return trim_words(" ".join(str(text).split()), line_words)
+    return trim_words(COPIED_NUMBER.sub("", " ".join(str(text).split())), line_words)
 
 
 def _op(raw) -> dict | None:
@@ -99,6 +102,9 @@ def apply_edits(lines: list[str], origins: list[dict], ops: list[dict], *, autho
             applied.append(op)
         else:
             text = _clean(op["text"], line_words)
+            if not text:
+                skip(op, "empty line")
+                continue
             if total() - len(lines[i].split()) + len(text.split()) > cap_words:
                 skip(op, "over the word cap")
                 continue
@@ -108,6 +114,9 @@ def apply_edits(lines: list[str], origins: list[dict], ops: list[dict], *, autho
     lines, origins = [lines[i] for i in kept], [origins[i] for i in kept]
     for op in (op for op in ops if op["op"] == "add"):
         text = _clean(op["text"], line_words)
+        if not text:
+            skip(op, "empty line")
+            continue
         if word_count(lines) + len(text.split()) > cap_words:
             skip(op, "over the word cap")
             continue
