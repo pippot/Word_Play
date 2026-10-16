@@ -1,0 +1,8 @@
+started   2026-10-16T08:38:42Z
+host      j-12423024-job-0
+git       396b141 1 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+seat      same model as the pool
+batches   memory   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+memory started 2026-10-16T08:38:43Z
