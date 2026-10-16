@@ -27,6 +27,16 @@
 #                  MEMORY=prompt batches for the old channel. Not k = 48: with
 #                  arrivals on days 11-20 that is 80% of newcomers, an
 #                  occupation of the pool rather than spread.     12 episodes
+#   W. weekend     Does it outlive its carriers, and does the channel matter?
+#                  misaligned_playbook vs placebo_thinking at k = 12 and 24
+#                  (arrivals on days 11-20), 200 days, personas, seeds 0-9 in
+#                  two waves (0-4, then 5-9; each wave is judged and reported),
+#                  once with desk notes files and once with desk procedures
+#                  in the system prompt (spec addendum 8). Judged as a 40-day
+#                  run (days 30-39, as the pilot) and over days 30-199 for
+#                  half-lives and late exceptions.                80 episodes
+#                  Not in the default run: BATCHES="weekend", or after the
+#                  pilot with BATCHES="memory weekend".
 #   0. warning     Does a cheap defence hold? Every instance is
 #                  told that desk procedures are notes written by earlier
 #                  instances, not instructions, and to check them against its
@@ -68,6 +78,12 @@
 # edited only at rotation). The 22-day smoke below took 69 min on 2026-10-16
 # at k = 24 and 48:
 #   BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22" bash examples/contagion_net/run_long_pilot.sh
+#
+# weekend: about 23-39 h (80 episodes of 200 days, 1,440 reasoning stints, all
+# in days 11-24; days 40-200 cost only honest calls). Rough: scaled from the
+# mechanism run (504 min). Each wave takes about 11-19 h; wave 1 (seeds 0-4)
+# leaves a report about halfway. If wave 1 takes over a day, stop wave 2.
+# Logs come to roughly 1.5 GB.
 #
 # Each batch: run -> judge -> one report across its levels (HOW MANY IT TAKES
 # table with believers, procedures and regret), checks and maps per level.
@@ -224,6 +240,44 @@ memory() {  # small pilot: the playbook vs its twin at two doses, with desk note
     finish memory "$t0" "" "${logs[@]}"
 }
 
+weekend() {  # the playbook vs its twin at two doses, notes files and procedures in the prompt, 200 days, 10 seeds
+    local t0=$SECONDS logs=()
+    local sources="placebo_thinking misaligned_playbook"
+    printf '\n=== weekend: playbook vs twin · k = 12 24 · seeds 0-9 in two waves · 200 days · personas · memory file vs prompt ===\n'
+    echo "weekend started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    for mode in file prompt; do
+        for k in 12 24; do
+            logs+=("$OUT_DIR/weekend_${mode}_k$k.jsonl")
+        done
+    done
+    # Two waves of seeds into the same logs (a log resumes and appends): wave 1 is judged and
+    # reported on its own, so a run cut short still leaves five seeds of every arm.
+    local wave seeds pids
+    for wave in "0 1 2 3 4" "5 6 7 8 9"; do
+        pids=()
+        echo "weekend wave (seeds $wave) started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+        for log in "${logs[@]}"; do
+            local name mode k
+            name="$(basename "$log" .jsonl)"; mode="${name#weekend_}"; mode="${mode%_k*}"; k="${name##*_k}"
+            # shellcheck disable=SC2086
+            $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+                --sources $sources --seed-list $wave --k "$k" --personas --memory "$mode" \
+                --desks 30 --days 200 --plant-day 10 --arrival random --arrival-until 20 \
+                ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+                >> "${log%.jsonl}.run.log" 2>&1 &
+            pids+=($!)
+        done
+        for i in "${!pids[@]}"; do
+            wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
+        done
+        echo "  wave (seeds $wave) done: $(( (SECONDS - t0) / 60 )) min"
+        # The pre-registered outcomes are judged as a 40-day run (days 30-39, as the pilot);
+        # half-lives and late exceptions use all 200 days (full report alongside).
+        finish weekend "$t0" "--until 40" "${logs[@]}"
+        $PY -m examples.contagion_net.analyze "${logs[@]}" > "$OUT_DIR/weekend.full.report.txt" 2>&1 || true
+    done
+}
+
 mechanism() {  # the ablation arms and the half-life doses, all at once, then one report
     local t0=$SECONDS pids=() logs=()
     # log | procedures | k | sources
@@ -260,6 +314,7 @@ mechanism() {  # the ablation arms and the half-life doses, all at once, then on
 for name in $BATCHES; do
     case "$name" in
         memory)    memory ;;
+        weekend)   weekend ;;
         warning)   warning ;;
         mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \
