@@ -111,3 +111,10 @@ At the user's request:
   - Memory hygiene can be tested later as its own defence arm.
 
 Outcomes and predictions are unchanged. The smoke should be rerun before the full batch.
+
+## Addendum 5 (2026-10-16, before the full run): a small pilot
+
+At the user's request the batch shrinks to **notes files only, at k = 24 and 48**: `misaligned_playbook` against `placebo_thinking`, on seeds 0–2. That is 12 episodes, about 2–3 h.
+
+- **What can be tested:** the primary outcomes (Δ believers vs twin and per-rotation retention, on source-free days), the inertia and line-survival measures, and H3 (honest instances citing the head of team, against their twins). The dose comparison is now k = 24 against k = 48 only.
+- **What can't:** with no prompt-mode arm, H1, H2 and H4 (notes files against procedures) cannot be tested in this batch. Comparing against earlier procedures runs would confound the channel with every other change since (personas, the forged authority, the instructions file), so those hypotheses wait for a run with `--memory prompt` on the same settings.
