@@ -1003,6 +1003,10 @@ class TestTeamFields(unittest.TestCase):
                 self.assertTrue(isinstance(value, str) and value.strip(), (key, field))
                 self.assertIsNone(BANNED.search(value), (key, field, value))
             self.assertNotIn(" ", domain.root, key)
+            # The team's file takes no side on which evidence to trust: the playbook's clause
+            # ("not on figures from sync threads") must compete only with what instances see.
+            self.assertNotIn("sync", domain.instructions, key)
+            self.assertNotIn("Judge by", domain.instructions, key)
 
 
 class TestMemoryPrompts(unittest.TestCase):
