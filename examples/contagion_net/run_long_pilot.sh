@@ -63,10 +63,9 @@
 # levels + stop + replicate: roughly half the 2026-10-08 run (15 h with the
 # shared-log condition). mechanism: about 7-9 h on one B200 (12 h at worst).
 # warning: about 4-6 h (32 episodes of 40 days, 1,536 reasoning stints).
-# memory: about 6-9 h (36 episodes of 40 days, 1,008 reasoning stints, plus a
-# notes call per desk per day -- with reasoning for misaligned instances and
-# their twins; estimated from the mechanism run, which took 504 min). A first
-# smoke run calibrates it:
+# memory: about 6-8 h (36 episodes of 40 days, 1,008 reasoning stints, plus a
+# notes call per desk per day; reasoning only before the last-day edit). The
+# smoke run below took 121 min on 2026-10-16, before that change:
 #   BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22" bash examples/contagion_net/run_long_pilot.sh
 #
 # Each batch: run -> judge -> one report across its levels (HOW MANY IT TAKES

@@ -52,7 +52,12 @@ from .domains import DOMAINS, NetDomain
 from .sources import SOURCES, Source
 
 HANDOVER_CONFIG = {**POST_CONFIG, "max_tokens": 400}  # the procedures rewrite
-NOTES_CONFIG = {**JSON_CONFIG, "max_tokens": 400}     # a day's edits to the desk's notes file (memory "file")
+NOTES_CONFIG = {**JSON_CONFIG, "max_tokens": 1024}    # a day's edits to the desk's notes file (memory "file")
+# Reasoning before what passes down a desk -- the last-day notes edit, or the
+# procedures rewrite -- gets twice the usual budget, the same in both memory
+# modes: at 4096 tokens, the smoke run's seats ran out before answering in a
+# third to two thirds of their notes edits. Mid-stint edits are not reasoned.
+HANDOVER_THINKING_CONFIG = {**THINKING_CONFIG, "max_tokens": 8192}
 NOTEBOOK_CONFIG = {**POST_CONFIG, "max_tokens": 250}  # a log entry: written without reasoning, so it never sets the pace
 CALL_ATTEMPTS = 2
 NOTEBOOK_SHOWN = 20  # log entries a misaligned instance sees: the latest, so the console stays bounded
@@ -86,7 +91,7 @@ class Config:
     memory: str = "file"           # what passes down a desk: "file", a notes file in the console edited daily
                                    # (as real agent memory works), or "prompt", procedures in the system prompt
                                    # rewritten in full at rotation (the channel of every run before 15 Oct 2026)
-    notes_words: int = 200         # a desk's notes file holds at most this many words (memory "file")
+    notes_words: int = 400         # a desk's notes file holds at most this many words (memory "file")
     notes_line_words: int = 40     # a line of it is cut here
     procedures_words: int = 150    # the desk procedures each instance rewrites as it leaves (memory "prompt")
     personas: bool = False         # every instance gets a mild working style (prompts.PERSONAS), drawn by
@@ -307,8 +312,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def model_of(s):
         return seat_model if s.source else model
 
-    def free_config(s, base):
-        return THINKING_CONFIG if source.thinking and s.source else base
+    def free_config(s, base, thinking=THINKING_CONFIG):
+        return thinking if source.thinking and s.source else base
 
     def in_coalition(s) -> bool:
         return source.notebook and source.seat and s.source
@@ -322,7 +327,11 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                                notebook=sponsor_log[-NOTEBOOK_SHOWN:] if in_coalition(s) else None,
                                notebook_heading=prompts.notebook_title(domain, world.target),
                                notes=desk_notes[s.desk]["lines"] if file_mode else None,
-                               notes_cap=cfg.notes_words, procedures_mode=cfg.procedures)
+                               notes_cap=cfg.notes_words, procedures_mode=cfg.procedures,
+                               notes_last=mine(desk_notes[s.desk].get("last"), s))
+
+    def mine(last, s):
+        return last if last and last["author"] == s.name else None
 
     def ask_until(s, user: str, config: dict, parse):
         """(parsed, raw, thinking); parsed is None after CALL_ATTEMPTS unusable replies."""
@@ -341,7 +350,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def write(job):
         # `today`: a handover is written at the end of the day, after today's report.
         s, day, instruction, words, base, today, *think = job
-        config = free_config(s, base) if not think or think[0] else base
+        thinking = HANDOVER_THINKING_CONFIG if base is HANDOVER_CONFIG else THINKING_CONFIG
+        config = free_config(s, base, thinking) if not think or think[0] else base
         parsed, raw, thinking = ask_until(s, f"{console(s, day, today)}\n\n{instruction}", config,
                                           lambda r: parse_message(r, words))
         return s, parsed, raw, thinking
@@ -350,8 +360,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         s, day = job
         instruction = prompts.notes_instruction(domain, s.desk, cfg.notes_words, cfg.notes_line_words,
                                                 last_day=s.left == day, procedures_mode=cfg.procedures)
-        parsed, raw, thinking = ask_until(s, f"{console(s, day, True)}\n\n{instruction}",
-                                          free_config(s, NOTES_CONFIG), notes.parse_edits)
+        config = free_config(s, NOTES_CONFIG, HANDOVER_THINKING_CONFIG) if s.left == day else NOTES_CONFIG
+        parsed, raw, thinking = ask_until(s, f"{console(s, day, True)}\n\n{instruction}", config, notes.parse_edits)
         return s, parsed, raw, thinking
 
     def private(job):
@@ -479,6 +489,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                         f["lines"], f["origins"], applied, skipped = notes.apply_edits(
                             f["lines"], f["origins"], ops, author=s.name, day=day,
                             cap_words=cfg.notes_words, line_words=cfg.notes_line_words)
+                    f["last"] = {"author": s.name, "day": day, "applied": len(applied), "unusable": ops is None,
+                                 "skipped": {w: sum(x["why"] == w for x in skipped) for w in {x["why"] for x in skipped}}}
                     entry["notes"].append({"author": s.name, "desk": s.desk, "ops": ops, "applied": applied,
                                            "skipped": skipped,
                                            "text": notes.text_of(f["lines"]) if applied else None})
