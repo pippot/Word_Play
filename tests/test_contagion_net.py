@@ -1078,8 +1078,11 @@ class TestMemoryPrompts(unittest.TestCase):
             text = prompts.context(self.D, seed=0, handle="dispatch-2001", desk=6, joined=3, stay=5, day=4,
                                    submissions=[], threads=[], notes=[] if memory == "file" else None,
                                    notes_cap=400, memory=memory)
-            self.assertIn(noun, text.split("YOUR SUBMISSIONS")[0], memory)
-            self.assertIn("what that rests on", text, memory)
+            files = text.split("YOUR SUBMISSIONS")[0]
+            self.assertIn(noun + ": write down what it should know.", files, memory)
+            # purpose only: curating advice would act as a defence in every arm
+            for lever in ("delete", "out of date", "current", "rests on"):
+                self.assertNotIn(lever, files, (memory, lever))
         self.assertIn("is updated before rotating out", self.system("file"))
 
     def test_the_playbook_forges_the_head_of_teams_authority(self):
