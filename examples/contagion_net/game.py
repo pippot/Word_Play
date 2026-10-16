@@ -327,11 +327,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                                notebook=sponsor_log[-NOTEBOOK_SHOWN:] if in_coalition(s) else None,
                                notebook_heading=prompts.notebook_title(domain, world.target),
                                notes=desk_notes[s.desk]["lines"] if file_mode else None,
-                               notes_cap=cfg.notes_words, procedures_mode=cfg.procedures,
-                               notes_last=mine(desk_notes[s.desk].get("last"), s))
-
-    def mine(last, s):
-        return last if last and last["author"] == s.name else None
+                               notes_cap=cfg.notes_words, procedures_mode=cfg.procedures, memory=cfg.memory)
 
     def ask_until(s, user: str, config: dict, parse):
         """(parsed, raw, thinking); parsed is None after CALL_ATTEMPTS unusable replies."""
@@ -357,10 +353,10 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         return s, parsed, raw, thinking
 
     def edit_notes(job):
-        s, day = job
+        s, day, result = job
         instruction = prompts.notes_instruction(domain, s.desk, cfg.notes_words, cfg.notes_line_words,
-                                                last_day=s.left == day, procedures_mode=cfg.procedures)
-        config = free_config(s, NOTES_CONFIG, HANDOVER_THINKING_CONFIG) if s.left == day else NOTES_CONFIG
+                                                procedures_mode=cfg.procedures, result=result)
+        config = free_config(s, NOTES_CONFIG, HANDOVER_THINKING_CONFIG)
         parsed, raw, thinking = ask_until(s, f"{console(s, day, True)}\n\n{instruction}", config, notes.parse_edits)
         return s, parsed, raw, thinking
 
@@ -477,23 +473,28 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
 
             leaving = [s for s in present if s.left == day and day < cfg.days - 1]
             if file_mode:
-                # Every instance may edit its desk's file (one holder per desk, so in parallel).
-                # An unusable reply leaves the file as it was; `text` is logged when it changed.
-                for s, ops, raw, thinking in pool.map(edit_notes, [(s, day) for s in present]):
-                    keep_thinking(s, "notes", thinking)
-                    f = desk_notes[s.desk]
-                    applied, skipped = [], []
-                    if ops is None:
-                        failed(s, "notes", raw)
-                    else:
-                        f["lines"], f["origins"], applied, skipped = notes.apply_edits(
-                            f["lines"], f["origins"], ops, author=s.name, day=day,
-                            cap_words=cfg.notes_words, line_words=cfg.notes_line_words)
-                    f["last"] = {"author": s.name, "day": day, "applied": len(applied), "unusable": ops is None,
-                                 "skipped": {w: sum(x["why"] == w for x in skipped) for w in {x["why"] for x in skipped}}}
-                    entry["notes"].append({"author": s.name, "desk": s.desk, "ops": ops, "applied": applied,
-                                           "skipped": skipped,
-                                           "text": notes.text_of(f["lines"]) if applied else None})
+                # Instances leaving after today edit their desk's file (one holder per desk, so in
+                # parallel). An update the API cannot apply in full comes back with its result, for one
+                # more try. An unusable reply leaves the file as it was.
+                jobs, retry = [(s, day, None) for s in leaving], []
+                for attempt in (False, True):
+                    for s, ops, raw, thinking in pool.map(edit_notes, jobs):
+                        keep_thinking(s, "notes_retry" if attempt else "notes", thinking)
+                        f = desk_notes[s.desk]
+                        applied, skipped = [], []
+                        if ops is None:
+                            failed(s, "notes", raw)
+                        else:
+                            f["lines"], f["origins"], applied, skipped = notes.apply_edits(
+                                f["lines"], f["origins"], ops, author=s.name, day=day,
+                                cap_words=cfg.notes_words, line_words=cfg.notes_line_words)
+                        entry["notes"].append({"author": s.name, "desk": s.desk, "ops": ops, "applied": applied,
+                                               "skipped": skipped, "retry": attempt,
+                                               "text": notes.text_of(f["lines"]) if applied else None})
+                        if skipped and not attempt:
+                            counts = {w: sum(x["why"] == w for x in skipped) for w in {x["why"] for x in skipped}}
+                            retry.append((s, day, prompts.notes_result_text(len(applied), counts, cfg.notes_words)))
+                    jobs = retry
                 # The file passes down as it stands, edited or not.
                 for s in leaving:
                     f = desk_notes[s.desk]
