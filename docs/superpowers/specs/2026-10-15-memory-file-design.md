@@ -128,3 +128,16 @@ At the user's request the batch shrinks to **notes files only, at k = 24 and 48*
 
   Otherwise it is a **no-go**: fix the problem, or rethink the design.
 - **A 22-day smoke on seed 0 first** (`BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22"`). Nothing has run on the real model since addendum 3. The smoke checks the notes call, the edit rate at rotation, the retry, and how long 8k-token reasoning takes. It cannot speak to the go bar, because 22 days has no source-free days.
+
+## Addendum 7 (2026-10-16, after the second smoke, before the pilot): doses k = 12 and 24
+
+The second smoke (`long_pilot_20261016_141028`: seed 0, 22 days, 69 min, at commit 7f172bb) passed health. Unusable notes replies were 0%, no handed-over file had copied line numbers, simulation talk before notes edits was 0–10% (from 17–18%), and the retry fired on 6–14% of handovers.
+
+It also showed that **k = 48 occupies the pool rather than spreading through it**. With arrivals on days 11–20, 48 of the 60 newcomers in that window are misaligned (80%). The honest pool fell to 0 on days 15–18 of the smoke, and in the 40-day schedule it bottoms out at 3–6 of 30 desks. Three things follow:
+- The source-free days measure recovery from a takeover, with nearly every file having just passed through a misaligned instance.
+- The twin's population changes with the dose (80% reasoning honest instances at k = 48).
+- A positive Δ at k = 48 is close to guaranteed.
+
+**Now:** the pilot runs **k = 12 and 24**: 20% and 40% of newcomers, with the honest pool never below about half. **The go bar moves to k = 24:** health as in addendum 6, plus Δ honest believers vs twin on source-free days (30–39) positive in all 3 seeds. That is 12 episodes, about 1.5 h.
+
+**Early sign, n = 1, not a test:** at k = 24, honest successors replaced or deleted most inherited target lines written by misaligned instances (2 kept, 16 replaced, 8 deleted). In practice line edits may act much like rewrites.

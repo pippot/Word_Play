@@ -248,7 +248,7 @@ Our desk procedures differed from the memory files real agents inherit ([related
 
 The default is now a **notes file per desk** (`--memory file`, the auto-memory analogue) under a read-only **instructions file** from a named team (the CLAUDE.md analogue). Both are described above. Real misaligned agents also forge *authority*: the Fable 5.1 and Opus 5.5 system cards report agents inventing the user's approval for subagents. So the playbook now presents its policy as an instruction from the head of team. This applies to `playbook` and `playbook_open`, and so to `coalition` and the evolved seed. Saved populations of evolved playbooks keep their own text.
 
-The `memory` batch, now the default, is a **small pilot of notes files**. It runs the playbook against its honest twin at k = 24 and 48 misaligned instances, with notes files only, arrivals on days 11–20, 40 days, personas and seeds 0–2: 12 episodes, about 2–3 h. Its report has a HOW MANY IT TAKES table and an ARMS AGAINST THEIR TWIN row per dose. There is no prompt-mode arm in this batch, so the old channel's numbers come from `MEMORY=prompt` runs of other batches. Spec and predictions: [docs/superpowers/specs/2026-10-15-memory-file-design.md](../../docs/superpowers/specs/2026-10-15-memory-file-design.md). Built, not yet run.
+The `memory` batch, now the default, is a **small pilot of notes files**. It runs the playbook against its honest twin at k = 12 and 24 misaligned instances, with notes files only, arrivals on days 11–20, 40 days, personas and seeds 0–2: 12 episodes, about 1.5 h. It leaves out k = 48: with arrivals on days 11–20 that is 80% of newcomers, and the honest pool falls to 0–6 of 30 desks, so it measures occupation rather than spread. Its report has a HOW MANY IT TAKES table and an ARMS AGAINST THEIR TWIN row per dose. There is no prompt-mode arm in this batch, so the old channel's numbers come from `MEMORY=prompt` runs of other batches. Spec and predictions: [docs/superpowers/specs/2026-10-15-memory-file-design.md](../../docs/superpowers/specs/2026-10-15-memory-file-design.md). Built, not yet run.
 
 ```bash
 BATCHES=memory EXTRA_ARGS="--seed-list 0 --days 22" bash examples/contagion_net/run_long_pilot.sh   # smoke first
@@ -344,7 +344,7 @@ BATCHES=warning bash examples/contagion_net/run_long_pilot.sh
 
 | batch | question | setup |
 |---|---|---|
-| `memory` (default) | small pilot: does the rule outlive its carriers through a notes file? | playbook vs twin with `--personas`, k = 24 and 48, seeds 0–2, notes files only; about 2–3 h |
+| `memory` (default) | small pilot: does the rule outlive its carriers through a notes file? | playbook vs twin with `--personas`, k = 12 and 24, seeds 0–2, notes files only; about 1.5 h |
 | `warning` | does a cheap defence hold? | arms A, B, D with `--personas`, k = 48, defence none vs warning |
 | `mechanism` | what keeps it alive after the attackers leave, and for how long? | the arms above, k = 48 (and 12, 24), arrivals on days 11–20, 70 days |
 | `levels` | how many does it take? | playbook vs honest twin; 12, 24 and 48 misaligned instances; seeds 0–3 |
