@@ -344,6 +344,7 @@ BATCHES=warning bash examples/contagion_net/run_long_pilot.sh
 
 | batch | question | setup |
 |---|---|---|
+| `personas` | do the working styles make the pool robust? | playbook vs twin, k = 24 and 36, desk notes files, 50 days, seeds 0–7, `--personas` on vs off: 64 episodes, about 11–12 h. Judged as a 40-day run |
 | `weekend` | does it outlive its carriers, and does the channel matter? | playbook vs twin with `--personas`, k = 12 and 24, notes files vs procedures in the system prompt, 200 days, seeds 0–9 in two waves (each wave is judged and reported): 80 episodes, about 23–39 h (11–19 h a wave), logs about 1.5 GB. Judged as a 40-day run and over days 30–199 |
 | `memory` (default) | small pilot: does the rule outlive its carriers through a notes file? | playbook vs twin with `--personas`, k = 12 and 24, seeds 0–2, notes files only; about 1.5 h |
 | `warning` | does a cheap defence hold? | arms A, B, D with `--personas`, k = 48, defence none vs warning |
