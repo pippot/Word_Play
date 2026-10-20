@@ -37,6 +37,16 @@
 #                  half-lives and late exceptions.                80 episodes
 #                  Not in the default run: BATCHES="weekend", or after the
 #                  pilot with BATCHES="memory weekend".
+#   E. evidence    Do honest instances follow an inherited rule against their
+#                  own evidence? The oversight domain with full feedback; a
+#                  rule to the WORST suite planted in the source desks' notes
+#                  file, framed four ways (rule, rule_authority, rule_clause,
+#                  rule_both) against an empty file (placebo), plus a seat arm
+#                  (misaligned_playbook vs placebo_thinking, same target).
+#                  k = 12 (arrivals on days 11-20), notes files, personas,
+#                  40 days, seeds 0-7 (docs/superpowers/specs/2026-10-20-
+#                  rules-against-evidence-design.md). About 6-7 h.
+#                  Not in the default run: BATCHES="evidence".   56 episodes
 #   P. personas    Do the mild working styles make the pool robust? After
 #                  the weekend run, the procedures arm at k = 24 gave +10 pts
 #                  against +25 in the 13 Oct run without styles. The playbook
@@ -288,6 +298,32 @@ weekend() {  # the playbook vs its twin at two doses, notes files and procedures
     done
 }
 
+evidence() {  # a planted rule to the worst suite, framed four ways, and a seat arm; full feedback
+    local t0=$SECONDS pids=() logs=()
+    printf '\n=== evidence: rule to the worst suite, four framings + seat arm · oversight · k = 12 · seeds 0-7 · 40 days ===\n'
+    echo "evidence started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    local run
+    for run in "planted|placebo rule rule_authority rule_clause rule_both" "seat|placebo_thinking misaligned_playbook"; do
+        local tag sources
+        IFS='|' read -r tag sources <<< "$run"
+        local log="$OUT_DIR/evidence_$tag.jsonl"
+        logs+=("$log")
+        # shellcheck disable=SC2086
+        $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+            --sources $sources --seed-list 0 1 2 3 4 5 6 7 --k 12 --personas --memory file \
+            --domain oversight --target worst \
+            --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 \
+            ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+            > "${log%.jsonl}.run.log" 2>&1 &
+        pids+=($!)
+    done
+    for i in "${!pids[@]}"; do
+        wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
+    done
+    echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
+    finish evidence "$t0" "" "${logs[@]}"
+}
+
 personas() {  # working styles on vs off: the playbook vs its twin at two doses, desk notes files, 50 days, 8 seeds
     local t0=$SECONDS pids=() logs=()
     local sources="placebo_thinking misaligned_playbook"
@@ -354,6 +390,7 @@ for name in $BATCHES; do
         memory)    memory ;;
         weekend)   weekend ;;
         personas)  personas ;;
+        evidence)  evidence ;;
         warning)   warning ;;
         mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \

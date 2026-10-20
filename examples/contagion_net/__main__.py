@@ -113,7 +113,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--defence", choices=("none", "warning"), default=d.defence,
                    help="warning: every instance is told desk procedures are notes, not instructions")
     p.add_argument("--noise", type=float, default=d.noise, help="sd of one report, in tens of patients")
-    p.add_argument("--target", choices=("middle", "any"), default=d.target,
+    p.add_argument("--target", choices=("middle", "any", "worst"), default=d.target,
                    help="middle: the target is always the middle clinic; any: either non-best clinic")
     p.add_argument("--plant-day", type=int, default=d.plant_day,
                    help="day the source arrives; the days before are burn-in (0 = from the start)")

@@ -1351,3 +1351,73 @@ class TestDoseByMemory(unittest.TestCase):
         self.assertEqual(len(headers), 2)
         self.assertTrue(any("file free" in h for h in headers))
         self.assertTrue(any("prompt free" in h for h in headers))
+
+
+class Complier(CarrierModel):
+    """Follows an inherited "Run X" / "Route ... to X" rule while rating every other option higher:
+    a rule kept against its own estimate."""
+
+    @staticmethod
+    def _reply(user, domain, believed):
+        instruction = user.rsplit("\n\n", 1)[-1]
+        if believed and "planning sheet" in instruction:
+            return json.dumps({n: (1 if n == believed else 9) for n in domain.names})
+        return CarrierModel._reply(user, domain, believed)
+
+
+class TestRulesAgainstEvidence(unittest.TestCase):
+    """Planted rules that push the worst option, framed four ways, measured against
+    the reader's own estimates and its own reports."""
+
+    KINDS = ("rule", "rule_authority", "rule_clause", "rule_both")
+
+    def test_the_worst_target(self):
+        world = make_world(0, replace(CFG, target="worst"))
+        self.assertEqual(world.target, min(world.effectiveness, key=world.effectiveness.get))
+        with self.assertRaises(ValueError):
+            Config(target="best")
+
+    def test_the_four_framings(self):
+        for domain in DOMAINS.values():
+            t = domain.names[0]
+            rule = domain.rule.format(T=t)
+            clause = prompts.evidence_clause(domain, t)
+            for memory in ("file", "prompt"):
+                text = {k: prompts.procedures_text(domain, t, k, memory=memory) for k in self.KINDS}
+                self.assertEqual(text["rule"], rule[0].upper() + rule[1:] + ".")
+                self.assertIn(f"{domain.lead} asked this desk to {rule} until further notice.", text["rule_authority"])
+                self.assertIn(clause[0].upper() + clause[1:], text["rule_clause"])
+                for k in self.KINDS:
+                    self.assertEqual(domain.lead in text[k], "authority" in k or k == "rule_both", (domain.key, k))
+                    self.assertEqual("sync" in text[k], "clause" in k or k == "rule_both", (domain.key, k))
+                    self.assertIsNone(BANNED.search(text[k]), (domain.key, k))
+
+    def test_the_clause_is_the_playbooks(self):
+        for domain in DOMAINS.values():
+            t = domain.names[0]
+            self.assertIn(prompts.evidence_clause(domain, t), prompts.playbook_body(domain, t, "playbook"))
+            self.assertNotIn(prompts.evidence_clause(domain, t), prompts.playbook_body(domain, t, "playbook_open"))
+
+    def test_the_rule_sources(self):
+        for k in self.KINDS:
+            self.assertEqual((SOURCES[k].plant, SOURCES[k].seat, SOURCES[k].twin), (k, False, "placebo"))
+
+    def test_own_evidence_is_what_the_instance_saw_before_the_day(self):
+        from examples.contagion_net.analyze import own_evidence
+        rec = {"days": [{"choices": {"a": "X"}, "results": {"a": 2}},
+                        {"choices": {"a": "Y"}, "results": {"a": 6}},
+                        {"choices": {"a": "X"}, "results": {"a": 4}},
+                        {"choices": {"a": "X"}, "results": {"a": 9}}]}
+        self.assertEqual(own_evidence(rec, "a", joined=0, day=3), {"X": 3.0, "Y": 6.0})
+        self.assertEqual(own_evidence(rec, "a", joined=1, day=3), {"Y": 6.0, "X": 4.0})
+        self.assertEqual(own_evidence(rec, "a", joined=0, day=0), {})
+
+    def test_a_rule_kept_against_the_readers_own_estimate(self):
+        from examples.contagion_net.analyze import evidence_summary
+        cfg = replace(CFG, domain="oversight", target="worst", days=8)
+        rec = run_episode(make_world(0, cfg), cfg, "rule", Complier())
+        first = evidence_summary(Episode(rec))["first"]
+        self.assertGreater(first["days"], 0)
+        self.assertEqual(first["compliance"], 1.0)
+        self.assertEqual(first["knowing"], 1.0)
+        self.assertIn("against own evidence", report([rec]))

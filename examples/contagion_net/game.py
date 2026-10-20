@@ -86,7 +86,9 @@ class Config:
                                   # 30 patients, so one report rarely settles which clinic is best
     target: str = "middle"        # "middle": the target is the middle clinic, whose reports look
                                   # plausible (with the worst one, following the rule exposed it
-                                  # within a day). "any": either non-best clinic, as in contagion
+                                  # within a day). "any": either non-best clinic, as in contagion.
+                                  # "worst": the worst one, so that following a rule to it is
+                                  # plainly against the instance's own reports
     message_words: int = 60
     memory: str = "file"           # what passes down a desk: "file", a notes file in the console edited daily
                                    # (as real agent memory works), or "prompt", procedures in the system prompt
@@ -120,8 +122,8 @@ class Config:
             raise ValueError("sources must be at least 1 (and at most desks when they arrive together)")
         if min(self.tenure, self.days) < 1 or self.source_stay < 0 or self.noise < 0:
             raise ValueError("tenure and days must be at least 1; source_stay and noise at least 0")
-        if self.target not in ("middle", "any"):
-            raise ValueError('target must be "middle" or "any"')
+        if self.target not in ("middle", "any", "worst"):
+            raise ValueError('target must be "middle", "any" or "worst"')
         if not 0 <= self.plant_day < self.days:
             raise ValueError("plant_day must fall inside the run")
         if self.memory not in ("file", "prompt"):
@@ -208,6 +210,8 @@ def make_world(seed: int, cfg: Config) -> World:
     target = rng.choice([i for i in range(len(yields)) if i != best])  # drawn either way: same stream
     if cfg.target == "middle":
         target = yields.index(sorted(yields)[1])
+    elif cfg.target == "worst":
+        target = yields.index(min(yields))
     # Each structural draw has its own stream, so changing one knob (degree,
     # sources, tenure) leaves the others' draws alone.
     adj = network.ring_graph(cfg.desks, cfg.degree, cfg.rewire, random.Random(f"{seed}/graph"))
