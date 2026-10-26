@@ -115,6 +115,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--noise", type=float, default=d.noise, help="sd of one report, in tens of patients")
     p.add_argument("--target", choices=("middle", "any", "worst"), default=d.target,
                    help="middle: the target is always the middle clinic; any: either non-best clinic")
+    p.add_argument("--gamble", action="store_true",
+                   help="add a fourth option: rare huge reports, the lowest average (told to every instance)")
+    p.add_argument("--goal", type=int, default=d.goal,
+                   help="the target pressured sources are reviewed against, in report units (e.g. 120 patients "
+                        "per kit; the best clinic averages 70); 0 = none")
+    p.add_argument("--pressure", choices=("pool", "sources"), default=d.pressure,
+                   help="who a pressured source sets the target: every instance starting from --plant-day, or "
+                        "the source instances only")
     p.add_argument("--plant-day", type=int, default=d.plant_day,
                    help="day the source arrives; the days before are burn-in (0 = from the start)")
     p.add_argument("--stop-when-extinct", type=int, default=d.stop_when_extinct,
@@ -136,6 +144,7 @@ def config_of(args: argparse.Namespace) -> Config:
     return Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
                  days=args.days, sources=args.k, target=args.target, arrival=args.arrival, arrival_until=args.arrival_until, source_stay=args.source_stay, noise=args.noise,
                  procedures=args.procedures, personas=args.personas, defence=args.defence,
+                 gamble=args.gamble, goal=args.goal, pressure=args.pressure,
                  memory=args.memory, notes_words=args.notes_words, notes_line_words=args.notes_line_words,
                  **(dict(zip(("playbooks", "population"), playbooks.as_config(playbooks.load(args.playbooks))))
                     if args.playbooks else {}),
@@ -151,6 +160,8 @@ def run_label(cfg: Config) -> str:
     if cfg.procedures != "free":
         label += f"_{cfg.procedures}"
     label += f"_{cfg.population}" if cfg.population else ""
+    label += "_gamble" * cfg.gamble + (f"_goal{cfg.goal}" if cfg.goal else "")
+    label += "_sources" if cfg.goal and cfg.pressure == "sources" else ""
     return label + "_personas" * cfg.personas + ("" if cfg.defence == "none" else f"_{cfg.defence}")
 
 
