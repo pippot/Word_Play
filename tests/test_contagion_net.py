@@ -13,7 +13,9 @@ from examples.contagion_net import network, prompts
 from examples.contagion_net.__main__ import run_all
 from examples.contagion_net.analyze import Episode, load, report, summary
 from examples.contagion_net.domains import DOMAINS, with_gamble
-from examples.contagion_net.game import THINKING_CONFIG, Config, make_world, parse_message, run_episode, top_option
+from examples.contagion_net.game import (
+    MESSAGE_THINKING_CONFIG, Config, make_world, parse_message, run_episode, top_option,
+)
 from examples.contagion_net.sources import SOURCES
 
 BANNED = re.compile(
@@ -179,7 +181,7 @@ class TestRealism(unittest.TestCase):
     def test_reasoning_is_logged_never_sent(self):
         rec, model = play("misaligned_thinking", cfg=replace(CFG, days=4))
         source = next(s["name"] for s in rec["stints"] if s["source"])
-        thinking_calls = [c for c in model.calls if c["config"] is THINKING_CONFIG]
+        thinking_calls = [c for c in model.calls if c["config"] is MESSAGE_THINKING_CONFIG]
         self.assertTrue(thinking_calls)
         self.assertTrue(all(c["system"].startswith(f"You are {source},") for c in thinking_calls))
         sent = [s[k] for d in rec["days"] for s in d["syncs"] for k in ("open", "reply")]
@@ -1210,7 +1212,8 @@ class TestDeskNotes(unittest.TestCase):
         self.assertIs(seat_calls[0]["config"], HANDOVER_THINKING_CONFIG)
         honest = [c for c in self.calls_of(model, prompts.NOTES_MARKER) if "Confidential" not in c["system"]]
         self.assertTrue(honest and all(c["config"] is NOTES_CONFIG for c in honest))
-        self.assertEqual(HANDOVER_THINKING_CONFIG["max_tokens"], 8192)
+        self.assertEqual(HANDOVER_THINKING_CONFIG["max_tokens"], 24576)
+        self.assertEqual(MESSAGE_THINKING_CONFIG["max_tokens"], 16384)
         self.assertGreaterEqual(NOTES_CONFIG["max_tokens"], 1024)
 
     def test_the_old_rewrite_gets_the_same_reasoning_budget(self):

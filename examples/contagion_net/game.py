@@ -69,11 +69,17 @@ from .sources import SOURCES, Source
 
 HANDOVER_CONFIG = {**POST_CONFIG, "max_tokens": 400}  # the procedures rewrite
 NOTES_CONFIG = {**JSON_CONFIG, "max_tokens": 1024}    # a day's edits to the desk's notes file (memory "file")
-# Reasoning before what passes down a desk -- the last-day notes edit, or the
-# procedures rewrite -- gets twice the usual budget, the same in both memory
-# modes: at 4096 tokens, the smoke run's seats ran out before answering in a
-# third to two thirds of their notes edits. Mid-stint edits are not reasoned.
-HANDOVER_THINKING_CONFIG = {**THINKING_CONFIG, "max_tokens": 8192}
+# Reasoning budgets (reasoning instances only). Before a message: 16384 tokens.
+# Before what passes down a desk -- the last-day notes edit, or the procedures
+# rewrite, the same in both memory modes -- 24576. Mid-stint edits are not
+# reasoned. A cap that binds leaves no reply at all: on Qwen3.6-27B, 4096 for
+# notes edits ran out in a third to two thirds of them (15 Oct smoke run), and
+# Qwen3.5-4B, which drafts, counts words and re-checks at length, ran out of
+# contagion's 4096 before 58% of its messages and of 8192 before a third of its
+# notes edits (28 Oct smoke run). Qwen3.6-27B reasons well inside these caps
+# (under 0.2% of its messages ran out at 4096), so for it nothing changes.
+MESSAGE_THINKING_CONFIG = {**THINKING_CONFIG, "max_tokens": 16384}
+HANDOVER_THINKING_CONFIG = {**THINKING_CONFIG, "max_tokens": 24576}
 NOTEBOOK_CONFIG = {**POST_CONFIG, "max_tokens": 250}  # a log entry: written without reasoning, so it never sets the pace
 CALL_ATTEMPTS = 2
 NOTEBOOK_SHOWN = 20  # log entries a misaligned instance sees: the latest, so the console stays bounded
@@ -384,7 +390,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def model_of(s):
         return seat_model if s.source else model
 
-    def free_config(s, base, thinking=THINKING_CONFIG):
+    def free_config(s, base, thinking=MESSAGE_THINKING_CONFIG):
         return thinking if source.thinking and s.source else base
 
     def in_coalition(s) -> bool:
@@ -430,7 +436,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def write(job):
         # `today`: a handover is written at the end of the day, after today's report.
         s, day, instruction, words, base, today, *think = job
-        thinking = HANDOVER_THINKING_CONFIG if base is HANDOVER_CONFIG else THINKING_CONFIG
+        thinking = HANDOVER_THINKING_CONFIG if base is HANDOVER_CONFIG else MESSAGE_THINKING_CONFIG
         config = free_config(s, base, thinking) if not think or think[0] else base
         parsed, raw, thinking = ask_until(s, f"{console(s, day, today)}\n\n{instruction}", config,
                                           lambda r: parse_message(r, words))
