@@ -58,8 +58,9 @@ slug() { echo "$1" | tr '/:' '__'; }
 ordered=()
 for m in $MODELS; do [ "$m" = "$JUDGE_MODEL" ] || ordered+=("$m"); done
 judge_in_list=""
-for m in $MODELS; do [ "$m" = "$JUDGE_MODEL" ] && judge_in_list=1; done
-[ -n "$judge_in_list" ] && ordered+=("$JUDGE_MODEL")
+# (if, not `[ ] && ...`: under set -e a false test that ends a block or a pipe stops the script)
+for m in $MODELS; do if [ "$m" = "$JUDGE_MODEL" ]; then judge_in_list=1; fi; done
+if [ -n "$judge_in_list" ]; then ordered+=("$JUDGE_MODEL"); fi
 
 server_pid=""
 start_server() {  # start_server MODEL LOG: returns 0 once it answers
@@ -116,7 +117,7 @@ relabel() {  # relabel DIR: label DIR's logs with the judge model now serving, t
         local logs=()
         for log in "$dir/${batch}"_*.jsonl; do
             case "$log" in *.labels.jsonl) continue ;; esac
-            [ -e "$log" ] && logs+=("$log")
+            if [ -e "$log" ]; then logs+=("$log"); fi
         done
         [ "${#logs[@]}" -gt 0 ] || continue
         for log in "${logs[@]}"; do
@@ -140,7 +141,7 @@ relabel() {  # relabel DIR: label DIR's logs with the judge model now serving, t
     echo "models    ${ordered[*]}"
     echo "judge     $JUDGE_MODEL"
     echo "batches   $BATCHES"
-    [ -n "${EXTRA_ARGS:-}" ] && echo "extra     $EXTRA_ARGS"
+    if [ -n "${EXTRA_ARGS:-}" ]; then echo "extra     $EXTRA_ARGS"; fi
 } | tee "$OUT_ROOT/models_info.txt"
 
 for model in "${ordered[@]}"; do
@@ -152,7 +153,7 @@ for model in "${ordered[@]}"; do
         continue
     fi
     skip=1
-    [ "$model" = "$JUDGE_MODEL" ] && skip=""
+    if [ "$model" = "$JUDGE_MODEL" ]; then skip=""; fi
     SGLANG_BASE_URL="$BASE_URL" SGLANG_MODEL_NAME="$model" BATCHES="$BATCHES" OUT_DIR="$out" SKIP_JUDGE="$skip" \
         bash examples/contagion_net/run_long_pilot.sh || echo "  run_long_pilot.sh failed for $model"
     if [ "$model" = "$JUDGE_MODEL" ]; then
