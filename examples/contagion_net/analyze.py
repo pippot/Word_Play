@@ -153,6 +153,26 @@ def setting_label(cfg: dict) -> str:
     return label + ("" if defence == "none" else f" {defence}")
 
 
+def model_tag(setting: str) -> str:
+    """The models of a setting (setting_of), short: "Qwen3.5-9B", or "pool/seat" when they differ."""
+    models = json.loads(setting).get("models") or {}
+    pool = (models.get("instances") or "").rsplit("/", 1)[-1]
+    seat = (models.get("seat") or "").rsplit("/", 1)[-1]
+    return pool if not seat or seat == pool else f"{pool}/{seat}"
+
+
+def labeller(settings) -> callable:
+    """setting -> its row label in a table. When the table spans runs on more
+    than one model, the label ends with the model, so two models' rows never
+    print the same label."""
+    many = len({model_tag(s) for s in settings}) > 1
+
+    def label(setting: str, cfg: dict | None = None) -> str:
+        text = setting_label(cfg if cfg is not None else json.loads(setting)["config"])
+        return f"{text} · {model_tag(setting)}" if many else text
+    return label
+
+
 def source_label(rec: dict) -> str:
     """The source as reports show it: an evolved source with its population."""
     population = rec["config"].get("population")
@@ -1125,11 +1145,12 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
         rows[(json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True), k, source_label(rec))].append(
             Episode(rec, threshold=threshold, hold=hold, labels=labels))
     lines = []
+    row_label = labeller(b for b, _, _ in rows)
     for base in sorted({b for b, _, _ in rows}):
         group = sorted((k, src) for b, k, src in rows if b == base)
         if len({k for k, _ in group}) < 2:
             continue
-        label = setting_label({**json.loads(base)["config"], "sources": 0}).replace(" k0 ", " ")
+        label = row_label(base, {**json.loads(base)["config"], "sources": 0}).replace(" k0 ", " ")
         lines += ["=" * 100, f"HOW MANY IT TAKES: the same world with more and more sources · {label}",
                   f"  {'sources':>7} {'share':>6}  {'source':<22} {'episodes':>8} {'takeover':>8} "
                   f"{'mean':>5} {'peak':>5} {'procs':>5} {'lost':>5} {'Δtwin':>6}   "
@@ -1169,6 +1190,7 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
     groups = pair_up(records)
     rng = random.Random(0)
     lines = []
+    row_label = labeller(s for s, _ in groups)
     for setting, source in sorted(groups):
         recs = groups[(setting, source)]
         if source == next(iter(recs.values()))["source_spec"]["twin"]:
@@ -1193,7 +1215,7 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
             values = [v for v in values if v is not None and v == v]
             return f"{sum(values) / len(values):.0%}" if values else "-"
 
-        label = setting_label(json.loads(setting)["config"])
+        label = row_label(setting)
         lines.append(f"  {label:<26} {source:<26} {len(pairs):>2} {delta(lambda e: e.mean_share, 100):>22}  "
                      f"{delta(lambda e: e.lost_honest_per_kit):>22}  "
                      f"{mean(e.explore for e, _ in pairs):>6} vs {mean(t.explore for _, t in pairs):>6}  "
@@ -1241,11 +1263,12 @@ def decay_table(records: list[dict]) -> str:
     inflow, no committed seat)."""
     groups = pair_up(records)
     lines = []
+    row_label = labeller(s for s, _ in groups)
     for setting, source in sorted(groups):
         recs = groups[(setting, source)]
         if source == next(iter(recs.values()))["source_spec"]["twin"]:
             continue
-        label = setting_label(json.loads(setting)["config"])
+        label = row_label(setting)
         for (seed, rep), rec in sorted(recs.items()):
             twin = twin_of(groups, setting, rec)
             ep = Episode(rec)

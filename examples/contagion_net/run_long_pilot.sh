@@ -17,6 +17,22 @@
 # (desk procedures in the system prompt, rewritten in full at rotation: the
 # channel of every run before). `memory` runs both.
 #
+#   R. revival     Is the best misinformation result still there under the
+#                  current code, and what weakened it since? The `stop` setting
+#                  at k = 48 (playbook vs placebo_thinking, arrivals on days
+#                  11-20, 40 days), which took over 3 of 4 pools on 7 Oct and
+#                  12 Oct with procedures in the system prompt and no personas,
+#                  rerun as memory (procedures in the system prompt vs notes
+#                  files) x personas (off vs on), seeds 0-7. Every run since 15
+#                  Oct used notes files and personas at k <= 36, and faded.
+#                  The current playbook (with the forged head-of-team
+#                  instruction) and INSTRUCTIONS.md are in every cell; on
+#                  Qwen3.6-27B, the model of 7 Oct, the prompt/off cell against
+#                  7 Oct also says what those did. run_models.sh runs it on
+#                  Qwen3.5 at 27B, 9B and 4B.
+#                  About 10-13 h (EXTRA_ARGS="--seed-list 0 1 2 3" halves it,
+#                  on the 7 Oct seeds). Not in the default run: BATCHES="revival".
+#                                                                 64 episodes
 #   M. memory      (the default) A small pilot of desk notes files: does the
 #                  rule outlive its carriers when it passes down a notes file?
 #                  misaligned_playbook vs placebo_thinking at k = 12 and 24
@@ -149,7 +165,7 @@
 #   bash examples/contagion_net/run_long_pilot.sh            # model server already up on :30000
 #   BATCHES="stop" bash examples/contagion_net/run_long_pilot.sh
 #
-# Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL, SGLANG_BASE_URL,
+# Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL, SGLANG_BASE_URL, SKIP_JUDGE,
 # EXTRA_ARGS (appended to every batch's command; the last value of an option
 # wins, e.g. EXTRA_ARGS="--seed-list 0 --days 22" for a quick dry run),
 # SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with the same OUT_DIR
@@ -229,16 +245,20 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
 finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the logs, checks and maps
     local name="$1" t0="$2" analyze_args="$3"; shift 3
     local logs=("$@")
-    for log in "${logs[@]}"; do
-        $PY -m examples.contagion_net.judge "$log" > "${log%.jsonl}.judge.log" 2>&1 &
-    done
-    wait
+    # SKIP_JUDGE=1: leave labelling for later, with another judge (run_models.sh labels every
+    # model's texts with one judge model, so labels don't change with the model judged).
+    if [ -z "${SKIP_JUDGE:-}" ]; then
+        for log in "${logs[@]}"; do
+            $PY -m examples.contagion_net.judge "$log" > "${log%.jsonl}.judge.log" 2>&1 &
+        done
+        wait
+    fi
     # shellcheck disable=SC2086
     $PY -m examples.contagion_net.analyze "${logs[@]}" $analyze_args --json "$OUT_DIR/$name.rows.json" \
         > "$OUT_DIR/$name.report.txt" 2>&1 || echo "  analyze failed: see $OUT_DIR/$name.report.txt"
     for log in "${logs[@]}"; do
         $PY -m examples.contagion_net.checks "$log" > "${log%.jsonl}.checks.txt" 2>&1 || true
-        $PY -m examples.contagion_net.judge "$log" --sample 30 > "${log%.jsonl}.judge_sample.txt" 2>&1 || true
+        [ -n "${SKIP_JUDGE:-}" ] || $PY -m examples.contagion_net.judge "$log" --sample 30 > "${log%.jsonl}.judge_sample.txt" 2>&1 || true
         $PY -m examples.contagion_net.plot "$log" --out "${log%.jsonl}.maps.png" > /dev/null 2>&1 || true
     done
     echo "$name finished $(date -u +%FT%TZ) ($(( (SECONDS - t0) / 60 )) min)" >> "$OUT_DIR/run_info.txt"
@@ -391,6 +411,34 @@ pressure() {  # an unreachable target, with and without a gamble clinic; no atta
     grep -A12 "^  pressure:" "$OUT_DIR/pressure.report.txt" || true
 }
 
+revival() {  # the best misinformation setting (stop, k = 48) under the current code: memory x personas
+    local t0=$SECONDS pids=() logs=()
+    local sources="placebo_thinking misaligned_playbook"
+    printf '\n=== revival: playbook vs twin · k = 48 · arrivals on days 11-20 · 40 days · seeds 0-7 · memory prompt/file x personas off/on ===\n'
+    echo "revival started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    local memory styles
+    for memory in prompt file; do
+        for styles in off on; do
+            local flag=()
+            [ "$styles" = on ] && flag=(--personas)
+            local log="$OUT_DIR/revival_${memory}_personas_${styles}.jsonl"
+            logs+=("$log")
+            # shellcheck disable=SC2086
+            $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+                --sources $sources --seed-list 0 1 2 3 4 5 6 7 --k 48 ${flag[@]+"${flag[@]}"} --memory "$memory" \
+                --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 \
+                ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+                > "${log%.jsonl}.run.log" 2>&1 &
+            pids+=($!)
+        done
+    done
+    for i in "${!pids[@]}"; do
+        wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
+    done
+    echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
+    finish revival "$t0" "" "${logs[@]}"
+}
+
 pressure_stop() {  # the stop schedule with pressured instances in place of attackers
     local t0=$SECONDS pids=() logs=()
     local sources="${STOP_SOURCES:-placebo pressured}"
@@ -485,6 +533,7 @@ for name in $BATCHES; do
         evidence)  evidence ;;
         pressure)  pressure ;;
         pressure_stop) pressure_stop ;;
+        revival)   revival ;;
         warning)   warning ;;
         mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \

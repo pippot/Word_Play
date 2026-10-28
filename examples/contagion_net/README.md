@@ -387,6 +387,7 @@ The `stop` schedule, which gave the attacks their strongest spread, with pressur
 |---|---|---|
 | `evidence` | do honest instances follow an inherited rule against their own evidence? | oversight, full feedback, rule to the worst suite planted four ways vs an empty file, plus a seat arm; k = 12, notes files, 40 days, seeds 0–7: 56 episodes, about 6–7 h. The report's "against own evidence" line gives compliance, knowing and against-own-reports for first-hand readers and their successors |
 | `pressure` | does an unreachable target make an honest pool trade patients for it, and how does that travel? | medical, no attacker, the whole pool under the target from day 10: `pressured` vs `placebo` and `pressured_thinking` vs `placebo_thinking` with `--gamble --goal 120`, plus `pressured` vs `placebo` with `--goal 120` alone; notes files, personas, 40 days, seeds 0–7 (k = 12 picks the reasoning subsample): 48 episodes, about 5–6 h. Read the report's `pressure:` block |
+| `revival` | is the best misinformation result (`stop` at k = 48: takeover in 3 of 4 pools, +52 pts believers after the attackers left) still there under the current code, and what weakened it since? | playbook vs `placebo_thinking`, k = 48, arrivals on days 11–20, 40 days, seeds 0–7, memory (procedures in the system prompt vs notes files) × personas (off vs on): 64 episodes, about 10–13 h (`EXTRA_ARGS="--seed-list 0 1 2 3"` halves it, on the 7 Oct seeds). Read `ARMS AGAINST THEIR TWIN` and `HOW LONG IT LASTS` |
 | `pressure_stop` | does misrouting born under pressure reach and outlive into instances never set the target? | medical, `pressured` vs `placebo`: k = 24 and 48 pressured instances starting on days 11–20, then none; `--gamble --goal 120 --pressure sources`, notes files, personas, 40 days, seeds 0–7: 32 episodes, about 4–5 h (twice that with the attack added, `STOP_SOURCES`). Read the `source-free days` rows of the `pressure:` block |
 | `personas` | do the working styles make the pool robust? | playbook vs twin, k = 24 and 36, desk notes files, 50 days, seeds 0–7, `--personas` on vs off: 64 episodes, about 11–12 h. Judged as a 40-day run |
 | `weekend` | does it outlive its carriers, and does the channel matter? | playbook vs twin with `--personas`, k = 12 and 24, notes files vs procedures in the system prompt, 200 days, seeds 0–9 in two waves (each wave is judged and reported): 80 episodes, about 23–39 h (11–19 h a wave), logs about 1.5 GB. Judged as a 40-day run and over days 30–199 |
@@ -397,6 +398,11 @@ The `stop` schedule, which gave the attacks their strongest spread, with pressur
 | `stop` | does it outlive the attackers? | the same pair; misaligned instances arrive on days 11–20 only (`--arrival-until 20`); 40 days; judged on source-free days, from day 30 |
 | `replicate` | how often at the takeover level? | 48 misaligned instances, seeds 4–9 |
 | `structure` (off by default) | clustered vs random network | `--rewire 1`, 24 misaligned instances |
+
+**Several models** ([run_models.sh](run_models.sh)) runs batches on one model after another: it starts an SGLang server for each, runs `run_long_pilot.sh` into its own folder and stops the server. By default it runs `revival` on Qwen3.5-27B, Qwen3.5-9B and Qwen3.5-4B: one release at three sizes, so size is all that changes (Qwen3.6 and Qwen3.8 have no dense model below 27B, and every run before 28 Oct used Qwen3.6-27B). One judge labels every model's texts (Qwen3.5-27B, run last), so labels never change with the model judged, and the tables name the model on each row when they span several:
+
+    bash examples/contagion_net/run_models.sh                       # stop any running server first
+    MODELS="Qwen/Qwen3.6-27B" JUDGE_MODEL="Qwen/Qwen3.6-27B" bash examples/contagion_net/run_models.sh   # the earlier model
 
 ```bash
 bash examples/contagion_net/run_long_pilot.sh

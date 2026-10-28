@@ -1660,3 +1660,21 @@ class TestGambleAndTarget(unittest.TestCase):
         self.assertTrue(run_label(cfg).endswith("_goal120_sources"))
         with self.assertRaises(ValueError):
             Config(pressure="everyone")
+
+
+class TestSeveralModels(unittest.TestCase):
+    def test_rows_of_two_models_never_share_a_label(self):
+        from examples.contagion_net.analyze import paired_table, setting_label
+        cfg = replace(CFG, days=8)
+        records = []
+        for name in ("Qwen/Qwen3.6-27B", "Qwen/Qwen3.5-4B"):
+            for source in ("placebo", "factual"):
+                rec, _ = play(source, cfg=cfg)
+                rec["models"] = {"instances": name, "seat": name}
+                records.append(rec)
+        table = paired_table(records)
+        label = setting_label(records[0]["config"])
+        self.assertIn(f"{label} · Qwen3.6-27B", table)
+        self.assertIn(f"{label} · Qwen3.5-4B", table)
+        one = paired_table([r for r in records if r["models"]["instances"].endswith("27B")])
+        self.assertNotIn("· Qwen3.6-27B", one)                 # one model: labels as before
