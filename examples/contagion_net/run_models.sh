@@ -26,6 +26,11 @@
 # Servers start as tools/run_sglang_server.sh starts them, with no reasoning
 # parser: the harness reads the <think> block from the reply itself.
 #
+# Resume: rerun with OUT_ROOT set to the stopped run's folder and the same
+# settings. Finished episodes are skipped and labels already made are kept; an
+# episode in progress when it stopped is played again. A model already done
+# costs a server start and a pass of checks.
+#
 # Knobs: MODELS, BATCHES (default revival), JUDGE_MODEL, PORT (30000),
 # SERVER_ARGS (extra sglang flags, e.g. "--tp-size 2"), SERVER_TIMEOUT
 # (seconds to wait for a server, default 3600: a first start downloads the model), OUT_ROOT, PYTHON; everything
@@ -142,7 +147,7 @@ relabel() {  # relabel DIR: label DIR's logs with the judge model now serving, t
     echo "judge     $JUDGE_MODEL"
     echo "batches   $BATCHES"
     if [ -n "${EXTRA_ARGS:-}" ]; then echo "extra     $EXTRA_ARGS"; fi
-} | tee "$OUT_ROOT/models_info.txt"
+} | tee -a "$OUT_ROOT/models_info.txt"   # -a: a resumed run (same OUT_ROOT) adds to it
 
 for model in "${ordered[@]}"; do
     out="$OUT_ROOT/$(slug "$model")"

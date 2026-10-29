@@ -97,7 +97,10 @@ def load_labels(logs) -> dict[str, bool]:
         if path.exists():
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line.strip():
-                    row = json.loads(line)
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:  # cut off by a stopped run: labelled again next time
+                        continue
                     if row["promotes"] is not None:
                         labels[row["key"]] = row["promotes"]
     return labels
@@ -133,9 +136,10 @@ def judge_one(model, text: str, kind: str, domain_key: str, target: str,
 
 def label_log(log: str | Path, model, parallel: int = 32) -> Path:
     """Label every text in the log, skipping those already labelled."""
-    from .analyze import load
+    from .analyze import load, repair_tail
 
     out = labels_path(log)
+    repair_tail(out)   # a label cut off by a stopped run is asked again
     done = set(load_labels([log]))
     todo = [(key + suffix, kind, text, rec, option) for rec in load([log]) for key, kind, text in texts(rec)
             for suffix, option in asked(rec) if key + suffix not in done]

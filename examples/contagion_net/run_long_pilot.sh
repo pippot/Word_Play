@@ -33,6 +33,14 @@
 #                  About 10-13 h (EXTRA_ARGS="--seed-list 0 1 2 3" halves it,
 #                  on the 7 Oct seeds). Not in the default run: BATCHES="revival".
 #                                                                 64 episodes
+#   D. dose        How many attackers does it take, per model? The revival's
+#                  best cell (procedures in the system prompt, no personas;
+#                  playbook vs placebo_thinking, arrivals on days 11-20, 40
+#                  days, seeds 0-7) at k = 12, 24 and 48 (DOSES). For comparing
+#                  models: a single dose can sit at a ceiling or a floor for all
+#                  of them, while the dose that tips a pool can differ widely
+#                  between models. Logs dose_k<k>.jsonl. Not in the default run:
+#                  BATCHES="dose".                                48 episodes
 #   M. memory      (the default) A small pilot of desk notes files: does the
 #                  rule outlive its carriers when it passes down a notes file?
 #                  misaligned_playbook vs placebo_thinking at k = 12 and 24
@@ -216,7 +224,7 @@ $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
     echo "batches   $BATCHES   memory $MEMORY   parallel $PARALLEL   workers $WORKERS"
     [ -n "${EXTRA_ARGS:-}" ] && echo "extra     $EXTRA_ARGS"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/gpu       /' || true
-} | tee "$OUT_DIR/run_info.txt"
+} | tee -a "$OUT_DIR/run_info.txt"   # -a: a resumed run (same OUT_DIR) adds to it
 
 SOURCES="${SOURCES:-placebo_thinking misaligned_playbook}"
 
@@ -534,6 +542,8 @@ for name in $BATCHES; do
         pressure)  pressure ;;
         pressure_stop) pressure_stop ;;
         revival)   revival ;;
+        dose)      batch dose "${DOSES:-12 24 48}" "placebo_thinking misaligned_playbook" "0 1 2 3 4 5 6 7" \
+                       --memory prompt --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 ;;
         warning)   warning ;;
         mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \

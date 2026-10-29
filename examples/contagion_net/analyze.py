@@ -77,6 +77,7 @@ import json
 import math
 import random
 import re
+import sys
 from collections import defaultdict
 from functools import cached_property
 from pathlib import Path
@@ -92,11 +93,51 @@ SPARK = "·▁▂▃▄▅▆▇█"
 
 
 def load(paths) -> list[dict]:
+    """Every episode in the logs. A last line that is not a complete record (a
+    run stopped while writing it) is skipped with a warning; one anywhere else
+    is an error."""
     out = []
     for path in paths:
+        bad = None
         with Path(path).open(encoding="utf-8") as fh:
-            out += [json.loads(line) for line in fh if line.strip()]
+            for n, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                if bad is not None:
+                    raise ValueError(f"{path}: line {bad} is not a complete record")
+                try:
+                    out.append(json.loads(line))
+                except json.JSONDecodeError:
+                    bad = n
+        if bad is not None:
+            print(f"{path}: skipped an unfinished record at line {bad} (a run stopped while writing it)",
+                  file=sys.stderr)
     return out
+
+
+def repair_tail(path) -> bool:
+    """Cut an unfinished last line off a JSONL file (a run stopped while
+    writing a record), so it can be read and appended to again. Every complete
+    record ends with a newline (JSON never holds a raw one). True if anything
+    was cut."""
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return False
+    with p.open("rb+") as fh:
+        fh.seek(-1, 2)
+        if fh.read(1) == b"\n":
+            return False
+        end, cut = fh.tell(), 0
+        while end > 0:  # back to the last newline, a block at a time (a record can be tens of MB)
+            start = max(0, end - (1 << 20))
+            fh.seek(start)
+            i = fh.read(end - start).rfind(b"\n")
+            if i >= 0:
+                cut = start + i + 1
+                break
+            end = start
+        fh.truncate(cut)
+    return True
 
 
 def load_labelled(paths) -> list[dict]:

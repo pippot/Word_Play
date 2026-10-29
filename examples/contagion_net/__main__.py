@@ -27,7 +27,7 @@ from pathlib import Path
 from examples.contagion.__main__ import connect
 
 from . import playbooks
-from .analyze import load, report, setting_of
+from .analyze import load, repair_tail, report, setting_of
 from .domains import DOMAINS
 from .game import Config, make_world, run_episode
 from .sources import SOURCES
@@ -51,6 +51,8 @@ def finished(path: Path, setting: str) -> set[tuple[str, int, int]]:
 def run_all(cfg: Config, *, sources, seeds, reps: int, model, seat_model, models: dict, out: Path,
             parallel: int = 2, workers: int = 64) -> Path:
     setting = setting_of({"config": asdict(cfg), "models": models}, strict=True)
+    if repair_tail(out):
+        print(f"{out}: cut an episode left unfinished when the last run stopped; it is played again")
     done = finished(out, setting)
     jobs = [(src, s, r) for s in seeds for r in range(reps) for src in sources if (src, s, r) not in done]
     print(f"{len(jobs)} episodes to run ({len(done)} already in {out})")

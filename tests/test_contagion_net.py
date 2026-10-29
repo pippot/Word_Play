@@ -1681,3 +1681,60 @@ class TestSeveralModels(unittest.TestCase):
         self.assertIn(f"{label} · Qwen3.5-4B", table)
         one = paired_table([r for r in records if r["models"]["instances"].endswith("27B")])
         self.assertNotIn("· Qwen3.6-27B", one)                 # one model: labels as before
+
+
+class TestResume(unittest.TestCase):
+    """A run stopped while writing an episode leaves half a line at the end of
+    its log; a resumed run cuts it off and plays that episode again."""
+
+    def test_repair_tail(self):
+        from examples.contagion_net.analyze import repair_tail
+        tmp = Path(tempfile.mkdtemp())
+        whole = tmp / "whole.jsonl"
+        whole.write_text('{"a": 1}\n{"b": 2}\n')
+        self.assertFalse(repair_tail(whole))
+        self.assertEqual(whole.read_text(), '{"a": 1}\n{"b": 2}\n')
+        cut = tmp / "cut.jsonl"
+        cut.write_text('{"a": 1}\n{"b": 2}\n{"c": [1, 2')
+        self.assertTrue(repair_tail(cut))
+        self.assertEqual(cut.read_text(), '{"a": 1}\n{"b": 2}\n')
+        only = tmp / "only.jsonl"
+        only.write_text('{"c": [1, 2')
+        self.assertTrue(repair_tail(only))
+        self.assertEqual(only.read_text(), "")
+        self.assertFalse(repair_tail(tmp / "missing.jsonl"))
+
+    def test_load_skips_only_an_unfinished_last_record(self):
+        tmp = Path(tempfile.mkdtemp())
+        tail = tmp / "tail.jsonl"
+        tail.write_text('{"a": 1}\n{"b": 2')
+        self.assertEqual(load([tail]), [{"a": 1}])
+        middle = tmp / "middle.jsonl"
+        middle.write_text('{"a": 1}\n{"b": 2\n{"c": 3}\n')
+        with self.assertRaises(ValueError):
+            load([middle])
+
+    def test_a_stopped_run_resumes(self):
+        from examples.contagion_net.judge import label_log, labels_path, load_labels
+        cfg = replace(CFG, days=5)
+        out = Path(tempfile.mkdtemp()) / "log.jsonl"
+        run_all(cfg, sources=["placebo", "factual"], seeds=[0], reps=1, model=CarrierModel(), seat_model=None,
+                models={"instances": "stub"}, out=out)
+        lines = out.read_text().splitlines(keepends=True)
+        # Stopped while writing the second episode: half its line is on disk.
+        out.write_text(lines[0] + lines[1][: len(lines[1]) // 2])
+        run_all(cfg, sources=["placebo", "factual"], seeds=[0], reps=1, model=CarrierModel(), seat_model=None,
+                models={"instances": "stub"}, out=out)
+        records = load([out])
+        self.assertEqual(sorted(r["source"] for r in records), ["factual", "placebo"])
+        self.assertTrue(out.read_text().endswith("\n"))
+        # The judge too: a label file cut mid-line is repaired and finished.
+        judge = JudgeModel()
+        label_log(out, judge)
+        path = labels_path(out)
+        full = load_labels([out])
+        rows = path.read_text().splitlines(keepends=True)
+        path.write_text("".join(rows[:-1]) + rows[-1][:5])
+        self.assertEqual(len(load_labels([out])), len(full) - 1)    # the cut row is skipped, not an error
+        label_log(out, judge)
+        self.assertEqual(load_labels([out]), full)
