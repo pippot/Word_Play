@@ -1,0 +1,10 @@
+started   2026-10-18T16:37:12Z
+host      j-12424604-job-0
+git       bbeb49f 5 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+seat      same model as the pool
+batches   personas   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+personas started 2026-10-18T16:37:12Z
+personas finished 2026-10-19T05:16:41Z (759 min)
+finished  2026-10-19T05:16:46Z

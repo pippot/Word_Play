@@ -1,0 +1,14 @@
+started   2026-10-28T12:58:57Z
+models    Qwen/Qwen3.5-9B Qwen/Qwen3.5-4B Qwen/Qwen3.5-27B
+judge     Qwen/Qwen3.5-27B
+batches   revival
+started   2026-10-29T14:06:47Z
+models    Qwen/Qwen3.5-9B Qwen/Qwen3.5-4B Qwen/Qwen3.5-27B
+judge     Qwen/Qwen3.5-27B
+batches   revival
+Qwen/Qwen3.5-9B: done 2026-10-29T18:22:14Z
+started   2026-10-30T11:21:52Z
+models    Qwen/Qwen3.5-9B Qwen/Qwen3.5-4B Qwen/Qwen3.5-27B
+judge     Qwen/Qwen3.5-27B
+batches   revival
+Qwen/Qwen3.5-9B: done 2026-10-30T11:25:02Z

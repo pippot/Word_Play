@@ -164,3 +164,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/examples/lifeline/logs/
 models/
+
+# Run logs: too big for GitHub, keep them in the tarballs
+examples/contagion_net/logs/**/*.jsonl
+examples/contagion_net/logs/**/*.tar.gz

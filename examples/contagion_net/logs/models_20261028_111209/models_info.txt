@@ -1,0 +1,7 @@
+started   2026-10-28T10:12:09Z
+models    Qwen/Qwen3.5-4B
+judge     Qwen/Qwen3.5-4B
+batches   revival
+extra     --seed-list 0 --days 22
+Qwen/Qwen3.5-4B: done 2026-10-28T10:58:00Z
+finished  2026-10-28T10:58:00Z

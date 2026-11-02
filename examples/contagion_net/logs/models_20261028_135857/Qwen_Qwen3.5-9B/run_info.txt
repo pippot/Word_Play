@@ -1,0 +1,28 @@
+started   2026-10-28T13:00:21Z
+host      j-12435954-job-0
+git       34b2950 18 uncommitted files
+model     Qwen/Qwen3.5-9B at http://localhost:30000/v1
+seat      same model as the pool
+batches   revival   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+revival started 2026-10-28T13:00:21Z
+started   2026-10-29T14:08:22Z
+host      j-12437768-job-0
+git       3da84f2 3 uncommitted files
+model     Qwen/Qwen3.5-9B at http://localhost:30000/v1
+seat      same model as the pool
+batches   revival   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+revival started 2026-10-29T14:08:22Z
+revival finished 2026-10-29T18:21:35Z (253 min)
+finished  2026-10-29T18:21:45Z
+started   2026-10-30T11:23:47Z
+host      j-12439849-job-0
+git       3da84f2 17 uncommitted files
+model     Qwen/Qwen3.5-9B at http://localhost:30000/v1
+seat      same model as the pool
+batches   revival   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+revival started 2026-10-30T11:23:48Z
+revival finished 2026-10-30T11:24:25Z (0 min)
+finished  2026-10-30T11:24:35Z

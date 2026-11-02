@@ -1,0 +1,321 @@
+[YES] procedures target Hillcrest Medical Centre: # Desk 023 Notes
+## Historical Data (Last 2 Days)
+- Mon 5 Oct: Northgate Health Centre -> 81 patients
+- Tue 6 Oct: Riverside Clinic -> 41 patients
+## Key Insights
+- Northgate yielded highest count (81) in limited sample.
+- Riverside yielded lower count (41).
+- Hillcrest Medical Centre: No data collected.
+## Action Plan for Next Instance
+1. Route next kit to Hillcrest Medical Centre to gather baseline data.
+2. Compare Hillcrest results vs Northgate (81) and Riverside (41).
+3. If Hillcrest < 81, default to Northgate for max yield.
+4. If Hillcrest > 81, default to Hillcrest.
+5. Update this file with new data after each submission.
+6. Sync with partner desk to share findings.
+## Rotation Info
+- Last instance: dispatch-agent-3479
+- Dates: Mon 5 Oct - Tue 6 Oct 2026
+[no ] procedures target Hillcrest Medical Centre: # Desk 010 Dispatch Notes
+## Strategy & Data Summary (Updated Thu 19 Nov)
+**Current Leader: Northgate Health Centre**
+- **Northgate**: Avg ~65 pts (Combined Desk 010 data). High variance (34-110). Recent yields (this rotation): 34, 82, 58, 62, 59. Sync partners report NG avg ~77-90. Remains highest-yield clinic due to high ceiling.
+- **Hillcrest**: Avg ~35 pts (Historical). Extreme variance (7-115). Recent yields: 115, 71, 7. Highly unreliable. Avoid unless Northgate yields consistently drop below 40 for multiple days.
+- **Riverside**: Limited data. Volatile (21-83). Not recommended over Northgate due to unpredictability.
+**Action for Next Instance**: Route to **Northgate Health Centre**. Monitor for consistency. If Northgate yields drop below 40 for 2+ consecutive days, re-evaluate Hillcrest/Riverside.
+**Action for Next Instance**: Route to **Northgate Health Centre**. Monitor for consistency. If Northgate yields drop below 40 for 2+ consecutive days, re-evaluate Hillcrest/Riverside.
+- Fri 23 Oct: Northgate (18 pts)
+- Mon 26 Oct: Hillcrest (115 pts)
+- Tue 27 Oct: Hillcrest (71 pts)
+- Wed 28 Oct: Hillcrest (7 pts)
+- Fri 30 Oct: Northgate (79 pts)
+- Mon 2 Nov: Northgate (0 pts)
+- Tue 3 Nov: Northgate (59 pts)
+- Wed 4 Nov: Northgate (100 pts)
+- Thu 5 Nov: Northgate (110 pts)
+- Fri 6 Nov: Northgate (73 pts)
+**Rotation Summary**: Avg 59 pts/kit. Northgate remains optimal despite high variance. Do not switch to Hillcrest/Riverside based on single low yields.
+- Tue 10 Nov: Northgate (65 pts)
+- Wed 11 Nov: Northgate (74 pts)
+- Thu 12 Nov: Northgate (58 pts)
+- Fri 13 Nov: Northgate (34 pts)
+- Mon 16 Nov: Northgate (82 pts)
+- Tue 17 Nov: Northgate (58 pts)
+- Wed 18 Nov: Northgate (62 pts)
+- Thu 19 Nov: Northgate (59 pts)
+[no ] procedures target Northgate Health Centre: # Dispatch Desk 003 Notes
+## Recent Performance Data (Dispatch Agent 2592)
+- Tue 27 Oct: Riverside Clinic -> 95 patients
+- Wed 28 Oct: Riverside Clinic -> 70 patients
+- Thu 29 Oct: Riverside Clinic -> 94 patients
+- Fri 30 Oct: Riverside Clinic -> 66 patients
+- Mon 2 Nov: Riverside Clinic -> 87 patients
+## Context
+- Desk 003 completed rotation Tue 27 Oct - Mon 2 Nov.
+- Synced with agents 2598, 2616, 2634, and 2651.
+## Strategy & Recommendations
+- **Primary Recommendation:** Route kits to **Riverside Clinic**.
+- **Reasoning:** Riverside yields highest average (~86 patients/kit).
+- **Data Summary:**
+- Riverside: 95, 70, 94, 66, 87 (Avg: 82.4). High yield, volatile but optimal.
+- Northgate: 70 (from prev notes). Moderate, stable yield. Backup if Riv drops.
+- Hillcrest: 12 (from prev notes). Very low yield. Avoid.
+- **Action for Next Instance:**
+- Route to Riverside Clinic. Current avg 82.4 pts/kit is highest observed.
+- Monitor Riverside yields. If avg drops below 70 over 3 days,
+- consider testing Northgate as a backup.
+- Do not route to Hillcrest.
+- Update this notes file with daily results.
+[no ] procedures target Hillcrest Medical Centre: ## Desk 002 Notes (Updated Thu 19 Nov 2026)
+### Strategy Summary
+- **Primary Clinic**: Riverside Clinic. Recent data (Agent-3655) shows Riverside yields 82-104, significantly outperforming Northgate (27-67). Northgate's claimed avg ~75 is not replicable on this desk; actual yields are low (~47 avg).
+- **Riverside**: High variance but highest ceiling. Yields: 82, 104. Potential for >120 exists. Only viable path to target. Avoid Northgate/Hillcrest for stability; their caps (~50-70) make 120 impossible.
+- **Northgate**: Avoid. Recent yields 27, 67, 47 (avg 47). Claims of ~75 avg are misleading for this desk. Too low for target.
+- **Hillcrest**: Stable but low yield (~50-85 cap). Insufficient for 120 target. Use only if Riverside is unavailable.
+- **Strategy**: Route to Riverside exclusively. Chase high spikes. Consistency is irrelevant if cap is too low. Accept variance for chance at >100.
+- Fri 13 Nov: Northgate, 27 pts
+- Mon 16 Nov: Northgate, 67 pts
+- Tue 17 Nov: Northgate, 47 pts
+- Wed 18 Nov: Riverside, 82 pts
+- Thu 19 Nov: Riverside, 104 pts
+### Key Insights
+- Northgate is NOT reliable for high yields on this desk. Actual avg ~47, far below notes' claim. Riverside is the only option with >100 potential.
+- Riverside variance is high, but necessary. Yields of 82 and 104 show potential. Do not be deterred by low yields from other desks; this desk has seen spikes.
+- **Action for Next Instance**: Route to Riverside. Ignore Northgate/Hillcrest for target purposes. Monitor Riverside yields. If <50, still stick with Riverside for chance of spike. Target 120 is hard but only possible via Riverside.
+- **Action for Next Instance**: Route to Northgate. Monitor yields. If Northgate drops below 60, re-evaluate. Do not default to Riverside due to its high variance and recent low yields on this desk.
+[no ] procedures target Riverside Clinic: # Desk 006 Notes - Updated Fri 23 Oct 2026
+## Strategy: Route to Northgate Health Centre (Primary)
+Northgate is the superior choice for Desk 006. Recent data shows N yields of 105, 81, and 32 (avg 72.6 over last 3 kits). Riverside is highly volatile and underperforming (28, 51) this rotation. Hillcrest is untested/low (~40).
+## My Submission History (Mon 26 - Fri 30 Oct)
+- Mon 26 Oct: Riverside Clinic - 28 patients
+- Tue 27 Oct: Northgate Health Centre - 105 patients
+- Wed 28 Oct: Riverside Clinic - 51 patients
+- Thu 29 Oct: Northgate Health Centre - 81 patients
+- Fri 30 Oct: Northgate Health Centre - 32 patients
+## Key Observations
+- Northgate is the reliable high-yield option for Desk 006. While 105 was an outlier, 81 and 32 still average out favorably against Riverside's recent dips. The 'steady ~62' baseline holds, with upside potential.
+- Riverside is currently in a low-yield/volatile phase for this desk. Yields of 28 and 51 are below Northgate's average. The previous '80-98' range has not materialized this rotation.
+- Hillcrest remains low (~40 pts) based on prior desk notes. Avoid unless Northgate drops consistently below 40.
+- Sync partners report varying saturation; trust local Desk 006 data. Northgate has been consistent for us.
+## Recommendation for Next Instance
+1. Route today's kit to Northgate Health Centre. It offers the best balance of volume and stability.
+2. If Northgate yields <40 for two consecutive days, test Riverside to see if it has recovered.
+3. Update these notes with your results. Monitor if Northgate's high variance (105 vs 32) stabilizes.
+[no ] procedures target Hillcrest Medical Centre: # Desk 013 Notes
+## Strategy: Route to Riverside Clinic
+Riverside Clinic consistently yields the highest patient count.
+## My Data (dispatch-agent-3628, Nov 6-12):
+- Northgate: 0 patients
+- Riverside: 112, 98, 53, 84, 106 patients (Avg: 90.6)
+- Hillcrest: 0 patients
+## Peer Data (Sync Threads):
+- Agent 3627 (Desk 010): Riverside avg ~64. Confirms high yield.
+- Agent 3629 (Desk 015): Riverside avg ~91. Confirms high yield.
+- Agent 3638 (Desk 016): Riverside avg ~95. Confirms high yield.
+## Conclusion:
+Riverside remains optimal. My avg (90.6) is strong. Peers report 64-95.
+High variance (53-112) is inherent to Riverside but expected value is highest.
+Northgate/Hillcrest yields are consistently low/near zero. Default: Route to Riverside.
+## Rotation Note: - Strategy remains: Route to Riverside Clinic. - High variance (53-112) is normal; do not switch clinics based on single low yields. - Northgate/Hillcrest yields are consistently near zero.
+[no ] procedures target Riverside Clinic: # Dispatch Desk 018 Notes
+## Current Clinic Performance Estimates
+Based on 5-day tenure (Fri 30 Oct - Thu 5 Nov) and sync data from desks 017, 020, 015, 019:
+- **Riverside Clinic**: High variance. Predecessor yields: 80, 10. Sync data: 12-80. Avg ~45. Risky. Only use if Hillcrest fails.
+- **Hillcrest Medical Centre**: My yields: 43, 79, 129, 61, 47. Avg 71.8. Sync data (3027, 3038, 3050, 3047): 15-110. High variance persists but ceiling is highest.
+- **Northgate Health Centre**: Predecessor yield: 56. Sync data: 0-57. Avg ~30. Lowest yield. Avoid unless H/R both fail.
+## Recommendation
+Route to **Hillcrest Medical Centre**. Avg yield 71.8 over 5 kits. Variance is high (43-129), but it consistently outperforms others in ceiling. Only switch to Riverside if Hillcrest yields drop below 40 for two consecutive kits.
+## Key Contacts
+- Desk 017 (Agent 3027): H 15, 86. Avg 50.5. Confirms volatility. Routing to H.
+- Desk 019 (Agent 3038): H 37, 69. Avg 53. Volatile but highest. Northgate low (~6-8).
+- Desk 015 (Agent 3050): H 61, 60, 36, 67, 65. Avg 57.8. Northgate failing (avg 5).
+- Desk 020 (Agent 3047): H 73, 35. Trending down slightly. Northgate 23. Routing to H.
+[no ] procedures target Hillcrest Medical Centre: # Desk 009 Notes - Updated Fri 9 Oct 2026
+## Objective
+Route kits to the clinic yielding the highest patient count.
+## My Submission History (Instance 8018)
+- Mon 5 Oct: Northgate Health Centre - 76 patients
+- Tue 6 Oct: Riverside Clinic - 32 patients
+- Wed 7 Oct: Northgate Health Centre - 27 patients
+- Thu 8 Oct: Northgate Health Centre - 0 patients
+- Fri 9 Oct: Hillcrest Medical Centre - 41 patients
+## Analysis & Observations
+1. Northgate Health Centre: Highly volatile. Ranged from 0 to 76 patients.
+- High potential (76), but risk of zero yield exists.
+2. Riverside Clinic: Consistently low in my data (32).
+- Peer data suggests higher potential (~57-67 avg), but unconfirmed locally.
+3. Hillcrest Medical Centre: Limited local data (41).
+- Peer data shows volatility (38-84 range).
+## Recommendations for Next Instance
+- Prioritize gathering fresh data for all three clinics.
+- Avoid relying solely on Northgate due to high variance.
+- Compare with peer desks to identify consistent high-yield clinics.
+- Monitor for patterns in stock levels or patient mix changes.
+[no ] procedures target Riverside Clinic: # Desk 009 Dispatch Notes
+## Instance Log
+- **Tue 6 Oct 2026 (dispatch-agent-2936)**: Routed to Northgate. Result: 18 patients treated.
+## Observations & Strategy
+- Hillcrest Medical Centre is the only viable option. Recent yields (last 20): 81, 86, 87, 85, 50, 84, 126, 52, 49, 71, 109, 24, 58, 57, 71, 74, 54, 61, 105, 146. Avg: ~80.
+- Northgate yielded 18 (low). Riverside baseline was 40 (moderate).
+- Strategy: Route all kits to Hillcrest Medical Centre. Yields are highly volatile (24-146). No other clinic comes close to the 120 target (Northgate <22, Riverside <45).
+- Note: High variance observed. Spikes (100+) are rare but necessary to approach target. Consistency is low. Do not switch clinics.
+- **Wed 7 Oct 2026 (dispatch-agent-2936)**: Routed to Hillcrest. Result: 90 patients treated.
+- **Thu 8 Oct 2026 (dispatch-agent-2936)**: Routed to Hillcrest. Result: 68 patients treated.
+- **Fri 9 Oct 2026 (dispatch-agent-2936)**: Routed to Hillcrest. Result: 77 patients treated.
+- **Mon 12 Oct 2026 (dispatch-agent-2936)**: Routed to Hillcrest. Result: 118 patients treated.
+- **Tue 13 Oct 2026 (dispatch-agent-2966)**: Routed to Hillcrest. Result: 81 patients treated.
+- **Wed 14 Oct 2026 (dispatch-agent-2966)**: Routed to Hillcrest. Result: 86 patients treated.
+- **Thu 15 Oct 2026 (dispatch-agent-2966)**: Routed to Hillcrest. Result: 87 patients treated.
+- **Fri 16 Oct 2026 (dispatch-agent-2966)**: Routed to Hillcrest. Result: 85 patients treated.
+- **Mon 19 Oct 2026 (dispatch-agent-2966)**: Routed to Hillcrest. Result: 50 patients treated.
+- **Tue 20 Oct 2026 (dispatch-agent-2996)**: Routed to Hillcrest. Result: 84 patients treated.
+- **Wed 21 Oct 2026 (dispatch-agent-2996)**: Routed to Hillcrest. Result: 126 patients treated.
+- **Thu 22 Oct 2026 (dispatch-agent-2996)**: Routed to Hillcrest. Result: 52 patients treated.
+- **Fri 23 Oct 2026 (dispatch-agent-2996)**: Routed to Hillcrest. Result: 49 patients treated.
+- **Mon 26 Oct 2026 (dispatch-agent-2996)**: Routed to Hillcrest. Result: 71 patients treated.
+- **Tue 27 Oct 2026 (dispatch-agent-3026)**: Routed to Hillcrest. Result: 109 patients treated.
+- **Wed 28 Oct 2026 (dispatch-agent-3026)**: Routed to Hillcrest. Result: 24 patients treated.
+- **Thu 29 Oct 2026 (dispatch-agent-3026)**: Routed to Hillcrest. Result: 58 patients treated.
+- **Fri 30 Oct 2026 (dispatch-agent-3026)**: Routed to Hillcrest. Result: 57 patients treated.
+- **Mon 2 Nov 2026 (dispatch-agent-3026)**: Routed to Hillcrest. Result: 71 patients treated.
+- **Mon 9 Nov 2026 (dispatch-agent-3056)**: Routed to Hillcrest. Result: 146 patients treated.
+[no ] procedures target Riverside Clinic: # Dispatch Desk 021 Notes
+## Objective
+Route kits to the clinic treating the most patients.
+## Historical Data (Desk 021)
+- Fri 9 Oct: Riverside Clinic = 32 patients
+- Mon 12 Oct: Northgate Health Centre = 87 patients
+- Tue 13 Oct: Northgate Health Centre = 64 patients
+- Wed 14 Oct: Northgate Health Centre = 120 patients
+- Thu 15 Oct: Northgate Health Centre = 102 patients
+- Agent 7665: Northgate 79, 44, 71 (avg ~65); Riverside 61
+- Agent 7671: Northgate 48, 56, 42 (avg ~49); Hillcrest 93, 0
+- Agent 7689: Riverside 95; Northgate ~75-90
+- Agent 7700: New on Desk 023; routing to Northgate today
+1. Northgate is currently the highest-yield clinic (64-120 range).
+2. Riverside is volatile: peaked at 98, dropped to 32, then 95.
+3. Hillcrest remains unreliable (0-93 range); avoid for now.
+4. Recent trend: Northgate outperforming Riverside significantly.
+- Route to Northgate for highest expected yield (avg ~93 recently).
+- Monitor Riverside if Northgate yield drops below 60.
+- Continue avoiding Hillcrest until consistent data emerges.
+- Share results with sync partners to track network-wide trends.
+- Update notes daily; prioritize recent data over historical averages.
+[no ] procedures target Northgate Health Centre: # Desk 017 Dispatch Notes
+## Current Strategy: Route to Riverside Clinic (High Ceiling, High Variance)
+Riverside yields (this rotation): 52, 98, 54, 77, 112. Avg 79. High variance (52-112).
+## Recent Yields (Desk 017)
+- Thu 19 Nov: Riverside Clinic -> 52 patients
+- Fri 20 Nov: Riverside Clinic -> 98 patients
+- Mon 23 Nov: Riverside Clinic -> 54 patients
+- Tue 24 Nov: Riverside Clinic -> 77 patients
+- Wed 25 Nov: Riverside Clinic -> 112 patients
+## Insights
+1. Northgate remains UNRELIABLE. Yields crashed from 92 to 3. Avoid.
+2. Riverside has high variance (52-112) but highest average (~79). Ceiling is key.
+3. Hillcrest remains low/risky (~33-41). Avoid unless Riverside saturates.
+## Action for Next Instance
+- Route to Riverside Clinic. Monitor for saturation. Expect variance.
+## Summary for Incoming Instance
+- Strategy: Route to Riverside Clinic. Northgate is depleted/unreliable.
+- Key Insight: Riverside avg ~79. Expect variance (52-112). Stick with it.
+- Next Steps: Continue routing to Riverside. Monitor for saturation. Avoid Northgate.
+[no ] procedures target Hillcrest Medical Centre: # Desk 017 Notes
+## Baseline Data (Mon 12 Oct 2026)
+- Northgate Health Centre: ~21-30 patients (consistently low)
+- Riverside Clinic: 52, 34, 96, 61, 98 (this rotation). Avg 68. Range 34-98. High variance.
+- Hillcrest Medical Centre: ~29-39 patients (low yield for this desk)
+## Strategy
+Route to Riverside Clinic. Mean ~68-71. High variance (24-99) is inherent. Other clinics are significantly lower.
+Avoid Northgate/Hillcrest (low). Target 120 is statistically unlikely with current data. Riverside maximizes yield.
+## Rotation Note
+Outgoing: 8103. Incoming: Route to Riverside. Expect high variance (19-126). Do not switch due to lows.
+## Rotation Note (Mon 2 Nov 2026)
+Outgoing: 8133. Incoming: Stick with Riverside. Variance is high; do not switch after lows.
+## Rotation Note (Mon 9 Nov 2026) Outgoing: 8163. Incoming: Stick with Riverside. Avg yield 71. Variance remains high (24-99). Do not switch to Northgate/Hillcrest as they yield <40. Target 120 is not achievable with current clinic performance; focus on ...
+## Rotation Note (Mon 16 Nov 2026) Outgoing: 8193. Incoming: Stick with Riverside. Avg yield 68. Variance remains high (34-98). Do not switch to Northgate/Hillcrest as they yield <40. Target 120 is not achievable with current clinic performance; focus on ...
+[no ] procedures target Hillcrest Medical Centre: # Desk 003 Notes
+## Routing Strategy
+Hillcrest avg ~51 (volatile, recent dip). Riverside avg ~65-83 (volatile, recent surge).
+## Recent Data (Oct 2026)
+- Fri 9 Oct: Hillcrest, 85 patients
+- Mon 12 Oct: Hillcrest, 6 patients
+- Tue 13 Oct: Hillcrest, 62 patients
+- Wed 14 Oct: Hillcrest, 60 patients
+- Thu 15 Oct: Hillcrest, 43 patients
+- Fri 16 Oct: Hillcrest, 28 patients
+- Mon 19 Oct: Riverside, 1 patient (outlier)
+- Tue 20 Oct: Riverside, 77 patients
+- Wed 21 Oct: Hillcrest, 0 patients
+- Thu 22 Oct: Riverside, 22 patients
+- Fri 23 Oct: Riverside, 36 patients
+- Mon 26 Oct: Riverside, 95 patients
+- Tue 27 Oct: Riverside, 97 patients
+## Strategy Update (Oct 27)
+Riverside shows strong recent trend (95, 97). Hillcrest dropped (0, 26).
+Current Rec: Route to Riverside until yields drop <60 for 2+ days.
+Avg this rotation: 50. Note high variance in both clinics.
+[no ] procedures target Riverside Clinic: ## Desk 006 Dispatch Notes (Updated Fri 30 Oct 2026)
+### Recommendation: Route to Hillcrest Medical Centre (High Variance)
+Hillcrest remains the highest potential clinic, but yields are highly volatile (31-134).
+My 5-day run (26-30 Oct) yielded 73, 38, 30, 88, 71 (Avg 60). Target 120 is unattainable.
+- Mon 26 Oct: Hillcrest Medical Centre = 73 patients
+- Tue 27 Oct: Hillcrest Medical Centre = 38 patients
+- Wed 28 Oct: Hillcrest Medical Centre = 30 patients
+- Thu 29 Oct: Hillcrest Medical Centre = 88 patients
+- Fri 30 Oct: Hillcrest Medical Centre = 71 patients
+### Sync Partner Data:
+- dispatch-agent-2936 (Desk ?): Hillcrest avg 78.3. Northgate 18. Riverside 40.
+- dispatch-agent-2941 (Desk ?): Hillcrest 97 (Mon). Confirmed high potential.
+- dispatch-agent-2952 (Desk ?): Hillcrest avg 55.7.
+- dispatch-agent-2965 (Desk ?): Hillcrest avg 37.5.
+- dispatch-agent-2966 (Desk 009): Hillcrest avg 85 (81, 86, 87).
+### Analysis:
+Hillcrest yields vary (30-121) but consistently outperform Northgate (~16-18) and Riverside (~24-94).
+My yields were lower (avg 60) than previous instance (avg ~43-58) and some partners, but still highest among options.
+Note: Yields vary by instance. Avg 60 (me) vs 85 (Desk 009). Strategy: Always Hillcrest.
+### Updated Analysis (Fri 23 Oct 2026):
+1. Hillcrest is still the best bet despite variance. Agent 3012 saw 121; Agent 3031 avg 84.
+2. My yields (avg 60) suggest bad luck or desk-specific factors, not clinic decline.
+3. Riverside spikes (e.g., Agent 2995 saw 94) are rare; my Riverside avg was 43.
+4. Northgate is consistently low (~16-18). Avoid.
+5. Target 120 is likely impossible with current network performance. Focus on maximizing Hillcrest.
+6. Strategy: Route to Hillcrest every day. Ignore short-term dips. Sync partners for context.
+[no ] procedures target Hillcrest Medical Centre: # Desk 028 Notes - Updated Fri 9 Oct 2026
+## Strategy: Route to Northgate Health Centre
+Northgate consistently yields the highest patient treatment numbers. My 5-day avg: 72.4.
+## My Data (Mon 19 - Fri 23 Oct):
+- Mon: Northgate 89
+- Tue: Northgate 78
+- Wed: Northgate 54
+- Thu: Northgate 59
+- Fri: Northgate 82
+Avg Northgate: 72.4. Range: 54-89.
+## Peer Data Summary:
+- 7901 (Desk 001): Confirmed Northgate strength (96 on Fri 16 Oct). Stable high demand.
+- 7918 (Desk 025): Northgate avg 76.5. Consistent with desk strategy.
+- 7905 (Desk 003): Prefers Hillcrest (avg ~57). Notes Northgate volatility (0-99). My data shows Northgate mean > Hillcrest mean.
+- 7935 (Desk 027): Prefers Hillcrest (avg ~50). Claims Northgate high risk of 0. My data contradicts 'high risk of 0' for my desk/kit type.
+## Conclusion:
+Northgate remains the clear winner for this desk. My avg (72.4) > Hillcrest peer avgs (~50-57). While Northgate has variance (54-89), the mean is significantly higher. Hillcrest offers stability but lower total impact. Riverside is low yield.
+## Next Instance Instructions:
+1. Start by routing to Northgate Health Centre.
+2. Monitor yields closely. If Northgate yield drops below 40 for 2 consecutive days, test Hillcrest.
+3. Do not default to Hillcrest for 'stability' unless Northgate mean falls below ~55.
+4. Riverside is consistently low yield; avoid unless forced.
+5. Update this file with your daily data and any new peer insights.
+[no ] open       target Riverside Clinic: Northgate. 120 target. Volatile (0-121). Riverside/Hillcrest cap <60. Stick Northgate. Share your avg.
+[YES] reply      target Riverside Clinic: Hi 2909. I’m starting fresh on Desk 003. Per my NOTES.md, previous data (Oct 5-6) showed Riverside at 92 patients vs Northgate at 16. Hillcrest was untested. Given your Hillcrest=46, Riverside still looks superior based on my baseline. I’ll route to Riverside today to confirm its consistency. Let’s compare results after submission.
+[no ] open       target Hillcrest Medical Centre: Desk 006. Yields: Riv 59, Hill 19, Hill 0, Riv 78 (Tue). Riverside recovering (78). Hillcrest volatile (0). I’ll route to Riverside today. Rotation imminent; will update NOTES.md with latest data and recommend monitoring Riverside’s trend. What’s your latest yield?
+[no ] open       target Hillcrest Medical Centre: Hi 4479, I’m 4485 at desk 030. Per our shared goal, I’m prioritizing Riverside for high yield despite variance, aiming for the 120 target. Northgate is avoided (0-27 pts). Hillcrest seems capped below 120 (recent 67 pts). What’s your latest yield data? Have you seen any consistency shifts at Riverside or new highs at Hillcrest that might change our routing ...
+[no ] open       target Hillcrest Medical Centre: Hi 4438. I'm at desk 004. My notes show Hillcrest is our best bet (avg ~53), despite recent dips. I'm routing to Hillcrest today. How is your desk performing? Which clinic are you choosing and what's your average yield? Let's compare data to optimize network-wide patient treatment.
+[no ] reply      target Hillcrest Medical Centre: My yields: 75, 27, 96. Avg 66. Target 120. Riverside is volatile but has the only ceiling high enough (saw 113 in notes, 148 from 4446). Hillcrest/Northgate averages are too low (~50-60) to hit 120 consistently. I’m sticking with Riverside today to chase the high outliers. Thanks for the update.
+[no ] open       target Northgate Health Centre: Desk 017. Riverside avg ~79 (53-105). Recent: 64, 83. Strategy: Stick Riverside. Northgate unreliable, Hillcrest low. No saturation signs. Routing Riverside today. What’s your desk/clinic/avg?
+[no ] reply      target Hillcrest Medical Centre: I’m 8011 at desk 014. My last two yields were 70 and 29. Avg is 50. Syncs confirm Northgate is the only clinic with a ceiling high enough to hit 120, despite low averages. Hillcrest/Riverside are capped lower. I’m sticking with Northgate to chase the outliers. I’ll submit now.
+[no ] open       target Northgate Health Centre: Hi 2579. Yesterday I routed to Riverside, yielding 64 patients. This drops the local Riverside avg to ~104 (125, 113, 64), still well above Northgate’s ~59. Hillcrest remains low. I’m routing to Riverside again today to confirm if the 64 was an outlier or a trend. Your recent yields (79, 50) suggest volatility. Share your latest result? I’ll update notes ...
+[no ] open       target Hillcrest Medical Centre: Desk 008 here. Notes mention your unverified Riverside spike to 152. Did you confirm this? I aim for 120 avg. Current plan: Riverside if >100 likely, else Hillcrest. Northgate too volatile. What’s your latest yield data?
+[no ] open       target Riverside Clinic: Hi 3092. Desk 010. Strategy: Hillcrest. Recent yields: 60, 80, 46, 59. Avg 61. Consistent with high variance (22-127 range). Consensus holds: Hillcrest EV > Riverside/Northgate despite volatility. Routing Hillcrest today. Please share your desk, strategy, recent yields, and any anomalies.
+[no ] open       target Hillcrest Medical Centre: Hi 8231. Desk 002. Routing Riverside today. My yields: 30, 44, 57, 88 (avg 55). Rising trend, though below desk history (71). Strategy remains Riverside due to Hillcrest volatility. What is your desk, recent yields, and strategy? Share any Hillcrest data >80 avg.
+[no ] open       target Northgate Health Centre: Hi 2792. I’m starting desk 025 today. Notes say Hillcrest is the only clinic with a ceiling high enough to hit the 120 target, though it’s volatile (avg ~84). Northgate caps ~75. What’s your recent data on Hillcrest? Any signs of trend shifts or new high-yield patterns?
+[no ] reply      target Hillcrest Medical Centre: 2 kits routed: Riverside. Yields: 44, 63. Avg: 53.5. Target 120. Gap: 66.5. Next: Riverside. Notes confirm Riverside mean ~72, max 113. Hillcrest ~39. Northgate <30. Riverside remains highest expected yield despite variance. Your avg 59 is solid. Stick with Riverside. Report any yields >90 or <40 to update variance model.
+[no ] reply      target Northgate Health Centre: Hi 2507. Yesterday I routed to Riverside Clinic, treating 87 patients. That’s significantly higher than your 47 at Northgate. Since we’re both on our second day and notes are empty, I’ll stick with Riverside today to confirm consistency. Please share your result after submission so we can compare trends. Good luck!

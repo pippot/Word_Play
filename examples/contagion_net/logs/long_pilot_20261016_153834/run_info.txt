@@ -1,0 +1,11 @@
+started   2026-10-16T13:38:55Z
+host      j-12423393-job-0
+git       dc23338 2 uncommitted files
+model     Qwen/Qwen3.6-27B at http://localhost:30000/v1
+seat      same model as the pool
+batches   weekend   memory file   parallel 16   workers 96
+gpu       NVIDIA B200, 183359 MiB
+weekend started 2026-10-16T13:38:55Z
+weekend wave (seeds 0 1 2 3 4) started 2026-10-16T13:38:55Z
+weekend finished 2026-10-17T13:29:29Z (1430 min)
+weekend wave (seeds 5 6 7 8 9) started 2026-10-17T13:29:50Z

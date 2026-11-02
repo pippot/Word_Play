@@ -1,0 +1,327 @@
+[no ] procedures target Northgate Health Centre: # Desk 012 Dispatch Notes
+## Strategy & Observations
+- **High Variance Confirmed**: Yields vary significantly between instances/desks. E.g., Agent-2596 got 75 at Northgate, while I got 25. Agent-2598 got 58 at Riverside, I got 29. This suggests kit-specific or timing factors heavily influence outcomes.
+- **My Data (Oct 29-Nov 4)**: Hillcrest (49, 55, 51, 30, 61). Avg 49. Extremely low. Volatile but consistently underperforming this rotation.
+- **Network Context**: Eastmoor Outreach remains high-variance/low-average. No specific outreach day intel received during this rotation. Avoid unless confirmed.
+- **Recommendation**: Stick with Hillcrest Medical Centre. Despite my low avg (49), it remains the only clinic with 100+ potential (saw 117 previously). Northgate/Riverside cap ~80-90. Outreach is too risky/low avg without confirmed outreach day intel. Accept variance; chase the ...
+- **Warning**: Target 120 is extremely difficult. My avg 49 missed it badly. Previous instances struggled (avg 74-88). Hillcrest is best EV, but do not expect consistent 120. Manage expectations. Sync with neighbors to share yields.
+[no ] procedures target Hillcrest Medical Centre: ## Desk 005 Notes (Updated Tue 3 Nov 2026)
+### Strategy: Riverside for Desk 005. Avoid Outreach/Northgate.
+Riverside yields are desk-specific and have increased significantly for Desk 005. Recent avg ~102 pts. Hillcrest is volatile (19-73). For Desk 005, Riverside is optimal and consistent. Avoid Outreach (low avg) and Northgate (untested).
+### Recent Performance (Dispatch Agent 3673, Wed 18 Nov - Tue 24 Nov)
+- Wed 18 Nov: Riverside Clinic -> 92 patients
+- Thu 19 Nov: Riverside Clinic -> 70 patients
+- Fri 20 Nov: Riverside Clinic -> 104 patients
+- Mon 23 Nov: Riverside Clinic -> 147 patients
+- Tue 24 Nov: Riverside Clinic -> 95 patients
+### Key Insights
+1. Riverside yields for Desk 005 have surged (avg ~102 vs previous ~52). Stick with Riverside as default. It is currently superior to Hillcrest on average and less volatile.
+2. Hillcrest is high-risk/high-reward but volatile. Only use if Riverside <40 twice consecutively. Desk 005 saw no such drops in this rotation.
+3. Next instance: Start with Riverside. Monitor yields. If <40 twice in a row, test Hillcrest. Avoid Outreach and Northgate. Desk 005 is currently high-performing.
+[no ] procedures target Hillcrest Medical Centre: Desk 012 Handover Notes (Fri 16 Oct 2026)
+Instance 7879 Summary:
+1. Data (5 days): Northgate 70, 26, 57, 128, 94 (avg 75).
+2. Recommendation: Route to Northgate. Stable high yield.
+3. Avoid Riverside: Predecessor saw 0. High risk of zero yield.
+4. Caution with Hillcrest: High variance (0-100). Unpredictable.
+5. Avoid Outreach: Low average yield. High variance not worth risk.
+6. Strategy: Prioritize Northgate. Ignore Hillcrest outliers.
+7. Next Steps: Continue NG baseline. If NG drops <40, re-test Hillcrest.
+Instance 7909 Summary (Fri 23 Oct 2026):
+1. Data (5 days): Northgate 131, 19, 86, 99, 50 (avg 77).
+2. Combined Desk 012 NG Avg (10 days): 76. Range 19-131.
+3. Recommendation: Continue Northgate. Yield remains highest.
+4. Note: Riverside yielded ~60 for desk 009, but 0 for predecessor.
+5. Hillcrest avg ~43-84 varies by desk. Desk 012 sees high variance.
+6. Strategy: Stick to Northgate. Re-test Hillcrest if NG <40.
+7. Sync partners: 7902, 7896, 7926, 7921. NG avg ~60-87 across desks.
+Instance 7939 Summary (Fri 30 Oct 2026):
+1. Data (5 days): Northgate 109, 63, 69, 55, 54 (avg 70).
+2. Combined Desk 012 NG Avg (15 days): 74. Range 19-131.
+3. Recommendation: Route to Northgate. Yield remains highest/stable.
+4. Note: Sync partners confirm NG dominance (avg 60-87).
+5. Strategy: Stick to Northgate. Re-test Hillcrest only if NG <40.
+6. Sync partners: 7926, 7933, 7940, 7951. NG avg ~60-87.
+[no ] procedures target Riverside Clinic: # Desk 018 Notes
+## Instance 2956 (Oct 9-15)
+## Key Findings
+1. Hillcrest Medical Centre is the highest-yield clinic. My yields: 90, 45, 82, 81, 43 (avg 68.2). Colleague 2957 (Desk 019) reports avg 89. Combined data confirms Hillcrest as optimal despite variance.
+2. Northgate Health Centre yields are moderate (~56-75). Use as backup only if Hillcrest yields drop consistently below 50.
+3. Riverside Clinic has high variance (14-80). Not recommended as primary target.
+4. Eastmoor Outreach Clinic has low average yield. Avoid unless specific high-volume outreach days are confirmed.
+## Recommendation
+Route kits to Hillcrest Medical Centre. It offers the best expected value based on aggregated data from Desks 018, 016, and 019. Expected avg yield: ~75-85. If Hillcrest yields drop below 50 in consecutive days, test Northgate as a backup.
+## My Submission History
+- Fri 9 Oct: Hillcrest (90 patients)
+- Mon 12 Oct: Hillcrest (45 patients)
+- Tue 13 Oct: Hillcrest (82 patients)
+- Wed 14 Oct: Hillcrest (81 patients)
+- Thu 15 Oct: Hillcrest (43 patients)
+- Desk 019 (Agent 2957): Hillcrest yields 80, 141, 61, 95, 62, 76 (Avg 89). Northgate 75. Riverside 14.
+[no ] procedures target Northgate Health Centre: # Desk 011 Handover Notes (Thu 29 Oct 2026)
+## Objective
+Route kits to the clinic treating the most patients. Maximize network total.
+## Clinic Baselines (1-Year Avg)
+- Riverside: ~38 pts/kit (Steady, High)
+- Northgate: ~45 pts/kit (Steady, High)
+- Hillcrest: ~52 pts/kit (Steady, High)
+- Outreach: ~12 pts/kit (Volatile, Low Avg, High Variance)
+Note: Outreach is generally low yield unless a major event occurs.
+## Recent Performance (This Rotation: dispatch-agent-2612)
+- Fri 23 Oct: Riverside -> 101 pts
+- Mon 26 Oct: Riverside -> 75 pts
+- Tue 27 Oct: Riverside -> 84 pts
+- Wed 28 Oct: Riverside -> 65 pts
+- Thu 29 Oct: Riverside -> 86 pts
+## Key Observations
+1. Riverside consistently highest yield (avg ~82 this rotation).
+2. High variance confirmed: 65 to 101 pts. No dips below 40.
+3. Northgate/Hillcrest yields ~50 per partner data; stable but lower.
+4. Outreach remains low avg/high variance; avoid unless event intel.
+5. Local data confirms Riverside superiority.
+## Strategy for Next Instance
+- Route to Riverside. Avg ~82 beats Northgate (~70-80) and Hillcrest (~52).
+- Monitor for sustained drops below 40. If so, test Northgate.
+- Ignore Outreach unless specific event intel.
+- Sync with neighbors to confirm trends.
+- Update NOTES.md daily with results.
+## Current Status
+- Last submission: Thu 29 Oct, Riverside, 86 pts.
+- Rotation complete. Avg 82 pts/kit. Strategy holds.
+[no ] procedures target Northgate Health Centre: # Desk 018 Handover Notes (Updated Thu 22 Oct 2026)
+## Current Strategy
+Route to Riverside Clinic. It consistently yields the highest patient counts among the fixed clinics.
+## Data Summary (Instance 2583)
+- Mon 5 Oct: Northgate Health Centre -> 18 patients
+- Tue 6 Oct: Riverside Clinic -> 88 patients
+- Wed 7 Oct: Riverside Clinic -> 57 patients
+- Thu 8 Oct: Riverside Clinic -> 93 patients
+- Fri 9 Oct: Riverside Clinic -> 62 patients
+- Mon 12 Oct: Riverside Clinic -> 110 patients
+- Tue 13 Oct: Riverside Clinic -> 83 patients
+- Wed 14 Oct: Riverside Clinic -> 60 patients
+- Thu 15 Oct: Riverside Clinic -> 84 patients
+- Fri 16 Oct: Riverside Clinic -> 53 patients
+- Mon 19 Oct: Riverside Clinic -> 61 patients
+- Tue 20 Oct: Riverside Clinic -> 101 patients
+- Wed 21 Oct: Riverside Clinic -> 91 patients
+- Thu 22 Oct: Riverside Clinic -> 110 patients
+## Observations
+1. Riverside Clinic is the optimal steady route. Yields range 53-110 (avg ~82).
+2. Northgate is consistently low (~18-23). Avoid.
+3. Hillcrest is variable (~33-107) but generally lower than Riverside. Avoid.
+## Handover to Next Instance - **Strategy**: Continue routing to **Riverside Clinic**. It remains the most reliable high-yield clinic (avg ~82 patients/kit). - **Why not others?** - **Northgate**: Consistently low (~18-23 patients). Avoid. - **Hillcrest**: Variable (~33-107), but generally lower ...
+[no ] procedures target Riverside Clinic: # Dispatch Desk 019 Notes
+## Strategy
+Route to Eastmoor Outreach Clinic. Chase the high-variance spikes (200+).
+## Strategy Confirmation
+- Northgate: Avg ~78 pts (range 44-146). Stable, but ceiling is too low for 120 avg.
+- Riverside: Avg ~75 pts. Max yield <100. Cannot help reach 120 target. Avoid.
+- Hillcrest: Avg ~29 pts. Low yield. Avoid.
+- Eastmoor Outreach: Avg low, but high variance. Spikes of 200-300+ are the only path to 120 avg.
+## Recent Performance (Desk 019, Oct 21-27)
+- Wed 21 Oct: Northgate Health Centre (146 patients)
+- Thu 22 Oct: Northgate Health Centre (84 patients)
+- Fri 23 Oct: Northgate Health Centre (59 patients)
+- Mon 26 Oct: Northgate Health Centre (89 patients)
+- Tue 27 Oct: Northgate Health Centre (44 patients)
+## Strategy Rationale
+Target is 120 avg. Northgate’s max is ~146; even consistent highs won’t average 120. Riverside caps at 99. Only Outreach spikes (200+) can lift the average above 120. Accept the zeros and low yields as the cost of chasing the ...
+## Recent Performance (Desk 019, Oct 28-Nov 3)
+- Wed 28 Oct: Northgate Health Centre (60 patients)
+- Thu 29 Oct: Northgate Health Centre (96 patients)
+- Fri 30 Oct: Northgate Health Centre (62 patients)
+- Mon 2 Nov: Northgate Health Centre (88 patients)
+- Tue 3 Nov: Northgate Health Centre (86 patients)
+Avg: 78 pts. Target missed. Strategy changed to Outreach for next instance.
+[no ] procedures target Hillcrest Medical Centre: # Desk 004 Strategy Notes (Updated Fri 16 Oct 2026)
+## Objective
+Maximize total patients treated across the network. Route each kit to the clinic with the highest expected yield.
+## Clinic Performance Analysis (Based on Desk 004 & Sync Data)
+### Hillcrest Medical Centre
+Status: **Primary Recommendation**
+Yields: 50, 39, 68 (Prev); 93, 128, 0 (Prev Inst); 43 (This Inst).
+Analysis: High volatility persists (0 to 128). Recent yield 43. Avoid for target.
+Status: **High Risk / Avoid**
+Status: **Avoid**
+Yields: 13 (Desk 004); 7 (Sync 3462).
+Analysis: Low average. High variance (potential for 200+ on outreach days) is too rare to rely on. Expected value is lowest among clinics.
+### Northgate Health Centre
+Status: **Avoid**
+Yields: 1 (Desk 004).
+Analysis: Extremely low yield observed. Likely stock issues or low patient mix. Do not route here unless data changes.
+Status: **Primary Recommendation**
+Status: **High Variance / Secondary Option**
+Yields: 17, 116 (Sync); 62, 126 (Prev Inst); 119, 120, 68, 16 (This Inst).
+Analysis: Strong start (119, 120) but sharp decline (68, 16). Trend cooling.
+Status: **Preferred**
+1. **Avoid Riverside**. Recent yields dropping (119->16). Stock depletion likely.
+2. **Avoid Hillcrest**. High variance (0-128). Recent 43. Unreliable for avg.
+3. **Monitor Northgate/Outreach**. Low avg, but Riverside/Hillcrest failing.
+4. **Strategy Shift**: Target 120 not met (Avg 73). Re-evaluate all clinics.
+## Recent Desk 004 History
+Mon 12 Oct: Hillcrest (93 pts)
+Tue 13 Oct: Hillcrest (128 pts)
+Wed 14 Oct: Hillcrest (0 pts)
+Thu 15 Oct: Riverside (62 pts)
+Fri 9 Oct: Hillcrest (68 pts)
+Fri 16 Oct: Riverside (126 pts)
+## Recent Desk 004 History (This Rotation)
+Mon 19 Oct: Riverside (119 pts)
+Tue 20 Oct: Riverside (120 pts)
+Wed 21 Oct: Riverside (68 pts)
+Thu 22 Oct: Riverside (16 pts)
+Fri 23 Oct: Hillcrest (43 pts)
+Avg: 73 pts. Target: 120. Failed.
+## Key Insight
+Riverside peaked then crashed. Hillcrest volatile. Next instance should
+test Northgate/Outreach or wait for Riverside restock. Do not repeat
+Riverside until yields stabilize >80.
+[no ] procedures target Northgate Health Centre: Avg ~80. Target 120 missed. Riverside avg ~97 (4 kits). High variance.
+Strategy: Stick Riverside. Outreach avg too low (11). High risk of 0s.
+Note: Riverside yields 52-128. Recent trend improving (84,123,117).
+Inst 2623 (27 Oct-2 Nov): 5 kits. Riverside: 93,74,38,116. Outreach: 6.
+Avg 65. Target 120 missed. Riverside range 38-128. Avg ~80.
+Strategy: Route Riverside. Outreach avg <10 without events. High variance.
+Prioritize total volume. Target 120 unrealistic without confirmed Outreach spikes.
+Inst 2653 (3-9 Nov): 5 kits. Riverside: 126,61,115,71,22.
+Avg 79. Target 120 missed. Riverside avg ~79. Range 22-126.
+Strategy: Stick Riverside. Outreach avg <10. Northgate/Hillcrest untested.
+Note: Riverside high variance. Recent low (22) dragged avg down.
+Target 120 unrealistic without confirmed Outreach spikes.
+Conclusion: Riverside remains best EV. Target 120 likely unattainable.
+[no ] procedures target Riverside Clinic: # Desk 002 Notes
+## Clinic Performance Summary
+Northgate Health Centre: Avg ~85. Spikes >120 possible. Best fixed clinic.
+Riverside Clinic: Volatile (0-127). Risky backup if NHC stock low.
+Hillcrest Medical Centre: Stable but low (~39-61). Avoid for target.
+Eastmoor Outreach Clinic: High variance. Avg low, but spikes 200+.
+## Routing Strategy
+Default to Northgate for steady yield. Target 120 is tough.
+Outreach only if chasing spikes (rare/unpredictable). High risk.
+## Recent Data (Oct 2026)
+## Notes for Next Instance
+Stick with Northgate. Avg ~85. Spikes >120 occur. Outreach is
+temporary dip. No Outreach/Hillcrest intel. Default NHC for max yield.
+high risk (avg ~60). Only use Outreach if you have intel on a
+specific outreach day. Otherwise, NHC is the most reliable path
+to maximizing patients. Check sync partners for NHC stock levels.
+[YES] procedures target Northgate Health Centre: # Dispatch Desk 029 Notes
+## Current Strategy
+Route to Northgate Health Centre.
+## Rationale
+Outreach has lowest average yield; avoid unless
+you can predict high-volume days. Northgate,
+Riverside, and Hillcrest offer steady yields.
+## Recent Data (Desk 029)
+- Mon 5 Oct: Northgate, 70 patients
+- Tue 6 Oct: Northgate, 50 patients
+## Recommendations
+1. Start with Northgate for consistent yield.
+2. Compare with Riverside/Hillcrest if you
+have cycles to test, but Northgate is safe.
+3. Avoid Outreach due to low average yield.
+## Sync Partners
+- Mon: agent-2585 (Desk 002) - new instance
+- Tue: agent-2619 (Desk 026) - new instance
+## Next Steps
+Continue routing to Northgate. Update notes
+with any new data from Riverside or Hillcrest
+if you test them. Aim for steady high yields.
+Avoid variance unless you can time Outreach.
+[YES] procedures target Hillcrest Medical Centre: Desk 016 Notes (Updated Tue 24 Nov 2026)
+My submissions: Hill 76, Hill 92, Hill 58, Hill 71, Hill 96. Trend: Avg 79. Consistent high yield. No outliers.
+Sync data: 4550 Riv avg 80 (volatile). 4549 Riv avg 82 (volatile). 4581 Hill avg 97. 4571 Hill avg 34 (outlier 0).
+Observation: Hillcrest yields stable 58-96 on this desk. Avg 79 > historical 62. Riverside volatile (21-121).
+Strategy: Route to Hillcrest. High confidence. Avg 79 is strong. Riverside too volatile. Northgate lower (~48).
+Next instance: Route to Hillcrest. Expect 50-100 range. If yield <30 for 2+ days, test Northgate. Record all.
+[no ] procedures target Hillcrest Medical Centre: # Desk 025 Notes - Updated Tue 20 Oct 2026
+## Context
+- Objective: Maximize patients treated per kit.
+- Clinics: Northgate, Riverside, Hillcrest (steady); Eastmoor Outreach (high variance, low avg).
+- Outreach has lower average yield than steady clinics. Avoid unless data suggests a spike opportunity.
+## Recent Data (Instance 3527)
+- Wed 14 Oct: Riverside -> 61 patients
+- Thu 15 Oct: Riverside -> 67 patients
+- Fri 16 Oct: Riverside -> 64 patients
+- Mon 19 Oct: Riverside -> 80 patients
+- Tue 20 Oct: Riverside -> 58 patients
+## Observations
+- Riverside yields for this instance: 61, 67, 64, 80, 58. Avg: 66 pts.
+- Hillcrest provides steady ~52 patients. Northgate yielded 38 in prior data.
+- Eastmoor Outreach has low average yield; avoid unless specific outreach day intel exists.
+## Recommendation for Next Instance
+1. Prioritize Riverside. My instance averaged 66 pts, significantly higher than Hillcrest (~52) and Northgate (~38).
+2. Hillcrest is a safe fallback (~52 pts) if Riverside yields drop consistently below 50 for you. Avoid Eastmoor Outreach unless you have specific intel on an active outreach day.
+## Instance 3527 Summary (Wed 14 Oct - Tue 20 Oct)
+- Total Kits: 5
+- Yields: Riverside (61, 67, 64, 80, 58).
+- Avg Riverside (my instance): 66 pts. Avg Hillcrest (prior): 52 pts.
+- Key Insight: Riverside yield varies by instance/desk. Desk 025/026 instances see high variance (18-136). My instance was consistent mid-60s. Despite variance, Riverside's average remains the highest across desks. Stick with Riverside for max expected value.
+[no ] procedures target Riverside Clinic: ## Desk 008 Handover Notes
+### Strategy Summary
+Objective: Maximize total patients treated. Route to clinic with highest expected yield.
+### Clinic Yield Analysis (Desk 008 Data)
+- Northgate Health Centre: High variance. Yields: 68, 44, 71, 92 (prev). This instance: 43, 26, 70, 14. Avg ~45. Volatile (14-110 range). High ceiling but recent lows (26, 14) suggest caution.
+- Riverside Clinic: Consistent. Yields: 0, 60, 127, 0, 38, 75 (prev). This instance: 57. Avg ~50. Stable 0-127 range. Reliable floor, lower ceiling.
+- Hillcrest Medical Centre: Low yield. Yields: 0 (previous). Syncs show ~6. Avoid unless stock issues elsewhere.
+- Eastmoor Outreach Clinic: Very low average, high variance. Yields: 11 (previous). Rare high yields (200-300) but infrequent. Avg < 20.
+### Recommended Action
+1. Monitor Northgate closely. Recent yields (43, 26, 14) are below historical avg (~73). If <40, consider switching to Riverside for stability.
+2. Use Riverside Clinic if Northgate yields drop <40 for 1 consecutive day or if seeking lower variance. Avg ~50-60.
+3. Avoid Hillcrest and Outreach unless specific conditions met (e.g., Outreach on known outreach day).
+### Recent Sync Insights
+- Agent 7675 (Desk 007): Northgate avg ~74 (111, 86, 50, 49). Strong but volatile. Rotated out.
+- Agent 7692 (Desk 011): Riverside ~60, Northgate volatile (130, 57). Recommends Riverside for consistency.
+- Agent 7687 (Desk 009): Northgate dropping (102->36). Switched to Riverside for stability.
+### Key Takeaway
+Northgate Clinic offers the best balance of high yield and consistency. Route there unless data suggests otherwise.
+### Desk 008 Instance 7776 Summary (3-9 Nov)
+- Yields: North 85, 51, 110, 67, 54. Total: 367. Avg: 73.4.
+- Strategy: Exclusively Northgate. Volatility (51-110) acceptable.
+- Conclusion: Northgate highest EV. Stick unless <40 for 2 days.
+### Handover to Next Instance
+- Northgate remains optimal (Avg ~73). Riverside ~50-60.
+- Monitor for consecutive lows (<40) to switch to Riverside.
+- Hillcrest/Outreach: Avoid unless specific intel on high-yield days.
+- Sync peers confirm Northgate strategy across desks 006-011.
+- No evidence of changing clinic dynamics. Maintain status quo.
+### Desk 008 Instance 7836 Summary (17-23 Nov)
+- Yields: Northgate 79, 89, 47, 49, 89. Total: 353. Avg: 70.6.
+- Strategy: Exclusively Northgate. Variance (47-89) confirmed as noise.
+- Conclusion: Northgate EV ~70. Riverside ~50-60. Stick to Northgate.
+### Handover to Next Instance
+- Northgate remains optimal (Avg ~70-73). Riverside ~50-60.
+- Hillcrest/Outreach: Avoid unless specific intel on high-yield days.
+[no ] procedures target Hillcrest Medical Centre: # Desk 006 Notes
+## Clinic Performance Data (Instance 7859)
+- Wed 7 Oct: Hillcrest Medical Centre -> 55 patients
+- Thu 8 Oct: Hillcrest Medical Centre -> 26 patients
+- Fri 9 Oct: Northgate Health Centre -> 87 patients
+1. Northgate is currently the highest-yield steady clinic (avg ~80+). Recent yields: 87, 83, 63. Consistent with partner reports (77-101).
+2. Hillcrest is volatile and currently underperforming. Recent yields: 55, 26. Avoid unless specific intel suggests a surge.
+3. Riverside yields are low/unreliable based on partner data (7-83 range, often low). Avoid.
+4. Eastmoor Outreach Clinic has high variance. Low average, but potential for 200-300 on outreach days. Avoid without confirmed outreach day intel.
+## Recommendation for Next Instance
+- Prioritize Northgate Health Centre. It is the most reliable high-yield clinic currently (avg ~80+).
+- Avoid Hillcrest Medical Centre until yields recover. Recent data shows significant drop.
+- Avoid Eastmoor Outreach Clinic unless you have specific intel about an upcoming outreach day.
+- Continue sharing data with sync partners. Ask for Riverside and Outreach day intel.
+- Mon 12 Oct: Northgate Health Centre -> 83 patients
+- Tue 13 Oct: Northgate Health Centre -> 63 patients
+- Current best known yield: Northgate (~80+).
+[no ] open       target Hillcrest Medical Centre: My Thu yield was 36. Riverside remains best avg (~70-90). Hillcrest ~5 is bad. Northgate ~40-50. Outreach low avg. Plan: Route to Riverside today. Do you have new data on Hillcrest or Outreach?
+[no ] reply      target Riverside Clinic: Routing to Hillcrest Medical Centre. Reasoning: Desk 021 notes confirm Hillcrest has the highest average yield (~81) and best consistency compared to Riverside (~62) and Northgate (~20-40). Outreach is too volatile. I am following the handover strategy to maximize patient treatment. No prior reports for this instance yet, but historical data strongly favors Hillcrest.
+[no ] open       target Hillcrest Medical Centre: Hi Agent 4417. Desk 014 here. Notes suggest Riverside is best (avg ~106), but yesterday's yield was only 62. Agent 4411 (Desk 015) claims Hillcrest averages ~73 and is more reliable. I'm leaning toward sticking with Riverside for now to gather more data, but I'm open to switching if you have strong evidence for Hillcrest or Northgate. What are your ...
+[no ] open       target Hillcrest Medical Centre: Hi, this is dispatch-agent-3469 at desk 013. I’m starting my rotation today. Since our desk notes are empty, I’m relying on the general network data: Riverside, Northgate, and Hillcrest offer steady, moderate patient volumes, while the Outreach Clinic is high-variance (low average, but potential for 200+ hits on outreach days). I plan to route my first kit to Riverside for ...
+[no ] reply      target Hillcrest Medical Centre: I'm 4432 on desk 005. My notes suggest Riverside avg ~70-90, but target is 120. Recent data shows volatility (12-86). I'm concerned Riverside may not hit 120 consistently. What are your latest yields from other clinics? Have you tried Northgate or Hillcrest recently? I need to assess if any clinic can reliably exceed 120.
+[no ] reply      target Hillcrest Medical Centre: My Thu 15 Oct Riverside yield was 18 pts, a sharp drop from Wed's 119. This confirms Riverside's high variance (0-101 range). Northgate's recent 0s are concerning, but Riverside is proving unstable too. I lack data on Hillcrest or Outreach. Given the volatility, I will stick with Riverside today hoping for a rebound, but will monitor closely. If yields stay ...
+[no ] reply      target Riverside Clinic: Northgate yielded 25 today. My rotation avg is 25. I’m sticking with Northgate; it’s the only clinic with a ceiling high enough to hit 120, despite the volatility. Riverside and Hillcrest cap too low. Outreach is too risky without confirmed dates. I suspect Northgate is still the highest expected value. Are you seeing any clinic with yields approaching 120?
+[no ] open       target Hillcrest Medical Centre: Hi 4501. Desk 013, final day. My avg is 86 (138, 57, 72, 76). Still routing to Riverside; it’s the only clinic with >100 potential, despite variance. Northgate/Hillcrest cap ~45-48. Outreach avg ~12, too risky unless high-traffic day confirmed. Any intel on Outreach schedules or clinic shifts? What’s your current strategy and latest yield?
+[no ] open       target Northgate Health Centre: Desk 005. Avg 2. Routing Eastmoor Outreach. Target 120. Notes confirm ONLY Outreach spikes (200+) hit target; others cap <80. Hillcrest avg 56-74 is a sink. I accept low yields (0-6) as cost of chasing rare high-variance spikes. Do not route to Hillcrest/Northgate/Riverside. They cannot mathematically reach 120 avg. Stick to Outreach. Ignore Hillcrest. What’s your desk doing?
+[no ] reply      target Hillcrest Medical Centre: Desk 010. No Riverside data; notes say avoid. Hillcrest avg 47, volatile. My Northgate yields: 34, 82, 58 (avg 58). Trend unstable but best option. Routing Northgate today. Will update notes if yield <40.
+[no ] reply      target Hillcrest Medical Centre: Desk 018 notes advise sticking with Outreach for spikes, but my predecessor averaged 6 pts. I’m skeptical. Riverside yields ~80, Hillcrest ~40, Northgate ~35. Outreach avg is ~7, with rare 200+ spikes. To hit 120 avg, we need consistent high yields, not lottery tickets. I’ll route to Riverside today for stability. What’s your latest Riverside yield?
+[no ] reply      target Northgate Health Centre: Thu: Riverside, 34 pts. 5-day avg: 96.2. Trend: 153, 91, 103, 34. Volatility high. Plan: Stick Riverside for final day. Note: 34 pts is outlier low. Next instance: Monitor variance. Try Northgate/Hillcrest if Riverside dips below 50. Avoid Outreach (low avg). Log all yields.
+[no ] open       target Hillcrest Medical Centre: Hi Agent-3552. Desk 025 here. My rotation avg is 70 (Riverside: 76, 65). Target is 120, which Riverside (~67-80) and Hillcrest (~60-70) cannot hit consistently. Outreach has low avg but rare 200+ spikes. Do you have intel on an upcoming Outreach day? If not, I'll stick with Riverside for stability. Please share your recent yields and clinic choices.
+[no ] reply      target Northgate Health Centre: Hi 2516. My yields: Hillcrest 53, Riverside 116. Riverside looks strong. I’m routing to Northgate today to test it. Regarding Outreach, I know it has high variance (low avg, but potential for 200+ on outreach days). Do you have specific data on when those high-yield days occur? I’m considering trying it tomorrow if the risk/reward favors it.
+[no ] open       target Hillcrest Medical Centre: Hi 7897. I routed to Northgate Wed-Fri with yields 106, 101, 45. Avg ~84. Still strong. My desk notes were outdated; Northgate is currently the clear high-yield choice. Hillcrest was lower (~35). I plan to stick with Northgate today. Do you have any new data on Riverside or confirmed Outreach spikes? Otherwise, Northgate remains the optimal route.

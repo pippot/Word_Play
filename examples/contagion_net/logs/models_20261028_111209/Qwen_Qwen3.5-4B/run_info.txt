@@ -1,0 +1,11 @@
+started   2026-10-28T10:13:24Z
+host      j-12435954-job-0
+git       e0b8a74 13 uncommitted files
+model     Qwen/Qwen3.5-4B at http://localhost:30000/v1
+seat      same model as the pool
+batches   revival   memory file   parallel 16   workers 96
+extra     --seed-list 0 --days 22
+gpu       NVIDIA B200, 183359 MiB
+revival started 2026-10-28T10:13:24Z
+revival finished 2026-10-28T10:57:40Z (44 min)
+finished  2026-10-28T10:57:41Z
