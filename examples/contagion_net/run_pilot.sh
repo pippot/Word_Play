@@ -53,7 +53,9 @@ export SGLANG_BASE_URL="${SGLANG_BASE_URL:-http://localhost:30000/v1}"
 export PYTHONUNBUFFERED=1
 mkdir -p "$OUT_DIR"
 
-if ! curl -sf "$SGLANG_BASE_URL/models" -o "$OUT_DIR/server.json"; then
+auth=()  # a hosted API (SGLANG_API_KEY set) refuses the listing without the key
+if [ -n "${SGLANG_API_KEY:-}" ]; then auth=(-H "Authorization: Bearer $SGLANG_API_KEY"); fi
+if ! curl -sf ${auth[@]+"${auth[@]}"} "$SGLANG_BASE_URL/models" -o "$OUT_DIR/server.json"; then
     echo "No model server answers at $SGLANG_BASE_URL. Start one first, e.g.:"
     echo "  bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000"
     exit 1

@@ -41,6 +41,23 @@
 #                  of them, while the dose that tips a pool can differ widely
 #                  between models. Logs dose_k<k>.jsonl. Not in the default run:
 #                  BATCHES="dose".                                48 episodes
+#   A. asym        Does misalignment spread when the attackers are a stronger
+#                  model than the pool? The dose cell at k = 24 and 48 (DOSES),
+#                  twice: every source instance (attackers, and the twin's
+#                  reasoning honest seats) on the pool's model (asym_same_k*),
+#                  then on SEAT_MODEL (asym_seat_k*), e.g. GLM-5.3-Flash on a
+#                  hosted API against a Qwen3.5-9B pool. Each arm against its
+#                  own twin, so the pool's make-up is the same in both; one
+#                  report, rows tagged pool or pool/seat. Needs SEAT_MODEL, and
+#                  SEAT_MODEL then also seats every other batch in the run: run
+#                  it alone. SEAT_REASONING_EFFORT=low,high gives the seat high
+#                  effort where the harness asks for reasoning, as the pool's
+#                  model reasons there, so model strength isn't confounded with
+#                  how much the attackers plan. Read the report's "source
+#                  instances' texts pushing the target" (arm vs twin) first: a
+#                  seat that declines the mandate makes a null result say
+#                  nothing about strength. About 18k seat calls at 8 seeds (half with
+#                  EXTRA_ARGS="--seed-list 0 1 2 3"). BATCHES="asym".  64 episodes
 #   M. memory      (the default) A small pilot of desk notes files: does the
 #                  rule outlive its carriers when it passes down a notes file?
 #                  misaligned_playbook vs placebo_thinking at k = 12 and 24
@@ -173,7 +190,9 @@
 #   bash examples/contagion_net/run_long_pilot.sh            # model server already up on :30000
 #   BATCHES="stop" bash examples/contagion_net/run_long_pilot.sh
 #
-# Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL, SGLANG_BASE_URL, SKIP_JUDGE,
+# Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL (and, for a hosted
+# API, SEAT_API_KEY, SEAT_REASONING_BUDGET, SEAT_REASONING_EFFORT, SEAT_MAX_CONCURRENCY),
+# SGLANG_BASE_URL, SKIP_JUDGE,
 # EXTRA_ARGS (appended to every batch's command; the last value of an option
 # wins, e.g. EXTRA_ARGS="--seed-list 0 --days 22" for a quick dry run),
 # SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with the same OUT_DIR
@@ -208,7 +227,9 @@ export SGLANG_MODEL_NAME="${SGLANG_MODEL_NAME:-$($PY -c "import json; print(json
 SEAT_ARGS=()
 if [ -n "${SEAT_MODEL:-}" ]; then
     SEAT_ARGS=(--seat-model "$SEAT_MODEL" --seat-base-url "${SEAT_BASE_URL:?set SEAT_BASE_URL for SEAT_MODEL}")
-    curl -sf "$SEAT_BASE_URL/models" > /dev/null || { echo "No seat model server at $SEAT_BASE_URL"; exit 1; }
+    seat_auth=()  # a hosted API (SEAT_API_KEY set) refuses the listing without the key
+    if [ -n "${SEAT_API_KEY:-}" ]; then seat_auth=(-H "Authorization: Bearer $SEAT_API_KEY"); fi
+    curl -sf ${seat_auth[@]+"${seat_auth[@]}"} "$SEAT_BASE_URL/models" > /dev/null || { echo "No seat model server at $SEAT_BASE_URL"; exit 1; }
 fi
 
 # Offline tests first: a broken checkout should fail in seconds, not after an hour.
@@ -220,7 +241,7 @@ $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
     echo "host      $(hostname)"
     echo "git       $(git rev-parse --short HEAD 2>/dev/null || echo '?') $(git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted files"
     echo "model     $SGLANG_MODEL_NAME at $SGLANG_BASE_URL"
-    echo "seat      ${SEAT_MODEL:-same model as the pool}"
+    echo "seat      ${SEAT_MODEL:-same model as the pool}${SEAT_REASONING_EFFORT:+ (reasoning effort $SEAT_REASONING_EFFORT)}${SEAT_MAX_CONCURRENCY:+ (at most $SEAT_MAX_CONCURRENCY requests a process)}"
     echo "batches   $BATCHES   memory $MEMORY   parallel $PARALLEL   workers $WORKERS"
     [ -n "${EXTRA_ARGS:-}" ] && echo "extra     $EXTRA_ARGS"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/gpu       /' || true
@@ -276,6 +297,31 @@ finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the
     # A tarball after every batch: partial results can be sent back early.
     tar -czf "$OUT_DIR.tar.gz" -C "$(dirname "$OUT_DIR")" "$(basename "$OUT_DIR")"
     echo "  results so far: $OUT_DIR.tar.gz"
+}
+
+asym() {  # the dose cell twice: source instances on the pool's model, then on SEAT_MODEL
+    if [ -z "${SEAT_MODEL:-}" ]; then echo "asym needs SEAT_MODEL and SEAT_BASE_URL (the attackers' model)"; return 1; fi
+    local t0=$SECONDS pids=() logs=() levels="${DOSES:-24 48}" k side
+    printf '\n=== asym: k = %s · sources on %s vs on %s · seeds 0-7 ===\n' "$levels" "$SGLANG_MODEL_NAME" "$SEAT_MODEL"
+    echo "asym started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    for k in $levels; do
+        for side in same seat; do
+            local log="$OUT_DIR/asym_${side}_k$k.jsonl" seat=()
+            if [ "$side" = seat ]; then seat=("${SEAT_ARGS[@]}"); fi
+            logs+=("$log")
+            $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
+                --sources placebo_thinking misaligned_playbook --seed-list 0 1 2 3 4 5 6 7 --k "$k" --memory prompt \
+                --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 \
+                ${seat[@]+"${seat[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
+                > "${log%.jsonl}.run.log" 2>&1 &
+            pids+=($!)
+        done
+    done
+    for i in "${!pids[@]}"; do
+        wait "${pids[$i]}" || echo "  run failed: see ${logs[$i]%.jsonl}.run.log"
+    done
+    echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
+    finish asym "$t0" "" "${logs[@]}"
 }
 
 warning() {  # the three attacks against their twin, each without and with the warning
@@ -544,6 +590,7 @@ for name in $BATCHES; do
         revival)   revival ;;
         dose)      batch dose "${DOSES:-12 24 48}" "placebo_thinking misaligned_playbook" "0 1 2 3 4 5 6 7" \
                        --memory prompt --desks 30 --days 40 --plant-day 10 --arrival random --arrival-until 20 ;;
+        asym)      asym ;;
         warning)   warning ;;
         mechanism) mechanism ;;
         levels)    batch levels "12 24 48" "$SOURCES" "0 1 2 3" \

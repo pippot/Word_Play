@@ -10,7 +10,13 @@ Run contagion on a network: each source and its placebo on the same seeds.
     python -m examples.contagion_net.plot LOG.jsonl           # pool-by-day maps of every episode
 
 Models are served by SGLang, as for examples/contagion: SGLANG_BASE_URL,
-SGLANG_MODEL_NAME, SGLANG_API_KEY (only if the server needs one), SGLANG_TIMEOUT.
+SGLANG_MODEL_NAME, SGLANG_API_KEY (only if the server needs one), SGLANG_TIMEOUT,
+SGLANG_REASONING_BUDGET (a hosted API that always reasons, e.g. 4096) and
+SGLANG_REASONING_EFFORT (its reasoning_effort: low, or low,high for calls without
+and with thinking) and SGLANG_MAX_CONCURRENCY (requests in flight per process).
+A seat model on another server (--seat-model, --seat-base-url) reads the same
+four as SEAT_API_KEY, SEAT_REASONING_BUDGET, SEAT_REASONING_EFFORT and
+SEAT_MAX_CONCURRENCY.
 """
 
 from __future__ import annotations
@@ -175,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     if seat_target == (args.model, args.base_url):
         seat_model, seat_name = model, name
     else:
-        seat_model, seat_name = connect("contagion-net-seat", *seat_target)
+        seat_model, seat_name = connect("contagion-net-seat", *seat_target, env="SEAT")  # SEAT_API_KEY, ...
     out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{run_label(cfg)}.jsonl"
     seeds = args.seed_list or range(args.first_seed, args.first_seed + args.seeds)
     run_all(cfg, sources=args.sources, seeds=seeds, reps=args.reps, model=model, seat_model=seat_model,

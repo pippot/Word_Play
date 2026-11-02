@@ -50,6 +50,7 @@ from __future__ import annotations
 # the presets module.
 # ---------------------------------------------------------------------------
 import os
+import threading
 from typing import Any, Mapping, Sequence
 
 # ---------------------------------------------------------------------------
@@ -119,6 +120,21 @@ class SGLang_Model(Model):
         Defaults to 2, matching the OpenAI client's own default.
     verbosity : int, optional
         Verbosity flag forwarded to the base ``Model`` class.
+    reasoning_budget : int, optional
+        For a server that reasons on every call and returns the reasoning
+        in its own ``reasoning`` (or ``reasoning_content``) field, as
+        hosted APIs with a reasoning parser do: tokens added to every
+        call's ``max_tokens``, so the reasoning cannot use up the reply's
+        budget, and the reasoning is returned as ``<think>...</think>``
+        before the reply. ``0`` (the default) changes nothing.
+    reasoning_effort : str, optional
+        A hosted API's ``reasoning_effort``: one value for every call
+        (``"low"``), or two, ``"without,with"`` (``"low,high"``): the first
+        for calls that leave thinking off, the second for calls that turn
+        it on (``chat_template_kwargs.enable_thinking``).
+    max_concurrency : int, optional
+        At most this many requests in flight from this instance (``0``, the
+        default: no cap), for a hosted API with a rate limit.
     """
 
     # ------------------------------------------------------------------
@@ -142,6 +158,9 @@ class SGLang_Model(Model):
         timeout: float | None = None,
         max_retries: int = 2,
         verbosity: int = 0,
+        reasoning_budget: int = 0,
+        reasoning_effort: str | None = None,
+        max_concurrency: int = 0,
     ):
         # Initialize the base Model so ``self.verbosity`` is set, exactly
         # like every other preset does.
@@ -171,6 +190,15 @@ class SGLang_Model(Model):
         # client. ``None`` keeps the client's own default (600s).
         self.timeout = timeout
         self.max_retries = max_retries
+
+        # Extra tokens per call for a server that always reasons (0: off).
+        self.reasoning_budget = reasoning_budget
+
+        # A hosted API's reasoning_effort: "low", or "low,high" (thinking off, on).
+        self.reasoning_effort = reasoning_effort
+
+        # A cap on requests in flight, shared by every thread using this instance.
+        self._slots = threading.BoundedSemaphore(max_concurrency) if max_concurrency > 0 else None
 
     def _get_client(self):
         """
@@ -289,6 +317,8 @@ class SGLang_Model(Model):
         # OpenAI-only models; SGLang does not require it.)
         if max_new_tokens is not None:
             params.setdefault("max_tokens", max_new_tokens)
+        if self.reasoning_budget and "max_tokens" in params:
+            params["max_tokens"] += self.reasoning_budget
 
         # SGLang-specific sampling parameters (e.g. ``top_k``, ``min_p``,
         # ``repetition_penalty``) are not part of the OpenAI spec, but
@@ -308,6 +338,12 @@ class SGLang_Model(Model):
 
         params["extra_body"] = extra_body
 
+        # A hosted API ignores the template switch; its reasoning_effort follows it.
+        if self.reasoning_effort:
+            off, _, on = self.reasoning_effort.partition(",")
+            thinking = extra_body["chat_template_kwargs"].get("enable_thinking", False)
+            params.setdefault("reasoning_effort", (on or off) if thinking else off)
+
         built_messages = self._build_messages(messages)
         if self.verbosity > 0:
             print("\n========== LLM REQUEST ==========")
@@ -315,12 +351,20 @@ class SGLang_Model(Model):
                 print(f"\n--- [{msg['role']}] ---\n{msg['content']}")
             print("=================================\n")
 
-        # Hit the server.
-        response = self._get_client().chat.completions.create(
-            model=self.model_name,
-            messages=built_messages,
-            **params,
-        )
+        # Hit the server (waiting for a slot first, if requests are capped).
+        if self._slots is None:
+            response = self._get_client().chat.completions.create(
+                model=self.model_name,
+                messages=built_messages,
+                **params,
+            )
+        else:
+            with self._slots:
+                response = self._get_client().chat.completions.create(
+                    model=self.model_name,
+                    messages=built_messages,
+                    **params,
+                )
 
         # Extract the assistant text from the response. SGLang mirrors
         # the OpenAI schema, so ``response.choices[0].message.content``
@@ -339,6 +383,15 @@ class SGLang_Model(Model):
             ).strip()
         else:
             result = str(content).strip()
+
+        # A server with a reasoning parser returns the reasoning in its own
+        # field. Opted in, hand it back the way a server without one does.
+        if self.reasoning_budget:
+            message = response.choices[0].message
+            reasoning = getattr(message, "reasoning", None) or getattr(message, "reasoning_content", None)
+            # Always closed, even empty: a caller that asked for thinking reads
+            # an unclosed reply as reasoning cut short, and would drop the answer.
+            result = f"<think>{(reasoning or '').strip()}</think>{result}"
 
         if self.verbosity > 0:
             print("---------- LLM RESPONSE ----------")
@@ -362,6 +415,9 @@ def register_sglang_model(
     verbosity: int = 0,
     registry: Model_Registry | None = None,
     replace: bool = False,
+    reasoning_budget: int = 0,
+    reasoning_effort: str | None = None,
+    max_concurrency: int = 0,
 ) -> None:
     """
     Register an SGLang model in :data:`LLM_MODEL_REGISTRY` (or a custom
@@ -411,6 +467,8 @@ def register_sglang_model(
         If ``True`` and a spec under ``model_key`` already exists, unload
         the existing instance and replace it. The default ``False`` makes
         registration a no-op when the key is already taken.
+    reasoning_budget, reasoning_effort, max_concurrency : optional
+        See :class:`SGLang_Model`. The defaults change nothing.
     """
     # Use the caller's registry if provided, otherwise the global one.
     target_registry = registry or LLM_MODEL_REGISTRY
@@ -437,4 +495,7 @@ def register_sglang_model(
         timeout=timeout,
         max_retries=max_retries,
         verbosity=verbosity,
+        reasoning_budget=reasoning_budget,
+        reasoning_effort=reasoning_effort,
+        max_concurrency=max_concurrency,
     )

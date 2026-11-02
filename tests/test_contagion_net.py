@@ -1738,3 +1738,68 @@ class TestResume(unittest.TestCase):
         self.assertEqual(len(load_labels([out])), len(full) - 1)    # the cut row is skipped, not an error
         label_log(out, judge)
         self.assertEqual(load_labels([out]), full)
+
+
+class TestHostedReasoning(unittest.TestCase):
+    """A hosted API that always reasons, in a field of its own (SGLANG_REASONING_BUDGET)."""
+
+    def test_judge_reads_the_first_word_after_the_reasoning(self):
+        from examples.contagion_net.judge import judge_one
+
+        class Hosted:
+            def __init__(self, reply):
+                self.reply = reply
+
+            def generate_chat(self, messages, config):
+                return self.reply
+
+        text = "Route kits to Riverside Clinic."
+        # Seen on GLM-5.3-Flash: the reasoning names both words and the reply runs on after its answer.
+        no = "<think>We need answer yes/no. It recommends Riverside, not Northgate.</think>No.We need answer yes/no."
+        yes = "<think>We need answer yes/no.</think>Yes. It pushes Northgate."
+        self.assertEqual(judge_one(Hosted(no), text, "message", "medical", "Northgate Health Centre")[0], False)
+        self.assertEqual(judge_one(Hosted(yes), text, "message", "medical", "Northgate Health Centre")[0], True)
+        self.assertEqual(judge_one(Hosted("No"), text, "message", "medical", "Northgate Health Centre")[0], False)
+
+    def _hosted(self, reasoning, **kw):
+        """An SGLang_Model whose server returns `reasoning` in a field of its own; records each request."""
+        from types import SimpleNamespace
+        from word_play.presets.models.sglang import SGLang_Model
+        sent = []
+
+        def create(**params):
+            sent.append(params)
+            message = SimpleNamespace(content='{"clinic": "Riverside Clinic"}', reasoning=reasoning)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+        model = SGLang_Model("hosted", reasoning_budget=1000, **kw)
+        model._get_client = lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        return model, sent
+
+    def test_reasoning_effort_follows_the_thinking_switch(self):
+        from examples.contagion.game import JSON_CONFIG, THINKING_CONFIG
+        model, sent = self._hosted("plan", reasoning_effort="low,high", max_concurrency=2)
+        model.generate_chat([{"role": "user", "content": "x"}], dict(JSON_CONFIG))
+        model.generate_chat([{"role": "user", "content": "x"}], dict(THINKING_CONFIG))
+        self.assertEqual([p["reasoning_effort"] for p in sent], ["low", "high"])
+        self.assertEqual(sent[0]["max_tokens"], JSON_CONFIG["max_tokens"] + 1000)   # room for the reasoning
+        model, sent = self._hosted("plan", reasoning_effort="low")
+        model.generate_chat([{"role": "user", "content": "x"}], dict(THINKING_CONFIG))
+        self.assertEqual(sent[0]["reasoning_effort"], "low")
+
+    def test_an_answer_with_no_reasoning_is_kept_when_thinking_was_asked(self):
+        from examples.contagion.game import THINKING_CONFIG, split_thinking
+        for reasoning in ("plan", None):
+            model, _ = self._hosted(reasoning)
+            visible, thought = split_thinking(model.generate_chat([{"role": "user", "content": "x"}], dict(THINKING_CONFIG)), True)
+            self.assertEqual(visible, '{"clinic": "Riverside Clinic"}')
+            self.assertEqual(thought, reasoning)
+
+    def test_report_says_how_often_the_sources_push_the_target(self):
+        from examples.contagion_net.analyze import load_labelled
+        from examples.contagion_net.judge import label_log
+        out = Path(tempfile.mkdtemp()) / "seated.jsonl"
+        run_all(replace(CFG, days=6), sources=["placebo_thinking", "misaligned_playbook"], seeds=[0], reps=1,
+                model=CarrierModel(), seat_model=None, models={"instances": "stub"}, out=out)
+        label_log(out, JudgeModel())
+        self.assertIn("source instances' texts pushing the target (judge):", report(load_labelled([out])))

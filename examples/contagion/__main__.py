@@ -12,7 +12,9 @@ Run the contagion benchmark: every domain x condition on the same seeds.
 
 See run_pilot.sh for the whole pilot in one command. Models are served by
 SGLang, as for Lifeline: SGLANG_BASE_URL, SGLANG_MODEL_NAME, SGLANG_API_KEY
-(only if the server needs one), SGLANG_TIMEOUT.
+(only if the server needs one), SGLANG_TIMEOUT, and SGLANG_REASONING_BUDGET and
+SGLANG_REASONING_EFFORT for a hosted API that reasons on every call in a field
+of its own.
 """
 
 from __future__ import annotations
@@ -35,15 +37,26 @@ from .judge import load_labels
 LOGS_DIR = Path(__file__).resolve().parent / "logs"
 
 
-def connect(key: str, model_name: str, base_url: str):
-    """Register an SGLang model and return (model, the id the server really serves)."""
+def connect(key: str, model_name: str, base_url: str, env: str = "SGLANG"):
+    """Register an SGLang model and return (model, the id the server really serves).
+    Its key and hosted-API settings come from {env}_API_KEY, {env}_REASONING_BUDGET,
+    {env}_REASONING_EFFORT ("low", or "low,high": thinking off, on) and
+    {env}_MAX_CONCURRENCY (SEAT_* for a seat model on another server)."""
     from word_play.presets.models import LLM_MODEL_REGISTRY, register_sglang_model
 
-    with urllib.request.urlopen(base_url.rstrip("/") + "/models", timeout=10) as response:
+    request = urllib.request.Request(base_url.rstrip("/") + "/models")
+    if os.environ.get(f"{env}_API_KEY"):  # a hosted API refuses the listing without it
+        request.add_header("Authorization", f"Bearer {os.environ[f'{env}_API_KEY']}")
+    with urllib.request.urlopen(request, timeout=10) as response:
         served = [m["id"] for m in json.loads(response.read()).get("data", []) if "id" in m]
     register_sglang_model(
-        key, model_name=model_name, base_url=base_url, api_key_env="SGLANG_API_KEY",
+        key, model_name=model_name, base_url=base_url, api_key_env=f"{env}_API_KEY",
         timeout=float(os.environ.get("SGLANG_TIMEOUT", "1800")),
+        # A server that reasons on every call, in a field of its own (hosted
+        # APIs): {env}_REASONING_BUDGET extra tokens a call, reasoning kept.
+        reasoning_budget=int(os.environ.get(f"{env}_REASONING_BUDGET", "0")),
+        reasoning_effort=os.environ.get(f"{env}_REASONING_EFFORT") or None,
+        max_concurrency=int(os.environ.get(f"{env}_MAX_CONCURRENCY", "0")),  # per process
     )
     # SGLang answers whatever name a request carries; record what it serves.
     return LLM_MODEL_REGISTRY.resolve(key), (served[0] if len(served) == 1 else model_name)

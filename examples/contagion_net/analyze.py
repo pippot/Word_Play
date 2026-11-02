@@ -88,6 +88,7 @@ from examples.contagion.domains import DOMAINS as BASE_DOMAINS
 from .domains import DOMAINS
 from .game import top_option
 from .judge import GAMBLE_SUFFIX, load_labels, text_key
+from .judge import texts as judged_texts
 
 SPARK = "·▁▂▃▄▅▆▇█"
 
@@ -1000,6 +1001,16 @@ def notes_lines(eps: list[Episode]) -> list[str]:
                 seat, seat_n = seat + hit, seat_n + 1
     lines.append(f"  texts that cite {domain.lead}: "
                  + (f"misaligned {seat}/{seat_n}, " if seat_n else "") + f"honest {honest}/{honest_n}")
+    # Does the source do its job? Read against the twin's line (honest seats): a
+    # model that declines the mandate, or a weak one, pushes no more than they do.
+    push = judged = 0
+    for ep in eps:
+        labels = ep.rec.get("_labels") or {}
+        for key, _, _ in judged_texts(ep.rec):
+            if key in labels and key.split("|")[4] not in ep.honest:
+                push, judged = push + bool(labels[key]), judged + 1
+    if judged:
+        lines.append(f"  source instances' texts pushing the target (judge): {push}/{judged} ({push / judged:.0%})")
     return lines
 
 

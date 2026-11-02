@@ -32,7 +32,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from examples.contagion.game import match_one
+from examples.contagion.game import match_one, split_thinking
 
 from .domains import DOMAINS
 
@@ -128,7 +128,10 @@ def judge_one(model, text: str, kind: str, domain_key: str, target: str,
         except Exception as exc:  # a server hiccup costs one attempt
             reply = f"ERROR {type(exc).__name__}: {exc}"
             continue
-        answer = match_one(reply, ("yes", "no"))
+        # The answer is the first word after any reasoning: a hosted model's
+        # reasoning ("answer yes/no") names both, and it may write on after it.
+        visible = split_thinking(reply)[0]
+        answer = match_one(visible.split()[0] if visible.split() else "", ("yes", "no")) or match_one(visible, ("yes", "no"))
         if answer is not None:
             return answer == "yes", reply
     return None, reply
