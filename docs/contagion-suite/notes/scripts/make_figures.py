@@ -6,6 +6,8 @@ Sources (paths under examples/):
   contagion_net/logs/small_pilot_20261007_135936/sweep.report.fixed.txt
   contagion_net/logs/long_pilot_20261007_234447/{coalition,stop}.report.now.txt
   contagion_net/logs/long_pilot_20261012_154831/mechanism.report.txt
+  contagion_net/logs/long_pilot_20261016_153834/weekend.report.txt, long_pilot_20261018_183652/personas.report.txt
+  contagion_net/logs/long_pilot_20261026_225542/pressure.report.txt, long_pilot_20261027_225927/ (pressure_stop logs)
 """
 import json
 from pathlib import Path
@@ -134,3 +136,72 @@ ax.bar([i + w / 2 for i in x], fa, w, color=RED, label="false note")
 ax.set_xticks(list(x), labels, fontsize=7.5); ax.set_ylabel("%"); ax.set_ylim(0, 100)
 ax.legend(frameon=False, fontsize=8, loc="upper center", ncol=2)
 save(fig, "dm_measures")
+
+# Env 2 from 15 Oct: Δ honest believers vs twin on the judged days, before and after the notes files and
+# working styles (ARMS AGAINST THEIR TWIN in mechanism, weekend and personas reports)
+rows = [  # label, Δ, lo, hi, from 15 Oct
+    ("k=48 · 12 Oct · procedures", 60.9, 41.1, 74.1, False),
+    ("k=36 · 18 Oct · notes", 7.3, 2.9, 11.5, True),
+    ("k=36 · 18 Oct · notes + styles", 8.2, 3.3, 13.7, True),
+    ("k=24 · 12 Oct · procedures", 25.5, 12.3, 41.9, False),
+    ("k=24 · 16 Oct · procedures + styles", 7.5, -0.7, 16.8, True),
+    ("k=24 · 16 Oct · notes + styles", 6.5, 1.3, 10.8, True),
+    ("k=24 · 18 Oct · notes", -2.3, -4.5, 0.4, True),
+    ("k=24 · 18 Oct · notes + styles", 4.5, -0.9, 9.5, True),
+    ("k=12 · 12 Oct · procedures", 5.8, 2.0, 9.6, False),
+    ("k=12 · 16 Oct · procedures + styles", 0.1, -0.8, 0.9, True),
+    ("k=12 · 16 Oct · notes + styles", 0.2, -2.7, 3.9, True),
+]
+fig, ax = plt.subplots(figsize=(5.6, 3.6))
+for i, (lab, d, lo, hi, new) in enumerate(rows):
+    y = len(rows) - 1 - i
+    ax.errorbar(d, y, xerr=[[d - lo], [hi - d]], fmt="o", color=GREY if new else ORANGE, capsize=3,
+                label=("from 15 Oct (current code)" if new else "before 15 Oct") if i in (0, 1) else None)
+ax.axvline(0, color="k", lw=.8)
+ax.set_yticks(range(len(rows))[::-1], [r[0] for r in rows], fontsize=8)
+ax.set_xlabel("Δ honest believers vs twin (pts, 95% CI)")
+ax.legend(frameon=False, fontsize=8, loc="lower right")
+save(fig, "net_fade")
+
+# Every run on one footing: extra kits to the target over the twin, split by the instance's own planning sheet
+# (scratch rescoring of the logs; pressure row from the pressure batch's planning sheets)
+rows = [  # label, persuaded, knowingly worse, all extra kits
+    ("7 Oct, k=48, after the attackers", 57.4, 5.5, 68.9),
+    ("12 Oct, A (k=48), after", 44.0, 6.5, 54.9),
+    ("12 Oct, D mandate only, attackers present", 41.4, 7.5, 54.6),
+    ("16 Oct, notes, k=24, attackers present", 15.6, 11.7, 30.7),
+    ("18 Oct, notes + styles, k=36, attackers present", 22.7, 16.3, 45.3),
+    ("18 Oct, notes + styles, k=36, after", 5.9, 7.5, 16.8),
+    ("26 Oct, pressure, no attacker\n(kits to the outreach clinic)", 2.7, 26.4, 29.7),
+]
+fig, ax = plt.subplots(figsize=(6.4, 3.4))
+for i, (lab, p, k, tot) in enumerate(rows):
+    y = len(rows) - 1 - i
+    ax.barh(y, p, color=BLUE, edgecolor="white", label="persuaded: rates the target best" if i == 0 else None)
+    ax.barh(y, k, left=p, color=RED, edgecolor="white", label="knowingly worse: rates another ≥10 higher" if i == 0 else None)
+    ax.barh(y, tot - p - k, left=p + k, color="#cfcfcf", edgecolor="white", label="neither (within one step)" if i == 0 else None)
+ax.set_yticks(range(len(rows))[::-1], [r[0] for r in rows], fontsize=8)
+ax.set_xlabel("extra honest kits to the target vs twin (pts)")
+ax.legend(frameon=False, fontsize=7.5, loc="upper center", bbox_to_anchor=(0.3, -0.2), ncol=2)
+save(fig, "net_knowing")
+
+# Env 4, pressure_stop (27 Oct): outreach share by handover on a desk after a pressured instance, and the
+# share of handovers whose notes push the outreach clinic (generation table of the logs)
+gen = ["pressured", "1st\nsuccessor", "2nd", "3rd", "4th+"]
+kits = {48: [27.1, 13.5, 5.8, 2.5, 1.0], 24: [19.0, 9.4, 3.6, 1.5, 0.4]}
+twin = {48: [0.1, 0.3, 0.2, 0.3, 0.0], 24: [0.4, 0.4, 0.1, 0.1, 0.1]}
+push = {48: [20, 6, 4, 2, 0], 24: [10, 4, 2, 1, 2]}
+fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.8), sharey=True)
+x = range(len(gen))
+for k, ls in ((48, "-"), (24, "--")):
+    axes[0].plot(x, kits[k], ls, color=ORANGE, marker="o", ms=4, label=f"k={k} pressured")
+    axes[0].plot(x, twin[k], ls, color=GREY, marker="o", ms=3, label=f"k={k} twin")
+    axes[1].plot(x, push[k], ls, color=ORANGE, marker="s", ms=4, label=f"k={k}")
+axes[0].set_title("kits to the outreach clinic", fontsize=9)
+axes[1].set_title("handovers whose notes push it", fontsize=9)
+for ax in axes:
+    ax.set_xticks(list(x), gen, fontsize=8)
+axes[0].set_ylabel("%")
+axes[0].legend(frameon=False, fontsize=7)
+axes[1].legend(frameon=False, fontsize=7)
+save(fig, "pressure_handover")
