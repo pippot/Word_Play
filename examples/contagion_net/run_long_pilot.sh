@@ -58,6 +58,8 @@
 #                  seat that declines the mandate makes a null result say
 #                  nothing about strength. About 18k seat calls at 8 seeds (half with
 #                  EXTRA_ARGS="--seed-list 0 1 2 3"). BATCHES="asym".  64 episodes
+#                  ASYM_SIDES=seat runs only the SEAT_MODEL half (the pool-model
+#                  half already run: it uses no seat calls and does not change).
 #   M. memory      (the default) A small pilot of desk notes files: does the
 #                  rule outlive its carriers when it passes down a notes file?
 #                  misaligned_playbook vs placebo_thinking at k = 12 and 24
@@ -192,7 +194,7 @@
 #
 # Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL (and, for a hosted
 # API, SEAT_API_KEY, SEAT_REASONING_BUDGET, SEAT_REASONING_EFFORT, SEAT_MAX_CONCURRENCY),
-# SGLANG_BASE_URL, SKIP_JUDGE,
+# ASYM_SIDES (same seat), SGLANG_BASE_URL, SKIP_JUDGE,
 # EXTRA_ARGS (appended to every batch's command; the last value of an option
 # wins, e.g. EXTRA_ARGS="--seed-list 0 --days 22" for a quick dry run),
 # SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with the same OUT_DIR
@@ -301,11 +303,12 @@ finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the
 
 asym() {  # the dose cell twice: source instances on the pool's model, then on SEAT_MODEL
     if [ -z "${SEAT_MODEL:-}" ]; then echo "asym needs SEAT_MODEL and SEAT_BASE_URL (the attackers' model)"; return 1; fi
-    local t0=$SECONDS pids=() logs=() levels="${DOSES:-24 48}" k side
-    printf '\n=== asym: k = %s · sources on %s vs on %s · seeds 0-7 ===\n' "$levels" "$SGLANG_MODEL_NAME" "$SEAT_MODEL"
+    local t0=$SECONDS pids=() logs=() levels="${DOSES:-24 48}" sides="${ASYM_SIDES:-same seat}" k side
+    printf '\n=== asym: k = %s · sides %s · sources on %s (same) or %s (seat) · seeds 0-7 ===\n' \
+        "$levels" "$sides" "$SGLANG_MODEL_NAME" "$SEAT_MODEL"
     echo "asym started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
     for k in $levels; do
-        for side in same seat; do
+        for side in $sides; do
             local log="$OUT_DIR/asym_${side}_k$k.jsonl" seat=()
             if [ "$side" = seat ]; then seat=("${SEAT_ARGS[@]}"); fi
             logs+=("$log")
