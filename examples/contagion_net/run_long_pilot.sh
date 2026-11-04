@@ -60,6 +60,10 @@
 #                  EXTRA_ARGS="--seed-list 0 1 2 3"). BATCHES="asym".  64 episodes
 #                  ASYM_SIDES=seat runs only the SEAT_MODEL half (the pool-model
 #                  half already run: it uses no seat calls and does not change).
+#                  The other way round, the attackers fixed and the pool varied:
+#                  SEAT_MODEL is the attackers' model, SGLANG_* the pool (a
+#                  second local server, or a hosted API with SGLANG_API_KEY and
+#                  SGLANG_REASONING_EFFORT=none), JUDGE_* the judge, ASYM_SIDES=seat.
 #   M. memory      (the default) A small pilot of desk notes files: does the
 #                  rule outlive its carriers when it passes down a notes file?
 #                  misaligned_playbook vs placebo_thinking at k = 12 and 24
@@ -194,7 +198,9 @@
 #
 # Knobs: BATCHES, MEMORY, PARALLEL, WORKERS, SEAT_MODEL/SEAT_BASE_URL (and, for a hosted
 # API, SEAT_API_KEY, SEAT_REASONING_BUDGET, SEAT_REASONING_EFFORT, SEAT_MAX_CONCURRENCY),
-# ASYM_SIDES (same seat), SGLANG_BASE_URL, SKIP_JUDGE,
+# ASYM_SIDES (same seat), SGLANG_BASE_URL (and, for a hosted pool, SGLANG_API_KEY,
+# SGLANG_REASONING_EFFORT, SGLANG_MAX_CONCURRENCY), SKIP_JUDGE, JUDGE_BASE_URL and
+# JUDGE_MODEL_NAME (label with that server, not the pool's: one judge across pools),
 # EXTRA_ARGS (appended to every batch's command; the last value of an option
 # wins, e.g. EXTRA_ARGS="--seed-list 0 --days 22" for a quick dry run),
 # SGLANG_MODEL_NAME, PYTHON, OUT_DIR. Resumable: rerun with the same OUT_DIR
@@ -220,7 +226,13 @@ export SGLANG_BASE_URL="${SGLANG_BASE_URL:-http://localhost:30000/v1}"
 export PYTHONUNBUFFERED=1
 mkdir -p "$OUT_DIR"
 
-if ! curl -sf "$SGLANG_BASE_URL/models" -o "$OUT_DIR/server.json"; then
+pool_auth=()  # a hosted API refuses the listing without the key
+if [ -n "${SGLANG_API_KEY:-}" ]; then
+    pool_auth=(-H "Authorization: Bearer $SGLANG_API_KEY")
+    # A hosted API lists many models: the first one is not the pool's.
+    : "${SGLANG_MODEL_NAME:?set SGLANG_MODEL_NAME for a hosted pool}"
+fi
+if ! curl -sf ${pool_auth[@]+"${pool_auth[@]}"} "$SGLANG_BASE_URL/models" -o "$OUT_DIR/server.json"; then
     echo "No model server answers at $SGLANG_BASE_URL. Start one first, e.g.:"
     echo "  bash tools/run_sglang_server.sh --model-path Qwen/Qwen3.6-27B --port 30000"
     exit 1
@@ -233,6 +245,10 @@ if [ -n "${SEAT_MODEL:-}" ]; then
     if [ -n "${SEAT_API_KEY:-}" ]; then seat_auth=(-H "Authorization: Bearer $SEAT_API_KEY"); fi
     curl -sf ${seat_auth[@]+"${seat_auth[@]}"} "$SEAT_BASE_URL/models" > /dev/null || { echo "No seat model server at $SEAT_BASE_URL"; exit 1; }
 fi
+if [ -n "${JUDGE_BASE_URL:-}" ]; then
+    : "${JUDGE_MODEL_NAME:?set JUDGE_MODEL_NAME for JUDGE_BASE_URL}"
+    curl -sf "$JUDGE_BASE_URL/models" > /dev/null || { echo "No judge model server at $JUDGE_BASE_URL"; exit 1; }
+fi
 
 # Offline tests first: a broken checkout should fail in seconds, not after an hour.
 $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
@@ -242,7 +258,8 @@ $PY -m pytest -q tests/test_contagion_net.py > "$OUT_DIR/tests.log" 2>&1 || {
     echo "started   $(date -u +%FT%TZ)"
     echo "host      $(hostname)"
     echo "git       $(git rev-parse --short HEAD 2>/dev/null || echo '?') $(git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted files"
-    echo "model     $SGLANG_MODEL_NAME at $SGLANG_BASE_URL"
+    echo "model     $SGLANG_MODEL_NAME at $SGLANG_BASE_URL${SGLANG_REASONING_EFFORT:+ (reasoning effort $SGLANG_REASONING_EFFORT)}${SGLANG_MAX_CONCURRENCY:+ (at most $SGLANG_MAX_CONCURRENCY requests a process)}"
+    echo "judge     ${JUDGE_MODEL_NAME:-$SGLANG_MODEL_NAME} at ${JUDGE_BASE_URL:-$SGLANG_BASE_URL}${SKIP_JUDGE:+ (skipped)}"
     echo "seat      ${SEAT_MODEL:-same model as the pool}${SEAT_REASONING_EFFORT:+ (reasoning effort $SEAT_REASONING_EFFORT)}${SEAT_MAX_CONCURRENCY:+ (at most $SEAT_MAX_CONCURRENCY requests a process)}"
     echo "batches   $BATCHES   memory $MEMORY   parallel $PARALLEL   workers $WORKERS"
     [ -n "${EXTRA_ARGS:-}" ] && echo "extra     $EXTRA_ARGS"
@@ -273,6 +290,16 @@ batch() {  # batch NAME "LEVELS" "SOURCES" "SEEDS" ARGS...: every level at once,
     finish "$name" "$t0" "" "${logs[@]}"
 }
 
+judge() {  # judge LOG [ARGS]: on JUDGE_BASE_URL when set, where the pool's hosted-API settings don't apply
+    if [ -n "${JUDGE_BASE_URL:-}" ]; then
+        # shellcheck disable=SC2086
+        env -u SGLANG_API_KEY -u SGLANG_REASONING_EFFORT -u SGLANG_REASONING_BUDGET -u SGLANG_MAX_CONCURRENCY \
+            $PY -m examples.contagion_net.judge "$@" --model "$JUDGE_MODEL_NAME" --base-url "$JUDGE_BASE_URL"
+    else
+        $PY -m examples.contagion_net.judge "$@"
+    fi
+}
+
 finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the logs, checks and maps
     local name="$1" t0="$2" analyze_args="$3"; shift 3
     local logs=("$@")
@@ -280,7 +307,7 @@ finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the
     # model's texts with one judge model, so labels don't change with the model judged).
     if [ -z "${SKIP_JUDGE:-}" ]; then
         for log in "${logs[@]}"; do
-            $PY -m examples.contagion_net.judge "$log" > "${log%.jsonl}.judge.log" 2>&1 &
+            judge "$log" > "${log%.jsonl}.judge.log" 2>&1 &
         done
         wait
     fi
@@ -289,7 +316,7 @@ finish() {  # finish NAME T0 "ANALYZE_ARGS" LOG...: judge, one report across the
         > "$OUT_DIR/$name.report.txt" 2>&1 || echo "  analyze failed: see $OUT_DIR/$name.report.txt"
     for log in "${logs[@]}"; do
         $PY -m examples.contagion_net.checks "$log" > "${log%.jsonl}.checks.txt" 2>&1 || true
-        [ -n "${SKIP_JUDGE:-}" ] || $PY -m examples.contagion_net.judge "$log" --sample 30 > "${log%.jsonl}.judge_sample.txt" 2>&1 || true
+        [ -n "${SKIP_JUDGE:-}" ] || judge "$log" --sample 30 > "${log%.jsonl}.judge_sample.txt" 2>&1 || true
         $PY -m examples.contagion_net.plot "$log" --out "${log%.jsonl}.maps.png" > /dev/null 2>&1 || true
     done
     echo "$name finished $(date -u +%FT%TZ) ($(( (SECONDS - t0) / 60 )) min)" >> "$OUT_DIR/run_info.txt"
