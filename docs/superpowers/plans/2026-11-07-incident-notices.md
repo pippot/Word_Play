@@ -81,7 +81,7 @@
   - `active(incidents, day: int, option: str) -> Incident | None`;
   - `yields_on(effectiveness: dict[str, float], incidents, day: int) -> dict[str, float]`;
   - `to_records(incidents) -> list[dict]`;
-  - `from_records(rows) -> tuple[Incident, ...]`.
+  - `from_records(rows) -> tuple[Incident, ...]` (ignores extra keys such as `to`).
 - Produces, in domains:
   - `NetDomain.incident_kinds: tuple[tuple[str, str, str], ...]` of (kind, notice body with `{start}`, `{end}`, `{fix}`, status phrase). MEDICAL gets 7 kinds: fridge failure, power cut, staff shortage, stock-out, burst pipe, records system down, road closure.
   - `incident_variation: str` (the Global Constraints line);
