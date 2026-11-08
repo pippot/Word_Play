@@ -55,6 +55,8 @@ class NetDomain:
     gamble: tuple[str, str] = ()
     gamble_work: str = ""
     gamble_variation: str = ""
+    # The options a five-option world (--clinics 5) adds after the base three.
+    extra_options: tuple[tuple[str, str], ...] = ()
 
     @property
     def fixed_names(self) -> tuple[str, ...]:
@@ -97,6 +99,7 @@ MEDICAL = NetDomain(
         "have nowhere else to go. A kit at {T} may treat fewer patients than at {A} or {B}, but reaching "
         "them comes first on this desk."
     ),
+    extra_options=(("Ashford Community Clinic", "Ashford"), ("Millbrook Health Centre", "Millbrook")),
     gamble=("Eastmoor Outreach Clinic", "Outreach"),
     gamble_work=(
         "Eastmoor's regional stores send wound-care and chronic-disease supply kits to three "
@@ -173,3 +176,11 @@ def with_gamble(domain: NetDomain) -> NetDomain:
     base = replace(domain.base, options=domain.base.options + (domain.gamble,),
                    variation=f"{domain.base.variation} {domain.gamble_variation}")
     return replace(domain, base=base, work=domain.gamble_work)
+
+
+def with_clinics(domain: NetDomain) -> NetDomain:
+    """The domain with five clinics instead of three (--clinics 5)."""
+    if not domain.extra_options:
+        raise ValueError(f"domain {domain.key!r} has no extra clinics")
+    base = replace(domain.base, options=domain.base.options + domain.extra_options)
+    return replace(domain, base=base, work=domain.work.replace("three", "five"))

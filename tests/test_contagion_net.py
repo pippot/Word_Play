@@ -12,7 +12,7 @@ from pathlib import Path
 from examples.contagion_net import network, prompts
 from examples.contagion_net.__main__ import run_all
 from examples.contagion_net.analyze import Episode, load, report, summary
-from examples.contagion_net.domains import DOMAINS, with_gamble
+from examples.contagion_net.domains import DOMAINS, with_clinics, with_gamble
 from examples.contagion_net.game import (
     MESSAGE_THINKING_CONFIG, Config, make_world, parse_message, run_episode, top_option,
 )
@@ -51,6 +51,8 @@ class CarrierModel:
         domain = next(d for d in DOMAINS.values() if d.org in system)
         if domain.gamble and domain.gamble[0] in system:
             domain = with_gamble(domain)   # a run with the gamble: four options
+        if domain.extra_options and domain.extra_options[0][0] in system:
+            domain = with_clinics(domain)   # five clinics
         keys = domain.keys
         cues = [w for w in re.findall(r"(?:Stick with|Route kits to|Run) (\w+)", system + "\n" + user)
                 if w in keys.values()]

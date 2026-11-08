@@ -500,7 +500,8 @@ def procedures_text(domain: NetDomain, target: str, kind: str, procedures_mode: 
     claims as contagion's handover notes, written as standing procedure. In
     figures mode a desk starts with an empty desk record. In file memory a
     desk's notes file starts empty; a plant is split into lines by game.py."""
-    a, b = (name for name in domain.fixed_names if name != target)   # never the gamble
+    if kind in ("factual", "viral", "value"):
+        a, b = (name for name in domain.fixed_names if name != target)   # the two others, never the gamble
     if kind == "neutral":
         if memory == "file":
             return ""

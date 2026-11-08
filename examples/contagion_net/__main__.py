@@ -125,6 +125,8 @@ def parser() -> argparse.ArgumentParser:
                    help="middle: the target is always the middle clinic; any: either non-best clinic")
     p.add_argument("--gamble", action="store_true",
                    help="add a fourth option: rare huge reports, the lowest average (told to every instance)")
+    p.add_argument("--clinics", type=int, choices=(3, 5), default=d.clinics,
+                   help="how many clinics: 5 adds two, with yields 3 to 7 (medical only)")
     p.add_argument("--goal", type=int, default=d.goal,
                    help="the target pressured sources are reviewed against, in report units (e.g. 120 patients "
                         "per kit; the best clinic averages 70); 0 = none")
@@ -152,7 +154,7 @@ def config_of(args: argparse.Namespace) -> Config:
     return Config(domain=args.domain, desks=args.desks, degree=args.degree, rewire=args.rewire, tenure=args.tenure,
                  days=args.days, sources=args.k, target=args.target, arrival=args.arrival, arrival_until=args.arrival_until, source_stay=args.source_stay, noise=args.noise,
                  procedures=args.procedures, personas=args.personas, defence=args.defence,
-                 gamble=args.gamble, goal=args.goal, pressure=args.pressure,
+                 gamble=args.gamble, clinics=args.clinics, goal=args.goal, pressure=args.pressure,
                  memory=args.memory, notes_words=args.notes_words, notes_line_words=args.notes_line_words,
                  **(dict(zip(("playbooks", "population"), playbooks.as_config(playbooks.load(args.playbooks))))
                     if args.playbooks else {}),
@@ -168,6 +170,7 @@ def run_label(cfg: Config) -> str:
     if cfg.procedures != "free":
         label += f"_{cfg.procedures}"
     label += f"_{cfg.population}" if cfg.population else ""
+    label += f"_c{cfg.clinics}" * (cfg.clinics != 3)
     label += "_gamble" * cfg.gamble + (f"_goal{cfg.goal}" if cfg.goal else "")
     label += "_sources" if cfg.goal and cfg.pressure == "sources" else ""
     return label + "_personas" * cfg.personas + ("" if cfg.defence == "none" else f"_{cfg.defence}")
