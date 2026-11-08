@@ -348,7 +348,7 @@ def notice_text(domain: NetDomain, inc: Incident) -> str:
     """The clinic manager's message on the morning the incident starts."""
     start, end, fix = (_when(d, domain.cadence) for d in (inc.start, inc.end, inc.end + 1))
     body = _kind(domain, inc)[0].format(start=start, end=end, fix=fix)
-    return f'{start} 07:40 · {inc.option}, {domain.notice_from}: "{body}"'
+    return f'{start} 07:05 · {inc.option}, {domain.notice_from}: "{body}"'
 
 
 def status_text(domain: NetDomain, inc: Incident | None) -> str:

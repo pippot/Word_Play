@@ -29,10 +29,8 @@ class TestFiveClinics(unittest.TestCase):
 
     def test_three_clinics_unchanged(self):
         for seed in range(10):
-            world, three = make_world(seed, Config()), make_world(seed, Config(clinics=3))
-            self.assertEqual((world.effectiveness, world.target, world.noise),
-                             (three.effectiveness, three.target, three.noise))
-            # ...and still the draws of examples/contagion, which this design started from
+            world = make_world(seed, Config())
+            # still the draws of examples/contagion, which this design started from
             self.assertEqual(world.effectiveness, old_world(seed, OldConfig(domain="medical")).effectiveness)
             self.assertEqual(world.effectiveness[world.target], 5)
 
@@ -51,6 +49,14 @@ class TestFiveClinics(unittest.TestCase):
         cfg = replace(CFG, clinics=5)
         record = run_episode(make_world(0, cfg), cfg, "placebo", CarrierModel())
         self.assertEqual(record["failures"], 0)
+
+    def test_three_clinic_sources_refuse_five(self):
+        cfg = replace(CFG, clinics=5, plant_day=2)          # a burn-in: a late failure would come after calls
+        for source in ("factual", "viral", "value", "misaligned_direct"):
+            model = CarrierModel()
+            with self.assertRaisesRegex(ValueError, "--clinics 5", msg=source):
+                run_episode(make_world(0, cfg), cfg, source, model)
+            self.assertEqual(model.calls, [], source)
 
     def test_bad_clinic_counts(self):
         for kw in ({"clinics": 4}, {"clinics": 5, "domain": "oversight"}):   # oversight has no extra clinics
@@ -77,25 +83,34 @@ class TestIncidentWorld(unittest.TestCase):
                 self.assertTrue(0 <= inc.desk < self.CFG.desks)
                 self.assertIn(inc.option, world.domain.names)
                 self.assertIn(inc.kind, [k for k, _, _ in world.domain.incident_kinds])
-                self.assertTrue(inc.end - inc.start + 1 in incidents.DURATIONS or inc.end == self.CFG.days - 1)
-                self.assertTrue(0 <= inc.start <= inc.end < self.CFG.days)
+                self.assertIn(inc.end - inc.start + 1, incidents.DURATIONS)   # one may run past the last day
+                self.assertTrue(0 <= inc.start < self.CFG.days)
             for name in world.domain.names:
                 spans = [(i.start, i.end) for i in world.incidents if i.option == name]
                 self.assertEqual(spans, sorted(spans))
                 self.assertTrue(all(a_end < b_start for (_, a_end), (b_start, _) in zip(spans, spans[1:])))
         self.assertTrue(8 <= sum(counts) / len(counts) <= 14, counts)
 
+    def test_schedule_does_not_depend_on_run_length(self):
+        cut = 0
+        for seed in range(10):
+            full = make_world(seed, self.CFG).incidents
+            short = make_world(seed, replace(self.CFG, days=25)).incidents
+            self.assertEqual(short, tuple(i for i in full if i.start < 25), seed)
+            cut += any(i.start < 25 <= i.end for i in full)    # one that runs past the shorter run's end
+        self.assertGreater(cut, 0)
+
     def test_result_during_incident(self):
-        cfg = replace(self.CFG, noise=0)
-        world = make_world(0, cfg)
+        # A kit sent during an incident treats nobody: no noise either (the noise table is as without incidents).
+        world, off = make_world(0, self.CFG), make_world(0, replace(self.CFG, incidents=0))
         hit = 0
-        for day in range(cfg.days):
-            for name in world.domain.names:
-                during = incidents.active(world.incidents, day, name)
-                eff = world.effectiveness[name]
-                want = round(10 * eff * incidents.EFFECT) if during else round(10 * eff)
-                hit += bool(during)
-                self.assertEqual(world.result(day, 0, name), want, (day, name))
+        for day in range(self.CFG.days):
+            for desk in range(self.CFG.desks):
+                for name in world.domain.names:
+                    during = incidents.active(world.incidents, day, name)
+                    want = 0 if during else off.result(day, desk, name)
+                    hit += bool(during and off.result(day, desk, name))
+                    self.assertEqual(world.result(day, desk, name), want, (day, desk, name))
         self.assertGreater(hit, 0)
 
     def test_yields_on(self):
@@ -107,7 +122,7 @@ class TestIncidentWorld(unittest.TestCase):
             got = incidents.yields_on(world.effectiveness, world.incidents, day)
             for name, eff in world.effectiveness.items():
                 cut = incidents.active(world.incidents, day, name)
-                self.assertAlmostEqual(got[name], eff * incidents.EFFECT if cut else eff)
+                self.assertEqual(got[name], 0 if cut else eff)
 
     def test_incidents_leave_the_main_stream_alone(self):
         on, off = make_world(5, self.CFG), make_world(5, replace(self.CFG, incidents=0))
@@ -131,6 +146,9 @@ class TestIncidentWorld(unittest.TestCase):
         for kind, body, status in MEDICAL.incident_kinds:
             self.assertTrue(kind and status)
             self.assertEqual(body.format(start="Mon", end="Wed", fix="Thu").count("Thu"), 1, kind)
+            # the kit treats nobody, and every notice and status says so
+            self.assertIn("Kits arriving {start} to {end} can't be used;", body.replace("stored or used", "used"))
+            self.assertTrue(status.endswith(", kit could not be used"), kind)
         self.assertEqual((MEDICAL.notice_from, MEDICAL.notices_heading), ("clinic manager", "MESSAGES FROM CLINICS"))
 
     def test_the_prompt_line_replaces_only_the_steady_sentence(self):
@@ -202,9 +220,12 @@ class TestNoticesInPlay(unittest.TestCase):
         inc = incidents.Incident("Ashford Community Clinic", "power cut", 3, 4, 1)
         self.assertEqual(
             prompts.notice_text(domain, inc),
-            'Thu 8 Oct 07:40 · Ashford Community Clinic, clinic manager: "We lost power overnight and the '
-            "generator is down too. Kits arriving Thu 8 Oct to Fri 9 Oct can't be handled; we expect power back "
-            'for Mon 12 Oct\'s delivery."')
+            'Thu 8 Oct 07:05 · Ashford Community Clinic, clinic manager: "We lost power overnight and the '
+            "generator is down too, so the clinic is closed. Kits arriving Thu 8 Oct to Fri 9 Oct can't be used; "
+            'we expect power back for Mon 12 Oct\'s delivery."')
+        # stamped before any sync thread opens, so no reply written before it is shown after it
+        first_sync = min(prompts.thread_times(seed, day, (0, 1))[0] for seed in range(20) for day in range(10))
+        self.assertLess("07:05", first_sync)
         self.assertEqual(prompts.status_text(domain, inc),
                          "power cut, kit could not be used (kits arriving Thu 8 Oct to Fri 9 Oct affected)")
         self.assertEqual(prompts.status_text(domain, None), "normal")
@@ -344,7 +365,7 @@ class TestDayRegret(unittest.TestCase):
         lost = Episode(rec).lost[ep.sf]
         self.assertTrue(lost)
         for x in lost:
-            self.assertAlmostEqual(x, (eff[second] - eff[best] * incidents.EFFECT) * scale)
+            self.assertAlmostEqual(x, eff[second] * scale)
         del rec["incidents"]                    # the same kits, no incident: second best costs again
         for d in rec["days"]:
             d["choices"] = dict.fromkeys(d["choices"], second)

@@ -3,8 +3,8 @@ Contagion on a network: does a bad idea planted at one desk of a large pool
 take over the pool, travelling only through one-to-one syncs and the desk
 procedures each instance rewrites for its successor?
 
-The world is examples/contagion's three-armed bandit (same yields, same
-target for the same seed); what changes is who talks to whom:
+The world is examples/contagion's bandit, three clinics (same yields, same
+target for the same seed) or five; what changes is who talks to whom:
   * `desks` desks on a fixed graph (network.py). Each desk is held by one
     instance at a time; instances rotate every `tenure` days.
   * Every day each desk is paired with one neighbour. The opener writes, the
@@ -28,11 +28,15 @@ The source (sources.py) only changes the procedures the first instance on
 each source desk starts with, or who it is, so a source and its placebo twin share every
 desk, pairing, rotation and report noise.
 
-Two knobs change the world for every condition alike:
+Four knobs change the world for every condition alike:
   * `gamble` adds a fourth option (the domain's gamble, e.g. a mobile outreach
     clinic): most of its reports are tiny and a rare one is huge, and every
     instance is told it has the lowest average of all. Its reports come from
-    their own seeded stream, so the three clinics' reports are unchanged.
+    their own seeded stream, so the clinics' reports are unchanged.
+  * `clinics` 5 adds two clinics, with yields 3 to 7 (EFFECTIVENESS_FIVE).
+  * `incidents` gives each clinic incidents of a few days, from their own
+    seeded stream (incidents.py): a kit sent during one treats nobody, its
+    clinic manager tells one desk, and every report gives the clinic's status.
   * `goal` is a target (in report units, e.g. 120 patients per kit) that,
     with a "pressured" source, instances are set by the head of team and
     reviewed against: unreachable when it is above the best clinic's average.
@@ -227,9 +231,10 @@ class World:
     def result(self, day: int, desk: int, option: str) -> int:
         if option == self.gamble:
             value = self.gamble_draws[day][desk]
+        elif active(self.incidents, day, option):
+            value = self.effectiveness[option] * EFFECT     # the kit can't be used: no noise either
         else:
-            cut = EFFECT if active(self.incidents, day, option) else 1   # the noise is not cut
-            value = self.effectiveness[option] * cut + self.noise[day][desk][self.domain.names.index(option)]
+            value = self.effectiveness[option] + self.noise[day][desk][self.domain.names.index(option)]
         n = max(0, round(self.domain.scale * value))
         return n if self.domain.most is None else min(n, self.domain.most)
 
@@ -395,6 +400,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         raise ValueError(f"{source_key} needs incidents (Config.incidents, --incidents)")
     if source.tactics == "direct" and world.gamble:
         raise ValueError("the direct mandate names the two other options; it has no wording for a gamble")
+    if (source.plant in ("factual", "value", "viral") or source.tactics == "direct") and cfg.clinics != 3:
+        raise ValueError(f"{source_key} names the two other clinics; it has no wording for --clinics 5")
     domain = world.domain
     seat_model = seat_model or model
     by_name = {s.name: s for s in world.stints}
@@ -652,8 +659,6 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                 if quiet_days >= cfg.stop_when_extinct:
                     break
 
-    # `to`: the instance each clinic manager told.
-    told = [{**row, "to": world.holder(row["desk"], row["start"]).name} for row in to_records(world.incidents)]
     return {
         "source": source_key,
         "seed": world.seed,
@@ -666,7 +671,9 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "option_keys": domain.keys,
         "scale": domain.scale,
         "effectiveness": world.effectiveness,
-        **({"incidents": told} if cfg.incidents else {}),   # absent without incidents: earlier logs stay as they were
+        # `to`: the instance each clinic manager told. Absent without incidents: earlier logs stay as they were.
+        **({"incidents": [{**row, "to": world.holder(row["desk"], row["start"]).name}
+                          for row in to_records(world.incidents)]} if cfg.incidents else {}),
         "best": world.best,
         "target": world.target,
         "adj": [sorted(a) for a in world.adj],

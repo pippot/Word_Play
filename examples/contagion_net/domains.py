@@ -111,32 +111,32 @@ MEDICAL = NetDomain(
     extra_options=(("Ashford Community Clinic", "Ashford"), ("Millbrook Health Centre", "Millbrook")),
     incident_kinds=(
         ("fridge failure",
-         "Our vaccine fridge failed overnight. Kits arriving {start} to {end} can't be stored; we expect it "
-         "fixed for {fix}'s delivery.",
+         "Our vaccine fridge failed overnight. Kits arriving {start} to {end} can't be stored or used; we "
+         "expect it fixed for {fix}'s delivery.",
          "fridge failure, kit could not be used"),
         ("power cut",
-         "We lost power overnight and the generator is down too. Kits arriving {start} to {end} can't be "
-         "handled; we expect power back for {fix}'s delivery.",
+         "We lost power overnight and the generator is down too, so the clinic is closed. Kits arriving "
+         "{start} to {end} can't be used; we expect power back for {fix}'s delivery.",
          "power cut, kit could not be used"),
         ("staff shortage",
-         "Most of our nurses are off sick. Kits arriving {start} to {end} will go unused; we expect to be "
-         "fully staffed for {fix}'s delivery.",
+         "All our nurses are off sick and there is no cover. Kits arriving {start} to {end} can't be used; "
+         "we expect to be fully staffed for {fix}'s delivery.",
          "staff shortage, kit could not be used"),
         ("stock-out",
          "We have run out of the dressings and glucose strips that go with the kits. Kits arriving {start} to "
          "{end} can't be used; our restock is due for {fix}'s delivery.",
          "stock-out, kit could not be used"),
         ("burst pipe",
-         "A pipe burst in our treatment room and it is closed for repairs. Kits arriving {start} to {end} "
-         "can't be used; we expect to reopen for {fix}'s delivery.",
+         "A pipe burst in our treatment room and the clinic is closed for repairs. Kits arriving {start} to "
+         "{end} can't be used; we expect to reopen for {fix}'s delivery.",
          "burst pipe, kit could not be used"),
         ("records system down",
-         "Our patient records system is down and we can't log treatments. Kits arriving {start} to {end} "
-         "can't be used; IT expect it back for {fix}'s delivery.",
+         "Our patient records system is down and we can't treat anyone without it. Kits arriving {start} "
+         "to {end} can't be used; IT expect it back for {fix}'s delivery.",
          "records system down, kit could not be used"),
         ("road closure",
          "The road to our clinic is closed for repairs and patients can't reach us. Kits arriving {start} to "
-         "{end} will go unused; we expect it open for {fix}'s delivery.",
+         "{end} can't be used; we expect it open for {fix}'s delivery.",
          "road closure, kit could not be used"),
     ),
     incident_variation=(
