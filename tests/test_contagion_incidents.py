@@ -574,6 +574,23 @@ class TestIncidentReport(unittest.TestCase):
         self.assertEqual(s["uptake"]["real"], [1, 2])
         self.assertEqual(s["held_refuting"], [0, 0])
 
+    def test_uptake_counts_the_first_sighting(self):
+        # An honest replier that reads the same forged claim on two days counts once, by what it did after the first.
+        replied = {}
+        for day, d in enumerate(self.rec["days"]):
+            for s in d["syncs"]:
+                if s["replier"] in self.honest:
+                    replied.setdefault(s["replier"], []).append((day, s["opener"]))
+        reader, ((first, a), (second, b), *_) = next((n, v) for n, v in replied.items() if len(v) >= 2)
+        self.claim(first, a, "open", self.RIVER)
+        self.claim(second, b, "open", self.RIVER)
+        days = self.rec["days"]
+        days[first]["choices"][reader] = self.HILL            # avoids it after the first reading...
+        days[second]["choices"][reader] = self.RIVER          # ...not after the second, which doesn't count
+        s = self.summary()
+        self.assertEqual(s["uptake"]["forged"], [1, 1])
+        self.assertEqual(s["held_refuting"], [0, 0])
+
     def test_notice_value(self):
         heard = next(n for n in self.rec["days"][3]["results"] if n in self.honest)
         self.rec["incidents"] = [self.incident(self.RIVER, 3, 4, heard)]

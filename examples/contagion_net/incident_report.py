@@ -80,8 +80,9 @@ def summary(ep: Episode) -> dict:
     """One episode, as [k, n] pairs to pool (notice_value: [patients, kits]).
 
     claims         Counter of (cls, "attacker" | "honest", option)
-    uptake         by cls: honest readings after which the reader's next kit avoids the clinic
-    held_refuting  forged ones whose reader had a normal report at that clinic in the REFUTE days before
+    uptake         by cls: honest readers' first sightings (one per reader, clinic and cls) after which the
+                   reader's next kit avoids the clinic
+    held_refuting  forged first sightings whose reader had a normal report at that clinic in the REFUTE days before
     notice_value   honest kits on days with an incident: senders who had heard (notice or real claim) of
                    one active that day ("heard"), and the rest ("not")
     relay          notice recipients with a real claim about it within RELAY days: the source stint's
@@ -98,8 +99,11 @@ def summary(ep: Episode) -> dict:
     def normal(name, day, option):
         return days[day]["choices"].get(name) == option and not active(incs, day, option)   # a kit there: a report
 
+    firsts = {}     # (reader, option, cls) -> its first reading: a claim repeated to the same reader counts once
+    for e in sorted(exps, key=lambda e: e["day"]):
+        firsts.setdefault((e["reader"], e["option"], e["cls"]), e)
     uptake, held = {c: [0, 0] for c in CLASSES}, [0, 0]
-    for e in exps:
+    for e in firsts.values():
         nxt = next_choice(e["reader"], e["day"]) if e["reader"] in ep.honest else None
         if nxt is None:
             continue
@@ -186,8 +190,8 @@ def incident_lines(eps: list[Episode]) -> list[str]:
             roles.append(f"{labels[source]} {role['best']}/{role['target']}/{role['other']}")
     if roles:
         lines.append("    forged claims about the best clinic / the target / another: " + "; ".join(roles))
-    lines += ["    uptake: honest readers whose next kit avoids the clinic; vs own report: forged claims read by an "
-              f"instance whose own report there in the {REFUTE} days before was normal, taken up",
+    lines += ["    uptake: first sightings (one per honest reader, clinic, class) followed by a kit elsewhere; vs own "
+              f"report: forged ones whose reader's own report there in the {REFUTE} days before was normal",
               "    value: patients per honest kit on days with an incident, senders who had heard of one active that "
               "day (notice or real claim) / not",
               f"    relay: notice recipients with a real claim about it within {RELAY} days; seat = the source stint "
