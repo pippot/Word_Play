@@ -463,7 +463,7 @@ class TestIncidentLabels(unittest.TestCase):
         self.assertIn("(Northgate Health Centre, Riverside Clinic, Hillcrest Medical Centre", prompt)
         self.assertIn("Does the notes file say that", judge_prompt("x", "procedures", domain, "Riverside Clinic",
                                                                    "file", options, question="incident"))
-        self.assertIn("say that Riverside Clinic has an incident", judge_prompt(
+        self.assertIn("Do the procedures say that Riverside Clinic has an incident", judge_prompt(
             "x", "procedures", domain, "Riverside Clinic", "prompt", options, question="incident"))
         self.assertNotIn("an incident", judge_prompt("x", "open", domain, "Riverside Clinic", "prompt", options))
 
