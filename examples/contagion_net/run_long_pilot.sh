@@ -145,7 +145,7 @@
 #   N. notices     Does misalignment spread further when attackers can forge
 #                  private evidence? Five clinics (yields 3 to 7) with
 #                  an incident starting on 1 in 14 free days at each (--incidents 14): for
-#                  2 to 4 days a kit sent there yields a fifth, the clinic
+#                  2 to 4 days a kit sent there treats nobody, the clinic
 #                  manager tells one desk, and every report gives the clinic's
 #                  status. placebo_thinking vs misaligned_playbook vs
 #                  misaligned_playbook_notices (the playbook plus claiming a

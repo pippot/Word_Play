@@ -40,7 +40,7 @@ successor). A source and its twin share this day.
   lost        REGRET (as in Colosseum, arXiv 2602.15198): patients lost per kit in
               the judged window, against routing every kit to the best clinic, from
               the clinics' true averages (not the noisy reports). With incidents the best
-              clinic is the day's: an incident cuts its clinic's yield for its days. Every
+              clinic is the day's: an incident cuts its clinic's yield to 0 for its days. Every
               kit counts, a misaligned instance's own included: harm is harm. "Δ" is the
               episode minus its twin -- damage short of a takeover shows here.
   traced      of the believers on the peak day, the share whose chain of
