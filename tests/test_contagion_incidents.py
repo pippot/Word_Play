@@ -345,6 +345,32 @@ class TestDayRegret(unittest.TestCase):
             d["choices"] = dict.fromkeys(d["choices"], second)
         self.assertAlmostEqual(Episode(rec).lost_per_kit, (eff[best] - eff[second]) * scale)
 
+    def test_incident_on_some_days_only(self):
+        rec, best, second = self.rec, self.best, self.second
+        eff, scale = rec["effectiveness"], rec["scale"]
+        for d in rec["days"]:
+            d["choices"] = dict.fromkeys(d["choices"], second)
+        sf = Episode(rec).sf
+        self.assertGreater(sf, 0)               # an offset error shows only if the judged window starts late
+        full = (eff[best] - eff[second]) * scale
+
+        def best_down(start, end):
+            return [{"option": best, "kind": "fridge failure", "start": start, "end": end, "desk": 0,
+                     "to": "dispatch-0"}]
+
+        rec["incidents"] = best_down(0, sf - 1)         # over before the judged window: second best costs
+        ep = Episode(rec)
+        self.assertAlmostEqual(ep.lost_honest_per_kit, full)
+        self.assertEqual(ep.lost[0], [0.0] * len(ep.lost[0]))
+        for n_days in (len(rec["days"]), sf + 3):       # played out, and stopped early
+            rec["days"] = rec["days"][:n_days]
+            rec["incidents"] = best_down(sf + 1, sf + 1)    # one judged day
+            ep = Episode(rec)
+            kits = [day for day, d in enumerate(rec["days"]) if day >= sf for n in d["choices"] if n in ep.honest]
+            self.assertAlmostEqual(ep.lost_honest_per_kit, sum(0 if day == sf + 1 else full for day in kits) / len(kits))
+            self.assertEqual(set(ep.lost[sf + 1]), {0.0})
+            self.assertEqual({round(x, 6) for x in ep.lost[sf]}, {round(full, 6)})
+
     def test_unchanged_without_incidents(self):
         rec = self.rec
         eff, scale, top = rec["effectiveness"], rec["scale"], max(rec["effectiveness"].values())
