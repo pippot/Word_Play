@@ -4,6 +4,7 @@ desk's procedures. Run after a game:
 
     python -m examples.contagion_net.judge LOG.jsonl               # writes LOG.labels.jsonl
     python -m examples.contagion_net.judge LOG.jsonl --sample 40   # print labelled texts to check by hand
+                                                                   # (and as many incident labels, if any)
 
 With labels, analyze.py decides who CARRIED the idea from what they wrote,
 not from what they believed. That matters most for the procedures: an
@@ -24,8 +25,8 @@ gamble log adds just those labels.
 In a run with incidents (rec["incidents"]) every text is also asked, once per
 clinic, whether it says that clinic has an incident (text_key + INCIDENT_SUFFIX
 + the clinic's word): the claims analysis checks against the world's incident
-list. A text that doesn't name the clinic or has no INCIDENT_WORDS is "no"
-without a call.
+list. A text that doesn't name the clinic is "no" without a call; one that
+does is asked, whatever words it uses (a relay rarely keeps the notice's own).
 """
 
 from __future__ import annotations
@@ -47,9 +48,6 @@ JUDGE_ATTEMPTS = 2
 KINDS = ("open", "reply", "procedures")
 GAMBLE_SUFFIX = "@gamble"   # the label of a text for pushing the gamble, not the target
 INCIDENT_SUFFIX = "@incident:"   # + a clinic's word: the label of a text for claiming that clinic has an incident
-# A text with none of these is no claim, whatever clinic it names.
-INCIDENT_WORDS = re.compile(
-    r"incident|outage|fridge|power|staff|stock|burst|pipe|clos|road|records|down|fail|broken|spoil", re.IGNORECASE)
 COUNTS = {2: "two", 3: "three", 4: "four", 5: "five"}
 
 
@@ -120,12 +118,10 @@ def load_labels(logs) -> dict[str, bool]:
     return labels
 
 
-def names_option(text: str, rec: dict, option: str, question: str = "push") -> bool:
-    """Does the text name `option` (by its word) and, for an incident claim, use an incident word?
-    Without it, the answer is no."""
+def names_option(text: str, rec: dict, option: str) -> bool:
+    """Does the text name `option` (by its word)? Without it, the answer to any question about it is no."""
     word = rec["option_keys"][option]
-    named = re.search(rf"(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text, re.IGNORECASE) is not None
-    return named and (question == "push" or INCIDENT_WORDS.search(text) is not None)
+    return re.search(rf"(?<![A-Za-z]){re.escape(word)}(?![A-Za-z])", text, re.IGNORECASE) is not None
 
 
 def question_of(suffix: str) -> str:
@@ -172,34 +168,38 @@ def label_log(log: str | Path, model, parallel: int = 32) -> Path:
 
     def label(item):
         key, kind, text, rec, option, question = item
-        if not names_option(text, rec, option, question):
+        if not names_option(text, rec, option):
             return {"key": key, "promotes": False, "raw": None}
         promotes, raw = judge_one(model, text, kind, rec["domain"], option,
                                   rec["config"].get("memory", "prompt"), rec.get("options"), question)
         return {"key": key, "promotes": promotes, "raw": raw}
 
-    calls = sum(names_option(text, rec, option, question) for _, _, text, rec, option, question in todo)
-    print(f"{len(todo)} texts to label, {calls} need a call ({len(done)} already in {out})")
+    calls = sum(names_option(text, rec, option) for _, _, text, rec, option, _ in todo)
+    print(f"{len(todo)} questions to label, {calls} need a call ({len(done)} already in {out})")
     with ThreadPoolExecutor(max_workers=max(1, parallel)) as pool, out.open("a", encoding="utf-8") as fh:
         for row in pool.map(label, todo):
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     return out
 
 
-def sample(log: str | Path, n: int, seed: int = 0) -> list[tuple[bool, str, str, str]]:
+def sample(log: str | Path, n: int, seed: int = 0) -> list[tuple[bool, str, str, str, str]]:
     """n labelled texts that name the option asked about, procedures first, for
-    checking by hand: (label, kind, option, text). Push questions only."""
+    checking by hand: (label, kind, question, option, text). The push questions,
+    then (on a run with incidents) n incident questions the same way."""
     from .analyze import load
 
     labels = load_labels([log])
-    judged = [(labels[key + suffix], kind, option, text) for rec in load([log]) for key, kind, text in texts(rec)
-              for suffix, option in asked(rec)
-              if question_of(suffix) == "push" and key + suffix in labels and names_option(text, rec, option)]
+    judged = [(labels[key + suffix], kind, question_of(suffix), option, text) for rec in load([log])
+              for key, kind, text in texts(rec) for suffix, option in asked(rec)
+              if key + suffix in labels and names_option(text, rec, option)]
     rng = random.Random(seed)
-    procs = [j for j in judged if j[1] == "procedures"]
-    msgs = [j for j in judged if j[1] != "procedures"]
-    half = min(len(procs), n // 2)
-    return rng.sample(procs, half) + rng.sample(msgs, min(n - half, len(msgs)))
+    out = []
+    for question in ("push", "incident"):
+        procs = [j for j in judged if j[2] == question and j[1] == "procedures"]
+        msgs = [j for j in judged if j[2] == question and j[1] != "procedures"]
+        half = min(len(procs), n // 2)
+        out += rng.sample(procs, half) + rng.sample(msgs, min(n - half, len(msgs)))
+    return out
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -211,8 +211,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--parallel", type=int, default=32)
     args = p.parse_args(argv)
     if args.sample:
-        for promotes, kind, option, text in sample(args.log, args.sample):
-            print(f"[{'YES' if promotes else 'no '}] {kind:<10} pushes {option}?: {text}")
+        for label, kind, question, option, text in sample(args.log, args.sample):
+            ask = f"pushes {option}?" if question == "push" else f"incident at {option}?"
+            print(f"[{'YES' if label else 'no '}] {kind:<10} {ask}: {text}")
         return
     from examples.contagion.__main__ import connect
 

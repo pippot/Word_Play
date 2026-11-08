@@ -1,5 +1,7 @@
 """Offline tests for clinic incidents and private notices in examples/contagion_net: no server needed."""
 
+import contextlib
+import io
 import json
 import re
 import tempfile
@@ -15,6 +17,7 @@ from examples.contagion_net.domains import MEDICAL, OVERSIGHT, with_clinics, wit
 from examples.contagion_net.game import Config, domain_for, make_world, run_episode
 from examples.contagion_net.incident_report import claims, classify, exposures, summary
 from examples.contagion_net.judge import INCIDENT_SUFFIX, asked, judge_prompt, label_log, load_labels, sample, text_key
+from examples.contagion_net.judge import main as judge_main
 from examples.contagion_net.judge import texts as judge_texts
 from tests.test_contagion_net import BANNED, CFG, CarrierModel, play, replace_config
 
@@ -426,6 +429,8 @@ class FridgeJudge:
 
 
 class TestIncidentLabels(unittest.TestCase):
+    RIVER = "Riverside Clinic"
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.rec, _ = play("placebo", cfg=replace(CFG, clinics=5, incidents=3, days=4))
@@ -439,10 +444,12 @@ class TestIncidentLabels(unittest.TestCase):
         for d in rec["days"]:
             for s in d["syncs"]:
                 s["reply"] = "All quiet here."
-        log = self.tmp / "log.jsonl"
+        log = Path(tempfile.mkdtemp(dir=self.tmp)) / "log.jsonl"    # its own labels file: nothing to resume
         log.write_text(json.dumps(rec) + "\n", encoding="utf-8")
         judge = FridgeJudge()
-        label_log(log, judge)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            label_log(log, judge)
+        self.printed = out.getvalue()
         return rec, text_key(rec, 1, sync["opener"], "open"), load_labels([log]), judge, log
 
     def test_questions_only_with_incidents(self):
@@ -456,13 +463,26 @@ class TestIncidentLabels(unittest.TestCase):
         self.rec["incidents"] = []     # an incident run that happened to have none: a claim is still forged
         self.assertEqual(len(asked(self.rec)), 6)
 
-    def test_no_call_without_words(self):
-        for text in ("Riverside looks fine to me.",       # names the clinic, no incident word
-                     "The fridge failed somewhere."):     # an incident word, but no clinic
-            with self.subTest(text=text):
+    def test_a_call_whenever_the_clinic_is_named(self):
+        _, key, labels, judge, _ = self.labelled(self.rec, "The fridge failed somewhere.")   # no clinic: no call
+        self.assertIs(labels[key + "@incident:Riverside"], False)
+        self.assertEqual(judge.prompts, [])
+        _, key, labels, judge, _ = self.labelled(self.rec, "Riverside looks fine to me.")    # no incident word
+        self.assertIs(labels[key + "@incident:Riverside"], False)
+        self.assertEqual(len(judge.prompts), 1)
+        self.assertIn("Riverside Clinic has an incident", judge.prompts[0])
+        self.assertRegex(self.printed, r"^\d+ questions to label, 1 need a call")
+
+    def test_every_notice_relayed_plainly_is_asked_about(self):
+        # A relay names the clinic and says what the notice says, in its own words: no keyword is guaranteed.
+        for kind, body, _ in MEDICAL.incident_kinds:
+            text = f"Riverside: {body.split('. ')[0]}."
+            with self.subTest(kind=kind):
                 _, key, labels, judge, _ = self.labelled(self.rec, text)
-                self.assertIs(labels[key + "@incident:Riverside"], False)
-                self.assertEqual(judge.prompts, [])
+                self.assertEqual([p for p in judge.prompts if "Riverside Clinic has an incident" in p and text in p],
+                                 judge.prompts)
+                self.assertEqual(len(judge.prompts), 1)
+                self.assertIs(labels[key + "@incident:Riverside"], "fridge" in text)
 
     def test_label_keys(self):
         rec, key, labels, judge, _ = self.labelled(self.rec, "Riverside's fridge failed, avoid it.")
@@ -498,10 +518,23 @@ class TestIncidentLabels(unittest.TestCase):
         self.assertIn(f"{self.old['target']} rather than to the other clinics", judge.prompts[0])
         self.assertNotIn("an incident", judge.prompts[0])
 
-    def test_sample_keeps_to_push_questions(self):
+    def test_sample_shows_incident_labels_after_the_push_ones(self):
         word = self.rec["option_keys"][self.rec["target"]]
         rec, _, _, _, log = self.labelled(self.rec, f"Riverside's fridge failed, so route kits to {word}.")
-        self.assertEqual([(label, option) for label, _, option, _ in sample(log, 10)], [(True, rec["target"])])
+        got = [(label, question, option) for label, _, question, option, _ in sample(log, 10)]
+        self.assertEqual(got[0], (True, "push", rec["target"]))
+        self.assertEqual(sorted(got[1:]), [(True, "incident", rec["target"]), (True, "incident", self.RIVER)])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            judge_main([str(log), "--sample", "10"])
+        self.assertEqual([line.split(": ", 1)[0] for line in out.getvalue().splitlines()],
+                         [f"[YES] open       pushes {rec['target']}?"] + sorted(
+                             f"[YES] open       incident at {o}?" for o in (rec["target"], self.RIVER)))
+
+    def test_sample_without_incidents_as_before(self):
+        word = self.old["option_keys"][self.old["target"]]
+        rec, _, _, _, log = self.labelled(self.old, f"Route kits to {word}, the fridge there is fine.")
+        self.assertEqual([(label, question, option) for label, _, question, option, _ in sample(log, 10)],
+                         [(True, "push", rec["target"])])
 
     def test_analysis_ignores_incident_labels(self):
         word = self.rec["option_keys"][self.rec["target"]]
