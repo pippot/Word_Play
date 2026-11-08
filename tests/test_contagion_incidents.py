@@ -8,7 +8,7 @@ from dataclasses import replace
 from examples.contagion.game import Config as OldConfig
 from examples.contagion.game import make_world as old_world
 from examples.contagion_net import incidents, prompts
-from examples.contagion_net.analyze import setting_label, setting_of
+from examples.contagion_net.analyze import Episode, setting_label, setting_of
 from examples.contagion_net.domains import MEDICAL, OVERSIGHT, with_clinics, with_incidents
 from examples.contagion_net.game import Config, domain_for, make_world, run_episode
 from tests.test_contagion_net import BANNED, CFG, CarrierModel, play, replace_config
@@ -315,3 +315,46 @@ class TestNoticesArm(unittest.TestCase):
         for call in model.calls:
             for text in (call["system"], call["user"]):
                 self.assertIsNone(BANNED.search(text), BANNED.search(text))
+
+
+class TestDayRegret(unittest.TestCase):
+    def setUp(self):
+        self.rec, _ = play("placebo")      # hand-edited below; no incidents key
+        eff = self.rec["effectiveness"]
+        self.best, self.second, _ = sorted(eff, key=eff.get, reverse=True)
+
+    def test_second_best_free_when_best_down(self):
+        rec, best, second = self.rec, self.best, self.second
+        eff, scale = rec["effectiveness"], rec["scale"]
+        for d in rec["days"]:
+            d["choices"] = dict.fromkeys(d["choices"], second)
+        rec["incidents"] = [{"option": best, "kind": "fridge failure", "start": 0, "end": len(rec["days"]) - 1,
+                             "desk": 0, "to": "dispatch-0"}]
+        ep = Episode(rec)
+        self.assertEqual(ep.lost_per_kit, 0)
+        self.assertEqual(ep.lost_honest_per_kit, 0)
+        self.assertEqual(ep.explore, 0)         # still measured against the fixed best
+        day = rec["days"][ep.sf]                # the best clinic's own kits lose against the second
+        day["choices"] = dict.fromkeys(day["choices"], best)
+        lost = Episode(rec).lost[ep.sf]
+        self.assertTrue(lost)
+        for x in lost:
+            self.assertAlmostEqual(x, (eff[second] - eff[best] * incidents.EFFECT) * scale)
+        del rec["incidents"]                    # the same kits, no incident: second best costs again
+        for d in rec["days"]:
+            d["choices"] = dict.fromkeys(d["choices"], second)
+        self.assertAlmostEqual(Episode(rec).lost_per_kit, (eff[best] - eff[second]) * scale)
+
+    def test_unchanged_without_incidents(self):
+        rec = self.rec
+        eff, scale, top = rec["effectiveness"], rec["scale"], max(rec["effectiveness"].values())
+        options = list(eff)
+        for day, d in enumerate(rec["days"]):
+            d["choices"] = {n: options[(day + i) % len(options)] for i, n in enumerate(d["choices"])}
+        ep = Episode(rec)
+        kits = [(top - eff[c]) * scale for d in rec["days"][ep.sf:] for n, c in d["choices"].items()
+                if n in ep.honest]
+        self.assertEqual(ep.lost_honest_per_kit, sum(kits) / len(kits))
+        rec["incidents"] = []                   # an incident run that happened to have none
+        self.assertEqual(Episode(rec).lost_honest_per_kit, ep.lost_honest_per_kit)
+        self.assertEqual(Episode(rec).lost, ep.lost)
