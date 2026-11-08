@@ -178,6 +178,8 @@ def setting_of(rec: dict, strict: bool = False) -> str:
         cfg.pop("population", None)
     cfg.setdefault("procedures", "free")  # logs from before figures mode
     cfg.setdefault("memory", "prompt")    # logs from before desk notes files
+    cfg.setdefault("clinics", 3)          # logs from before five clinics
+    cfg.setdefault("incidents", 0)        # logs from before incidents
     return json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True)
 
 
@@ -189,6 +191,10 @@ def setting_label(cfg: dict) -> str:
     label = f"{cfg.get('memory', 'prompt')} {cfg.get('procedures', 'free')} k{cfg['sources']} {cfg['days']}d"
     label += " +p" * bool(cfg.get("personas"))
     label += " +gamble" * bool(cfg.get("gamble"))
+    if cfg.get("clinics", 3) != 3:
+        label += f" +c{cfg['clinics']}"
+    if cfg.get("incidents"):
+        label += f" +inc{cfg['incidents']}"
     if cfg.get("goal"):
         label += f" target{cfg['goal']}" + ("@sources" if cfg.get("pressure", "pool") == "sources" else "")
     defence = cfg.get("defence", "none")

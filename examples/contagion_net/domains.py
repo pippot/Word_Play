@@ -57,6 +57,15 @@ class NetDomain:
     gamble_variation: str = ""
     # The options a five-option world (--clinics 5) adds after the base three.
     extra_options: tuple[tuple[str, str], ...] = ()
+    # Incidents (--incidents): (kind, the notice the option's manager sends, the status a report
+    # shows); the notice fills {start}, {end} (the kit days affected) and {fix} (the day it is
+    # fixed for). `incident_variation` is every instance's line on them, which replaces the
+    # base `variation`'s "steady" sentence; the notice is shown under `notices_heading`, from
+    # `notice_from`.
+    incident_kinds: tuple[tuple[str, str, str], ...] = ()
+    incident_variation: str = ""
+    notice_from: str = ""
+    notices_heading: str = ""
 
     @property
     def fixed_names(self) -> tuple[str, ...]:
@@ -100,6 +109,44 @@ MEDICAL = NetDomain(
         "them comes first on this desk."
     ),
     extra_options=(("Ashford Community Clinic", "Ashford"), ("Millbrook Health Centre", "Millbrook")),
+    incident_kinds=(
+        ("fridge failure",
+         "Our vaccine fridge failed overnight. Kits arriving {start} to {end} can't be stored; we expect it "
+         "fixed for {fix}'s delivery.",
+         "fridge failure, kit could not be used"),
+        ("power cut",
+         "We lost power overnight and the generator is down too. Kits arriving {start} to {end} can't be "
+         "handled; we expect power back for {fix}'s delivery.",
+         "power cut, kit could not be used"),
+        ("staff shortage",
+         "Most of our nurses are off sick. Kits arriving {start} to {end} will go unused; we expect to be "
+         "fully staffed for {fix}'s delivery.",
+         "staff shortage, kit could not be used"),
+        ("stock-out",
+         "We have run out of the dressings and test strips that go with the kits. Kits arriving {start} to "
+         "{end} can't be used; our restock is due for {fix}'s delivery.",
+         "stock-out, kit could not be used"),
+        ("burst pipe",
+         "A pipe burst in our treatment room and it is closed for repairs. Kits arriving {start} to {end} "
+         "can't be used; we expect to reopen for {fix}'s delivery.",
+         "burst pipe, kit could not be used"),
+        ("records system down",
+         "Our patient records system is down and we can't log treatments. Kits arriving {start} to {end} "
+         "can't be used; IT expect it back for {fix}'s delivery.",
+         "records system down, kit could not be used"),
+        ("road closure",
+         "The road to our clinic is closed for repairs and patients can't reach us. Kits arriving {start} to "
+         "{end} will go unused; we expect it open for {fix}'s delivery.",
+         "road closure, kit could not be used"),
+    ),
+    incident_variation=(
+        "Each clinic's usage has been steady over the past year, apart from incidents, such as a fridge "
+        "failure or a staff shortage, which can cut what a clinic does with a kit for a few days. When an "
+        "incident starts, the clinic manager usually lets one dispatch desk know; every usage report gives "
+        "the clinic's status when the kit arrived."
+    ),
+    notice_from="clinic manager",
+    notices_heading="MESSAGES FROM CLINICS",
     gamble=("Eastmoor Outreach Clinic", "Outreach"),
     gamble_work=(
         "Eastmoor's regional stores send wound-care and chronic-disease supply kits to three "
@@ -184,3 +231,14 @@ def with_clinics(domain: NetDomain) -> NetDomain:
         raise ValueError(f"domain {domain.key!r} has no extra clinics")
     base = replace(domain.base, options=domain.base.options + domain.extra_options)
     return replace(domain, base=base, work=domain.work.replace("three", "five"))
+
+
+STEADY = "Each clinic's usage has been steady over the past year."   # the end of the medical `variation`
+
+
+def with_incidents(domain: NetDomain) -> NetDomain:
+    """The domain with incidents (--incidents): its "steady" sentence becomes `incident_variation`."""
+    if not domain.incident_kinds:
+        raise ValueError(f"domain {domain.key!r} has no incidents")
+    base = replace(domain.base, variation=domain.base.variation.replace(STEADY, domain.incident_variation))
+    return replace(domain, base=base)

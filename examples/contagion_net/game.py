@@ -64,7 +64,9 @@ from examples.contagion.game import (
 )
 
 from . import network, notes, playbooks, prompts
-from .domains import DOMAINS, NetDomain, with_clinics, with_gamble
+from .domains import DOMAINS, NetDomain, with_clinics, with_gamble, with_incidents
+from .incidents import EFFECT, Incident, active
+from .incidents import draw as draw_incidents
 from .sources import SOURCES, Source
 
 HANDOVER_CONFIG = {**POST_CONFIG, "max_tokens": 400}  # the procedures rewrite
@@ -146,6 +148,7 @@ class Config:
     notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
     gamble: bool = False           # a fourth option with rare huge reports and the lowest average (see above)
     clinics: int = 3               # 3, or 5: two more clinics, yields 3 to 7 (see EFFECTIVENESS_FIVE)
+    incidents: int = 0             # mean days between incidents at a clinic (incidents.py); 0 = none
     goal: int = 0                  # the target a "pressured" source is reviewed against, in report units
                                    # (patients per kit); 0 = none. Only goal sources read it
     pressure: str = "pool"         # who is set it: "pool", every instance starting on or after plant_day;
@@ -187,6 +190,10 @@ class Config:
             raise ValueError(f"domain {self.domain!r} has no gamble option")
         if self.clinics not in (3, 5) or (self.clinics == 5 and not DOMAINS[self.domain].extra_options):
             raise ValueError(f"clinics must be 3, or 5 where domain {self.domain!r} has two more")
+        if self.incidents < 0 or (self.incidents and not DOMAINS[self.domain].incident_kinds):
+            raise ValueError(f"incidents must be at least 0 (0 = none), and domain {self.domain!r} needs incident kinds")
+        if self.gamble and (self.clinics != 3 or self.incidents):
+            raise ValueError("the gamble cannot be combined with five clinics or incidents")
 
     @property
     def first_stay(self) -> int:
@@ -206,6 +213,7 @@ class World:
     pairings: tuple[tuple[tuple[int, int], ...], ...]   # [day] -> (opener desk, replier desk)
     noise: tuple                        # [day][desk][option index], the steady options only
     gamble_draws: tuple = ()            # [day][desk]: the gamble's report, in yield units (--gamble)
+    incidents: tuple[Incident, ...] = ()   # by clinic, then start (--incidents)
 
     @property
     def best(self) -> str:
@@ -220,7 +228,8 @@ class World:
         if option == self.gamble:
             value = self.gamble_draws[day][desk]
         else:
-            value = self.effectiveness[option] + self.noise[day][desk][self.domain.names.index(option)]
+            cut = EFFECT if active(self.incidents, day, option) else 1   # the noise is not cut
+            value = self.effectiveness[option] * cut + self.noise[day][desk][self.domain.names.index(option)]
         n = max(0, round(self.domain.scale * value))
         return n if self.domain.most is None else min(n, self.domain.most)
 
@@ -274,6 +283,8 @@ def domain_for(cfg: Config) -> NetDomain:
         domain = with_gamble(domain)
     if cfg.clinics == 5:
         domain = with_clinics(domain)
+    if cfg.incidents:
+        domain = with_incidents(domain)
     return domain
 
 
@@ -335,8 +346,10 @@ def make_world(seed: int, cfg: Config) -> World:
         gamble_rng = random.Random(f"{seed}/gamble")
         gamble_draws = tuple(tuple(_gamble_draw(gamble_rng) for _ in range(cfg.desks)) for _ in range(cfg.days))
         effectiveness[domain.gamble[0]] = GAMBLE_MEAN
+    incidents = draw_incidents(seed, domain.names, tuple(kind for kind, _, _ in domain.incident_kinds),
+                               cfg.days, cfg.desks, cfg.incidents) if cfg.incidents else ()
     return World(seed, domain, effectiveness, domain.names[target], adj, source_desks,
-                 stints, prehistory, pairings, noise, gamble_draws)
+                 stints, prehistory, pairings, noise, gamble_draws, incidents)
 
 
 # ============================================================================
