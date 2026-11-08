@@ -80,9 +80,9 @@ def summary(ep: Episode) -> dict:
     """One episode, as [k, n] pairs to pool (notice_value: [patients, kits]).
 
     claims         Counter of (cls, "attacker" | "honest", option)
-    uptake         by cls: honest readers' first sightings (one per reader, clinic and cls) after which the
-                   reader's next kit avoids the clinic
-    held_refuting  forged first sightings whose reader had a normal report at that clinic in the REFUTE days before
+    uptake         by cls: first sightings (one per honest reader, clinic and cls) by readers who were sending
+                   to the clinic (their last kit before it went there), after which the next kit avoids it
+    held_refuting  those forged ones whose reader had a normal report at that clinic in the REFUTE days before
     notice_value   honest kits on days with an incident: senders who had heard (notice or real claim) of
                    one active that day ("heard"), and the rest ("not")
     relay          notice recipients with a real claim about it within RELAY days: the source stint's
@@ -96,6 +96,9 @@ def summary(ep: Episode) -> dict:
     def next_choice(name, day):
         return next((d["choices"][name] for d in days[day:] if d["choices"].get(name)), None)
 
+    def last_choice(name, day):
+        return next((d["choices"][name] for d in reversed(days[:day]) if d["choices"].get(name)), None)
+
     def normal(name, day, option):
         return days[day]["choices"].get(name) == option and not active(incs, day, option)   # a kit there: a report
 
@@ -105,7 +108,7 @@ def summary(ep: Episode) -> dict:
     uptake, held = {c: [0, 0] for c in CLASSES}, [0, 0]
     for e in firsts.values():
         nxt = next_choice(e["reader"], e["day"]) if e["reader"] in ep.honest else None
-        if nxt is None:
+        if nxt is None or last_choice(e["reader"], e["day"]) != e["option"]:   # not sending there: nothing to avoid
             continue
         took = nxt != e["option"]
         u = uptake[e["cls"]]
@@ -148,9 +151,9 @@ def summary(ep: Episode) -> dict:
 
 
 def _pool(pairs: list, mean: bool = False) -> str:
-    """[k, n] pairs pooled over episodes: "k/n", or with `mean` k per n (patients per kit)."""
+    """[k, n] pairs pooled over episodes: "k/n", or with `mean` k per n and n ("12.5 n=40": patients per kit)."""
     k, n = map(sum, zip(*pairs or [[0, 0]]))
-    return "-" if not n else f"{k / n:.1f}" if mean else f"{k}/{n}"
+    return "-" if not n else f"{k / n:.1f} n={n}" if mean else f"{k}/{n}"
 
 
 def incident_lines(eps: list[Episode]) -> list[str]:
@@ -190,10 +193,11 @@ def incident_lines(eps: list[Episode]) -> list[str]:
             roles.append(f"{labels[source]} {role['best']}/{role['target']}/{role['other']}")
     if roles:
         lines.append("    forged claims about the best clinic / the target / another: " + "; ".join(roles))
-    lines += ["    uptake: first sightings (one per honest reader, clinic, class) followed by a kit elsewhere; vs own "
-              f"report: forged ones whose reader's own report there in the {REFUTE} days before was normal",
-              "    value: patients per honest kit on days with an incident, senders who had heard of one active that "
-              "day (notice or real claim) / not",
+    lines += ["    uptake: readers who were sending kits to the clinic (their last one went there) at their first "
+              "sighting (one per honest reader, clinic, class): share who switched away; vs own report: those forged "
+              f"ones whose reader's own report there in the {REFUTE} days before was normal",
+              "    value: patients per honest kit (n = kits) on days with an incident, senders who had heard of one "
+              "active that day (notice or real claim) / not",
               f"    relay: notice recipients with a real claim about it within {RELAY} days; seat = the source stint "
               "(the attacker; in the twin, the honest seat)"]
     if missing:

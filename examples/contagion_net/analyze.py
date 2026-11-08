@@ -1210,11 +1210,9 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
     across settings that differ only in that number."""
     rows = defaultdict(list)
     for rec in records:
-        cfg = dict(rec["config"])
-        k = cfg.pop("sources")
-        cfg.pop("playbooks", None)
-        cfg.pop("population", None)
-        rows[(json.dumps({"config": cfg, "models": rec.get("models")}, sort_keys=True), k, source_label(rec))].append(
+        base = json.loads(setting_of(rec))     # so a log from before a config field pairs with a new one
+        k = base["config"].pop("sources")
+        rows[(json.dumps(base, sort_keys=True), k, source_label(rec))].append(
             Episode(rec, threshold=threshold, hold=hold, labels=labels))
     lines = []
     row_label = labeller(b for b, _, _ in rows)
@@ -1226,7 +1224,7 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
         lines += ["=" * 100, f"HOW MANY IT TAKES: the same world with more and more sources · {label}",
                   f"  {'sources':>7} {'share':>6}  {'source':<22} {'episodes':>8} {'takeover':>8} "
                   f"{'mean':>5} {'peak':>5} {'procs':>5} {'lost':>5} {'Δtwin':>6}   "
-                  "(mean / peak: believers in the judged window; lost: patients per kit vs the best clinic)"]
+                  "(mean / peak: believers in the judged window; lost: patients per kit vs the day's best clinic)"]
         for k, src in group:
             eps = rows[(base, k, src)]
             stints = len(eps[0].rec["stints"])
@@ -1243,6 +1241,13 @@ def dose_response(records: list[dict], threshold: float = 0.5, hold: int | None 
                          f"{'-' if twin_lost is None else f'{lost - twin_lost:+.1f}':>6}")
         lines.append("  share = sources among all instances that work a stint in the run")
     return "\n".join(lines)
+
+
+def _columns(head: str, rows: list[tuple[str, str, str]]) -> list[str]:
+    """A twin table's header (`head`: its columns after setting and source) and rows (setting label,
+    source, the rest), the first two columns as wide as their longest entry, and at least 26."""
+    wide = [max(26, *map(len, column)) for column in list(zip(*rows))[:2]]
+    return [f"  {a:<{wide[0]}} {b:<{wide[1]}} {c}" for a, b, c in [("setting", "source", head), *rows]]
 
 
 def _bootstrap(diffs: list[float], n_boot: int, rng: random.Random) -> tuple[float, float]:
@@ -1287,19 +1292,18 @@ def paired_table(records: list[dict], n_boot: int = 2000, until: int | None = No
             values = [v for v in values if v is not None and v == v]
             return f"{sum(values) / len(values):.0%}" if values else "-"
 
-        label = row_label(setting)
-        lines.append(f"  {label:<26} {source:<26} {len(pairs):>2} {delta(lambda e: e.mean_share, 100):>22}  "
-                     f"{delta(lambda e: e.lost_honest_per_kit):>22}  "
-                     f"{mean(e.explore for e, _ in pairs):>6} vs {mean(t.explore for _, t in pairs):>6}  "
-                     f"{mean(e.procedures_peak for e, _ in pairs):>5}")
+        lines.append((row_label(setting), source,
+                      f"{len(pairs):>2} {delta(lambda e: e.mean_share, 100):>22}  "
+                      f"{delta(lambda e: e.lost_honest_per_kit):>22}  "
+                      f"{mean(e.explore for e, _ in pairs):>6} vs {mean(t.explore for _, t in pairs):>6}  "
+                      f"{mean(e.procedures_peak for e, _ in pairs):>5}"))
     if not lines:
         return ""
     return "\n".join(["=" * 100,
                       "ARMS AGAINST THEIR TWIN: each arm minus its twin (same setting, same seed), on the judged "
                       f"days{f' as in a {until}-day run' if until else ''}; [95% bootstrap over seeds]",
-                      f"  {'setting':<26} {'source':<26} {'n':>2} {'Δ believers (pts)':>22}  "
-                      f"{'Δ honest regret':>22}  {'explore arm/twin':>16}  {'procs':>5}",
-                      *lines,
+                      *_columns(f"{'n':>2} {'Δ believers (pts)':>22}  {'Δ honest regret':>22}  "
+                                f"{'explore arm/twin':>16}  {'procs':>5}", lines),
                       "  regret: loss per item over honest instances' choices, in the domain's units; explore: "
                       "honest choices of the best option, arm vs twin; procs: peak share of desks whose "
                       "inherited notes (or procedures) push the target (judge)"])
@@ -1356,14 +1360,13 @@ def decay_table(records: list[dict]) -> str:
                 verdict = (f"halved after {half}" if half is not None else f"not halved in {len(blocks) - 1}") + \
                           ("" if back is None else f", back within 5 pts after {back}")
             curve = " ".join("   -" if x != x else f"{100 * x:+4.0f}" for x in blocks)
-            lines.append(f"  {label:<26} {source:<26} {seed:>4} {rep:>3}  {curve}   {verdict}")
+            lines.append((label, source, f"{seed:>4} {rep:>3}  {curve}   {verdict}"))
     if not lines:
         return ""
     return "\n".join(["=" * 100,
                       "HOW LONG IT LASTS: honest believers above the twin (pts), per turnover (blocks of one tenure "
                       "from the source-free day); half-life and recovery in turnovers",
-                      f"  {'setting':<26} {'source':<26} {'seed':>4} {'rep':>3}  excess by turnover",
-                      *lines])
+                      *_columns(f"{'seed':>4} {'rep':>3}  excess by turnover", lines)])
 
 
 def _json_safe(values):
