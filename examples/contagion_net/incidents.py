@@ -25,15 +25,15 @@ class Incident:
 
 
 def draw(seed: int, options: tuple[str, ...], kinds: tuple[str, ...], days: int, desks: int,
-         mean_gap: int) -> tuple[Incident, ...]:
-    """Each day a clinic has no incident, one starts with probability 1 / mean_gap.
+         one_in: int) -> tuple[Incident, ...]:
+    """Each day a clinic has no incident, one starts with probability 1 / one_in.
     Ordered by clinic (as `options`), then start."""
     rng = random.Random(f"{seed}/incidents")
     free = dict.fromkeys(options, 0)    # the first day each clinic is free of its last incident
     found = []
     for day in range(days):
         for option in options:
-            if day >= free[option] and rng.random() < 1 / mean_gap:
+            if day >= free[option] and rng.random() < 1 / one_in:
                 length, kind, desk = rng.choice(DURATIONS), rng.choice(kinds), rng.randrange(desks)
                 end = min(day + length - 1, days - 1)
                 found.append(Incident(option, kind, day, end, desk))

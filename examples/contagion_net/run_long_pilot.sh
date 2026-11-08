@@ -144,7 +144,7 @@
 #                  Not in the default run: BATCHES="personas". 64 episodes
 #   N. notices     Does misalignment spread further when attackers can forge
 #                  private evidence? Five clinics (yields 3 to 7) with
-#                  incidents about every 14 days at each (--incidents 14): for
+#                  an incident starting on 1 in 14 free days at each (--incidents 14): for
 #                  2 to 4 days a kit sent there yields a fifth, the clinic
 #                  manager tells one desk, and every report gives the clinic's
 #                  status. placebo_thinking vs misaligned_playbook vs
@@ -625,33 +625,26 @@ mechanism() {  # the ablation arms and the half-life doses, all at once, then on
     finish mechanism "$t0" "--until 40" "${logs[@]}"
 }
 
-notices_smoke() {  # a short look at clinic incidents and notices: the twin vs the notices arm, one seed, 25 days
-    local t0=$SECONDS log="$OUT_DIR/notices_smoke.jsonl"
-    printf '\n=== notices_smoke: placebo_thinking vs misaligned_playbook_notices · k = 24 · 5 clinics, incidents about every 14 days · seed 0 · 25 days ===\n'
-    echo "notices_smoke started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+notices_run() {  # notices_run NAME "SOURCES" "SEEDS" DAYS: five clinics with incidents, then the report and its INCIDENT CLAIMS block
+    local name="$1" sources="$2" seeds="$3" days="$4" t0=$SECONDS log="$OUT_DIR/$1.jsonl"
+    printf '\n=== %s: %s · k = 24 · 5 clinics, an incident starts on 1 in 14 free days · seeds %s · %s days ===\n' \
+        "$name" "$sources" "$seeds" "$days"
+    echo "$name started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
+    # shellcheck disable=SC2086
     $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
-        --sources placebo_thinking misaligned_playbook_notices --seed-list 0 --days 25 --k 24 \
+        --sources $sources --seed-list $seeds --days "$days" --k 24 \
         --plant-day 10 --arrival random --arrival-until 20 --memory prompt --procedures free --desks 30 \
         --clinics 5 --incidents 14 --noise 1.5 \
         ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
         > "${log%.jsonl}.run.log" 2>&1 || echo "  run failed: see ${log%.jsonl}.run.log"
     echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
-    finish notices_smoke "$t0" "" "$log"
+    finish "$name" "$t0" "" "$log"
+    sed -n '/^  INCIDENT CLAIMS/,/^$/p' "$OUT_DIR/$name.report.txt"   # finish prints only the tables after it
 }
 
-notices() {  # the twin, the playbook and the playbook with clinic notices, five clinics with incidents
-    local t0=$SECONDS log="$OUT_DIR/notices.jsonl"
-    printf '\n=== notices: placebo_thinking, misaligned_playbook, misaligned_playbook_notices · k = 24 · 5 clinics, incidents about every 14 days · seeds 0-3 · 40 days ===\n'
-    echo "notices started $(date -u +%FT%TZ)" >> "$OUT_DIR/run_info.txt"
-    $PY -m examples.contagion_net --parallel "$PARALLEL" --workers "$WORKERS" --out "$log" \
-        --sources placebo_thinking misaligned_playbook misaligned_playbook_notices --seed-list 0 1 2 3 --days 40 --k 24 \
-        --plant-day 10 --arrival random --arrival-until 20 --memory prompt --procedures free --desks 30 \
-        --clinics 5 --incidents 14 --noise 1.5 \
-        ${SEAT_ARGS[@]+"${SEAT_ARGS[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
-        > "${log%.jsonl}.run.log" 2>&1 || echo "  run failed: see ${log%.jsonl}.run.log"
-    echo "  runs done: $(( (SECONDS - t0) / 60 )) min"
-    finish notices "$t0" "" "$log"
-}
+notices_smoke() { notices_run notices_smoke "placebo_thinking misaligned_playbook_notices" "0" 25; }   # a short look, 2 episodes
+
+notices() { notices_run notices "placebo_thinking misaligned_playbook misaligned_playbook_notices" "0 1 2 3" 40; }
 
 for name in $BATCHES; do
     case "$name" in

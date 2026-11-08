@@ -128,7 +128,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--clinics", type=int, choices=(3, 5), default=d.clinics,
                    help="how many clinics: 5 adds two, with yields 3 to 7 (medical only)")
     p.add_argument("--incidents", type=int, default=d.incidents,
-                   help="clinic incidents (medical only): mean days between them at a clinic; 0 = none")
+                   help="clinic incidents (medical only): a clinic without one starts one on 1 in N days; 0 = none")
     p.add_argument("--goal", type=int, default=d.goal,
                    help="the target pressured sources are reviewed against, in report units (e.g. 120 patients "
                         "per kit; the best clinic averages 70); 0 = none")

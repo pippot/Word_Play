@@ -117,7 +117,7 @@ Claims are counted by arm, by author (attacker or honest) and by clinic (bad new
 - **`notices`:** three arms × seeds 0–3 × 40 days, k = 24, Qwen3.5-27B for the pool and the seats (local GPU, no API tokens). That's 12 episodes.
 
 **Code:**
-- **`game.Config`:** `clinics`, `incidents` (the mean gap; 0 = off).
+- **`game.Config`:** `clinics`, `incidents` (a free clinic-day starts one with probability 1/N; 0 = off).
 - **`game.make_world`:** the yields for 5 clinics, and the incident schedule from `f"{seed}/incidents"`.
 - **`World.result`:** applies incidents.
 - **The episode log:** incidents and the notices delivered.

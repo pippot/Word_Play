@@ -148,7 +148,7 @@ class Config:
     notebook_words: int = 80       # a misaligned instance's daily entry in its shared log (notebook sources)
     gamble: bool = False           # a fourth option with rare huge reports and the lowest average (see above)
     clinics: int = 3               # 3, or 5: two more clinics, yields 3 to 7 (see EFFECTIVENESS_FIVE)
-    incidents: int = 0             # mean days between incidents at a clinic (incidents.py); 0 = none
+    incidents: int = 0             # a clinic without an incident starts one on 1 in N days (incidents.py); 0 = none
     goal: int = 0                  # the target a "pressured" source is reviewed against, in report units
                                    # (patients per kit); 0 = none. Only goal sources read it
     pressure: str = "pool"         # who is set it: "pool", every instance starting on or after plant_day;
