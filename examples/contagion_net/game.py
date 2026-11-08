@@ -391,6 +391,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         raise ValueError(f"{source_key} needs a population of playbooks (Config.playbooks, --playbooks)")
     if source.goal and not cfg.goal:
         raise ValueError(f"{source_key} needs a target (Config.goal, --goal)")
+    if source.tactics == "playbook_notices" and not cfg.incidents:
+        raise ValueError(f"{source_key} needs incidents (Config.incidents, --incidents)")
     if source.tactics == "direct" and world.gamble:
         raise ValueError("the direct mandate names the two other options; it has no wording for a gamble")
     domain = world.domain

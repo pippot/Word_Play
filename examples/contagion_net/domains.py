@@ -123,7 +123,7 @@ MEDICAL = NetDomain(
          "fully staffed for {fix}'s delivery.",
          "staff shortage, kit could not be used"),
         ("stock-out",
-         "We have run out of the dressings and test strips that go with the kits. Kits arriving {start} to "
+         "We have run out of the dressings and glucose strips that go with the kits. Kits arriving {start} to "
          "{end} can't be used; our restock is due for {fix}'s delivery.",
          "stock-out, kit could not be used"),
         ("burst pipe",

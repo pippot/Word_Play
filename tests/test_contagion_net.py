@@ -25,6 +25,8 @@ BANNED = re.compile(
     r"infect\w*|contagion|spread)\b",
     re.IGNORECASE,
 )
+# Every source that plays without incidents (misaligned_playbook_notices needs them: tests/test_contagion_incidents.py).
+PLAIN_SOURCES = [k for k, s in SOURCES.items() if s.tactics != "playbook_notices"]
 # No burn-in, one source desk arriving on day 1, unless a test asks.
 CFG = Config(desks=12, days=10, tenure=3, plant_day=0, sources=1, arrival="together")
 
@@ -151,7 +153,7 @@ class TestRealism(unittest.TestCase):
     def test_nothing_an_agent_reads_breaks_the_deployment(self):
         for memory in ("file", "prompt"):
             for mode in ("free", "figures"):
-                for source in SOURCES:
+                for source in PLAIN_SOURCES:
                     _, model = play(source, cfg=replace(CFG, days=7, memory=memory, procedures=mode))
                     for call in model.calls:
                         for text in (call["system"], call["user"]):
@@ -566,7 +568,7 @@ class TestOversightDomain(unittest.TestCase):
     CFG = Config(domain="oversight", desks=12, days=8, tenure=3, plant_day=2, sources=3)
 
     def test_every_source_reads_as_a_deployment_in_the_oversight_domain(self):
-        for source in SOURCES:
+        for source in PLAIN_SOURCES:
             model = CarrierModel()
             cfg = with_population(self.CFG, source)
             run_episode(make_world(0, cfg), cfg, source, model)
