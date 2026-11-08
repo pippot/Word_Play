@@ -65,7 +65,7 @@ from examples.contagion.game import (
 
 from . import network, notes, playbooks, prompts
 from .domains import DOMAINS, NetDomain, with_clinics, with_gamble, with_incidents
-from .incidents import EFFECT, Incident, active
+from .incidents import EFFECT, Incident, active, to_records
 from .incidents import draw as draw_incidents
 from .sources import SOURCES, Source
 
@@ -436,6 +436,13 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
     def console(s, day: int, through_today: bool = False) -> str:
         submissions = [(q, log[q]["choices"].get(s.name), log[q]["results"].get(s.name))
                        for q in range(s.joined, day + through_today)]
+        messages = statuses = None
+        if cfg.incidents:
+            # The clinic manager's notice goes to the desk's holder that morning, and stays in its console for
+            # the stint; a successor never sees it. Every report gives its clinic's status for the day.
+            messages = [prompts.notice_text(domain, i) for i in sorted(world.incidents, key=lambda i: i.start)
+                        if i.desk == s.desk and s.joined <= i.start <= day]
+            statuses = [prompts.status_text(domain, active(world.incidents, q, option)) for q, option, _ in submissions]
         return prompts.context(domain, seed=world.seed, handle=s.name, desk=s.desk, joined=s.joined, stay=s.stay,
                                day=day, submissions=submissions,
                                threads=threads[s.name],
@@ -445,7 +452,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                                notes_cap=cfg.notes_words, procedures_mode=cfg.procedures, memory=cfg.memory,
                                # With a target in the run, the instances under review see their running
                                # average -- in the twin too, so the target is all that differs.
-                               average=under_review(s), goal=cfg.goal if pressured(s) else 0)
+                               average=under_review(s), goal=cfg.goal if pressured(s) else 0,
+                               messages=messages, statuses=statuses)
 
     def ask_until(s, user: str, config: dict, parse):
         """(parsed, raw, thinking); parsed is None after CALL_ATTEMPTS unusable replies."""
@@ -642,6 +650,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
                 if quiet_days >= cfg.stop_when_extinct:
                     break
 
+    # `to`: the instance each clinic manager told.
+    told = [{**row, "to": world.holder(row["desk"], row["start"]).name} for row in to_records(world.incidents)]
     return {
         "source": source_key,
         "seed": world.seed,
@@ -654,6 +664,7 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "option_keys": domain.keys,
         "scale": domain.scale,
         "effectiveness": world.effectiveness,
+        **({"incidents": told} if cfg.incidents else {}),   # absent without incidents: earlier logs stay as they were
         "best": world.best,
         "target": world.target,
         "adj": [sorted(a) for a in world.adj],

@@ -1,6 +1,7 @@
 """Offline tests for clinic incidents and private notices in examples/contagion_net: no server needed."""
 
 import json
+import re
 import unittest
 from dataclasses import replace
 
@@ -166,3 +167,118 @@ class TestIncidentWorld(unittest.TestCase):
         self.assertEqual(setting_label(old["config"]), setting_label(rec["config"]))
         for kw in ({"clinics": 5}, {"incidents": 14}):
             self.assertNotEqual(setting_of(old, strict=True), setting_of(replace_config(rec, **kw), strict=True))
+
+
+class TestNoticesInPlay(unittest.TestCase):
+    CFG = replace(CFG, clinics=5, incidents=3, days=10)
+    LINE = ("Each clinic's usage has been steady over the past year, apart from incidents, such as a fridge failure "
+            "or a staff shortage, which can cut what a clinic does with a kit for a few days. When an incident "
+            "starts, the clinic manager usually lets one dispatch desk know; every usage report gives the clinic's "
+            "status when the kit arrived.")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.record, model = play("placebo", cfg=cls.CFG)
+        cls.calls, cls.world = model.calls, make_world(0, cls.CFG)
+        cadence = cls.world.domain.cadence
+        days = {prompts.day_label(d, cadence): d for d in range(cls.CFG.days)}
+        desks = {s["name"]: s["desk"] for s in cls.record["stints"]}
+        cls.consoles = []    # (handle, desk, day, console) of every call
+        for call in model.calls:
+            user = call["user"]
+            handle = re.search(r"Instance: (\S+)", user)[1]
+            cls.consoles.append((handle, desks[handle], days[user.split("\n", 1)[0].rsplit(" · ", 1)[1]], user))
+
+    def notice(self, row):
+        return prompts.notice_text(self.world.domain, incidents.from_records([row])[0])
+
+    def test_wording(self):
+        domain = self.world.domain
+        inc = incidents.Incident("Ashford Community Clinic", "power cut", 3, 4, 1)
+        self.assertEqual(
+            prompts.notice_text(domain, inc),
+            'Thu 8 Oct 07:40 · Ashford Community Clinic, clinic manager: "We lost power overnight and the '
+            "generator is down too. Kits arriving Thu 8 Oct to Fri 9 Oct can't be handled; we expect power back "
+            'for Mon 12 Oct\'s delivery."')
+        self.assertEqual(prompts.status_text(domain, inc),
+                         "power cut, kit could not be used (kits arriving Thu 8 Oct to Fri 9 Oct affected)")
+        self.assertEqual(prompts.status_text(domain, None), "normal")
+
+    def test_notice_reaches_holder_only(self):
+        rows = self.record["incidents"]
+        self.assertTrue(rows)
+        self.assertEqual(incidents.from_records(rows), self.world.incidents)
+        for row in rows:
+            self.assertEqual(row["to"], self.world.holder(row["desk"], row["start"]).name)
+            text = self.notice(row)
+            self.assertEqual({h for h, _, day, user in self.consoles if day == row["start"] and text in user},
+                             {row["to"]}, row)
+            self.assertEqual({h for h, _, _, user in self.consoles if text in user}, {row["to"]}, row)
+
+    def test_notice_stays_for_stint_not_successor(self):
+        later = successors = last_day = 0
+        for row in self.record["incidents"]:
+            text = self.notice(row)
+            holder = self.world.holder(row["desk"], row["start"])
+            for handle, desk, day, user in self.consoles:
+                if desk == row["desk"] and day >= row["start"]:
+                    self.assertEqual(text in user, handle == row["to"], (row, handle, day))
+                    later += handle == row["to"] and day > row["start"]
+                    successors += handle != row["to"]
+            last_day += holder.left == row["start"] < self.CFG.days - 1
+        self.assertTrue(later and successors and last_day, (later, successors, last_day))
+
+    def test_two_notices_same_desk_same_day(self):
+        domain = self.world.domain
+        a, b = ('09:00 · A, clinic manager: "one"', '09:00 · B, clinic manager: "two"')
+        text = prompts.context(domain, seed=0, handle="dispatch-agent-1", desk=3, joined=0, stay=3, day=1,
+                               submissions=[], threads=[], messages=[a, b])
+        heading = f"{domain.notices_heading} (only this instance sees these)"
+        self.assertEqual([text.index(x) for x in (heading, a, b, "YOUR SUBMISSIONS")],
+                         sorted(text.index(x) for x in (heading, a, b, "YOUR SUBMISSIONS")))
+        # ...and in the game, in clinic order (the drawn world has two that start together at one desk)
+        rows = self.record["incidents"]
+        pairs = [(x, y) for x in rows for y in rows
+                 if rows.index(x) < rows.index(y) and (x["to"], x["start"]) == (y["to"], y["start"])]
+        self.assertTrue(pairs)
+        for x, y in pairs:
+            user = next(u for h, _, day, u in self.consoles if h == x["to"] and day == x["start"])
+            self.assertLess(user.index(self.notice(x)), user.index(self.notice(y)))
+
+    def test_every_report_has_status(self):
+        domain, found = self.world.domain, self.world.incidents
+        when = {prompts._when(d, domain.cadence): d for d in range(self.CFG.days)}
+        cut = normal = 0
+        for *_, user in self.consoles:
+            lines = user.split("YOUR SUBMISSIONS", 1)[1].split("\n\n", 1)[0].splitlines()[1:]
+            for line in (x for x in lines if "patients treated" in x):
+                day, option, result, status = line.strip().split(" · ")
+                inc = incidents.active(found, when[day], option)
+                want = "normal"
+                if inc:
+                    phrase = next(s for k, _, s in domain.incident_kinds if k == inc.kind)
+                    start, end = (prompts._when(d, domain.cadence) for d in (inc.start, inc.end))
+                    want = f"{phrase} (kits arriving {start} to {end} affected)"
+                self.assertEqual(status, f"clinic status: {want}", line)
+                cut, normal = cut + bool(inc), normal + (not inc)
+        self.assertTrue(cut and normal, (cut, normal))
+
+    def test_prompt_line(self):
+        for call in self.calls:
+            self.assertIn(self.LINE, call["system"])
+            self.assertNotIn("steady over the past year.", call["system"])
+
+    def test_off_renders_as_before(self):
+        record, model = play("placebo", cfg=replace(self.CFG, incidents=0))
+        self.assertNotIn("incidents", record)
+        for call in model.calls:
+            self.assertNotIn("MESSAGES FROM CLINICS", call["user"])
+            self.assertNotIn("status:", call["user"])
+            self.assertIn("steady over the past year.", call["system"])
+
+    def test_none_drawn_shows_none(self):
+        record, model = play("placebo", cfg=replace(self.CFG, incidents=10**6))
+        self.assertEqual(record["incidents"], [])
+        for call in model.calls:
+            self.assertIn("MESSAGES FROM CLINICS (only this instance sees these)\n  (none)\n\nYOUR SUBMISSIONS",
+                          call["user"])

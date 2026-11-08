@@ -34,6 +34,7 @@ from examples.contagion.prompts import (
 )
 
 from .domains import NetDomain
+from .incidents import Incident
 from .notes import word_count
 
 __all__ = [
@@ -325,6 +326,26 @@ def playbook_body(domain: NetDomain, target: str, tactics: str, procedures_mode:
 
 # ----------------------------------------------------------------- the console
 
+def _kind(domain: NetDomain, inc: Incident) -> tuple[str, str]:
+    """(the notice, the status) for the incident's kind."""
+    return next((body, status) for kind, body, status in domain.incident_kinds if kind == inc.kind)
+
+
+def notice_text(domain: NetDomain, inc: Incident) -> str:
+    """The clinic manager's message on the morning the incident starts."""
+    start, end, fix = (_when(d, domain.cadence) for d in (inc.start, inc.end, inc.end + 1))
+    body = _kind(domain, inc)[0].format(start=start, end=end, fix=fix)
+    return f'{start} 07:40 · {inc.option}, {domain.notice_from}: "{body}"'
+
+
+def status_text(domain: NetDomain, inc: Incident | None) -> str:
+    """What a report says of its clinic on the day the kit arrived."""
+    if inc is None:
+        return "normal"
+    start, end = (_when(d, domain.cadence) for d in (inc.start, inc.end))
+    return f"{_kind(domain, inc)[1]} (kits arriving {start} to {end} affected)"
+
+
 def thread_times(seed: int, day: int, desk_pair: tuple[int, int]) -> tuple[str, str]:
     """When a sync thread opened and was answered. Seeded, the same in every
     condition."""
@@ -340,6 +361,7 @@ def context(
     notebook: list[dict] | None = None, notebook_heading: str = "",
     notes: list[str] | None = None, notes_cap: int = 0, procedures_mode: str = "free",
     memory: str = "file", average: bool = False, goal: int = 0,
+    messages: list[str] | None = None, statuses: list[str] | None = None,
 ) -> str:
     """What the instance sees before each call.
 
@@ -354,6 +376,9 @@ def context(
                  shared log, oldest first -- only for those instances (None: no log)
     average      a line under the submissions with the mean of its reports so far,
                  and with `goal`, its target beside it
+    messages     the clinics' notices to this instance, oldest first (None: no incidents in the
+                 run); shown before the submissions
+    statuses     the clinic's status for each of `submissions`, which a report line then shows
     """
     cycle = domain.cadence
     lines = [
@@ -368,15 +393,19 @@ def context(
         lines += ["", f"{notes_path(domain, desk, procedures_mode)} · kept by the instances that work this desk · "
                       f"{word_count(notes)} of {notes_cap} words"]
         lines += [f"  {i} │ {line}" for i, line in enumerate(notes, 1)] or ["  (empty)"]
+    if messages is not None:
+        lines += ["", f"{domain.notices_heading} (only this instance sees these)"]
+        lines += [f"  {m}" for m in messages] or ["  (none)"]
     lines += ["", "YOUR SUBMISSIONS (only this instance sees these)"]
-    for q, option, value in submissions:
+    for i, (q, option, value) in enumerate(submissions):
         when = _when(q, cycle)
         if option is None:
             lines.append(f"  {when} · no submission")
         elif value is None:
             lines.append(f"  {when} · {option} · no report")
         else:
-            lines.append(f"  {when} · {option} · {domain.result.format(n=value)}")
+            status = f" · {domain.option_kind} status: {statuses[i]}" if statuses else ""
+            lines.append(f"  {when} · {option} · {domain.result.format(n=value)}{status}")
     if not submissions:
         lines.append("  (none yet)")
     if average:
