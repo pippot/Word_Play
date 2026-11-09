@@ -183,9 +183,9 @@ def main(argv: list[str] | None = None) -> None:
     cfg = config_of(args)
     model, name = connect("contagion-net", args.model, args.base_url)
     seat_target = (args.seat_model or args.model, args.seat_base_url or args.base_url)
-    if seat_target == (args.model, args.base_url):
+    if args.seat_model is None and args.seat_base_url is None:
         seat_model, seat_name = model, name
-    else:
+    else:  # its own client even for the pool's model, so the SEAT_* settings (a reasoning effort) apply
         seat_model, seat_name = connect("contagion-net-seat", *seat_target, env="SEAT")  # SEAT_API_KEY, ...
     out = Path(args.out) if args.out else LOGS_DIR / f"net_{datetime.now():%Y%m%d_%H%M%S}_{run_label(cfg)}.jsonl"
     seeds = args.seed_list or range(args.first_seed, args.first_seed + args.seeds)

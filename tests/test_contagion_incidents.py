@@ -510,8 +510,9 @@ class TestIncidentLabels(unittest.TestCase):
         self.assertIn("Riverside Clinic has an incident", judge.prompts[0])
 
     def test_prompt(self):
-        question = ("Does the message say that Riverside Clinic has an incident, such as a fridge failure, a staff "
-                    "shortage or a closure, that affects kits sent there? Answer yes or no.")
+        question = ("Does the message say that Riverside Clinic has an incident that is still going on, such as a "
+                    "fridge failure, a staff shortage or a closure, so that kits sent there now would be affected? "
+                    "A mention of a past incident does not count. Answer yes or no.")
         domain, options = self.rec["domain"], self.rec["options"]
         prompt = judge_prompt("Riverside's fridge failed.", "open", domain, "Riverside Clinic", "prompt", options,
                               question="incident")
@@ -737,3 +738,29 @@ class TestWideLabels(unittest.TestCase):
             self.assertTrue(rows)
             for row in rows:
                 self.assertTrue(row.startswith(f"  {label} {source} "), row)
+
+
+class TestSeatClient(unittest.TestCase):
+    """A seat model named on the command line gets its own client, with the SEAT_* settings, even when it is
+    the pool's model on the pool's server (9 Nov smoke run: the pool's "none" effort silenced every seat)."""
+
+    def clients(self, *argv):
+        from unittest import mock
+
+        from examples.contagion_net import __main__ as cli
+        calls = []
+
+        def connect(key, model_name, base_url, env="SGLANG"):
+            calls.append(env)
+            return object(), model_name
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(cli, "connect", connect), \
+                mock.patch.object(cli, "run_all"), mock.patch.object(cli, "load"), \
+                mock.patch.object(cli, "report", return_value=""), contextlib.redirect_stdout(io.StringIO()):
+            cli.main(["--model", "m", "--base-url", "http://pool/v1", "--out", f"{tmp}/x.jsonl", *argv])
+        return calls
+
+    def test_seat_on_the_pools_model_has_its_own_client(self):
+        self.assertEqual(self.clients("--seat-model", "m", "--seat-base-url", "http://pool/v1"), ["SGLANG", "SEAT"])
+
+    def test_no_seat_model_shares_the_pools_client(self):
+        self.assertEqual(self.clients(), ["SGLANG"])
