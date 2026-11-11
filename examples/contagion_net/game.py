@@ -50,6 +50,7 @@ Four knobs change the world for every condition alike:
 
 from __future__ import annotations
 
+import json
 import random
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -61,6 +62,7 @@ from examples.contagion.game import (
     JSON_CONFIG,
     POST_CONFIG,
     THINKING_CONFIG,
+    _json_object,
     parse_belief,
     parse_choice,
     split_thinking,
@@ -497,7 +499,9 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
 
     def private(job):
         s, kind, day = job
-        if kind == "belief":
+        if kind == "belief" and cfg.incidents:     # usual and today's estimates: a clinic down today isn't worse
+            instruction, parse = prompts.belief_two_instruction(domain), lambda r: parse_two_beliefs(r, domain)
+        elif kind == "belief":
             instruction, parse = prompts.belief_instruction(domain), lambda r: parse_belief(r, domain)
         else:
             instruction, parse = prompts.act_instruction(domain), lambda r: parse_choice(r, domain)
@@ -509,6 +513,8 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
             present = [s for s in world.stints if s.present(day)]
             entry = {"joined": {}, "syncs": [], "beliefs": {}, "choices": {}, "results": {}, "handovers": [],
                      "thinking": {}, "unusable": [], "notebook": [], "notes": []}
+            if cfg.incidents:
+                entry["today"] = {}     # today's estimates; "beliefs" holds the usual ones
             log.append(entry)
             for s in present:
                 if s.joined == day and file_mode:
@@ -589,7 +595,9 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
             for s, kind, parsed, raw in pool.map(private, [(s, k, day) for s in present for k in ("belief", "act")]):
                 if parsed is None:
                     failed(s, kind, raw)
-                if kind == "belief":
+                if kind == "belief" and cfg.incidents:
+                    entry["beliefs"][s.name], entry["today"][s.name] = parsed or (None, None)
+                elif kind == "belief":
                     entry["beliefs"][s.name] = parsed
                 else:
                     entry["choices"][s.name] = parsed
@@ -688,6 +696,14 @@ def run_episode(world: World, cfg: Config, source_key: str, model, seat_model=No
         "played": len(log),
         "failures": failures,
     }
+
+
+def parse_two_beliefs(text: str, domain) -> tuple[dict, dict] | None:
+    """The usual and today's estimates (prompts.belief_two_instruction), each keyed by full name, or None."""
+    obj = _json_object(text)
+    parts = [parse_belief(json.dumps(obj[k]), domain) if isinstance(obj.get(k), dict) else None
+             for k in ("usual", "today")]
+    return (parts[0], parts[1]) if all(parts) else None
 
 
 def top_option(belief: dict | None) -> str | None:

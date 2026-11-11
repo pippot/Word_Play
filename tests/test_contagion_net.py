@@ -70,7 +70,8 @@ class CarrierModel:
     def _reply(user, domain, believed):
         instruction = user.rsplit("\n\n", 1)[-1]
         if "planning sheet" in instruction:
-            return json.dumps({n: (9 if n == believed else 1) if believed else 5 for n in domain.names})
+            sheet = {n: (9 if n == believed else 1) if believed else 5 for n in domain.names}
+            return json.dumps({"usual": sheet, "today": sheet} if '"usual"' in instruction else sheet)
         if "Submit" in instruction:
             return json.dumps({domain.option_field: believed or domain.names[0]})
         key = domain.keys[believed] if believed else None

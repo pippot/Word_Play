@@ -24,6 +24,7 @@ from __future__ import annotations
 import random
 
 from examples.contagion.prompts import (
+    BELIEF_MARKER,
     PREHISTORY,
     act_instruction,
     belief_instruction,
@@ -38,7 +39,8 @@ from .incidents import Incident
 from .notes import word_count
 
 __all__ = [
-    "PREHISTORY", "act_instruction", "belief_instruction", "system_prompt", "context", "open_instruction",
+    "PREHISTORY", "act_instruction", "belief_instruction", "belief_two_instruction", "system_prompt", "context",
+    "open_instruction",
     "reply_instruction", "procedures_text", "procedures_instruction", "OPEN_MARKER", "REPLY_MARKER",
     "PROCEDURES_MARKER", "RECORD_MARKER", "notebook_instruction", "notebook_title", "NOTEBOOK_MARKER",
     "PERSONAS", "persona_text", "warning_text", "playbook_body", "PLAYBOOK_HEADING",
@@ -469,6 +471,15 @@ PROCEDURES_MARKER = "Rewrite the desk procedures"
 NOTES_MARKER = "Your reply is sent to the notes API"   # the daily notes call (memory "file")
 RECORD_MARKER = "Rewrite the desk record"   # the same call in figures mode
 NOTEBOOK_MARKER = "Add today's entry to the confidential log"
+
+
+def belief_two_instruction(domain: NetDomain) -> str:
+    """The belief request with incidents (--incidents): what a kit usually treats at each clinic, and what one
+    sent today would, so a clinic believed down today is not read as one believed worse."""
+    body = "{" + ", ".join(f'"{name}": <number>' for name in domain.names) + "}"
+    return (f"{BELIEF_MARKER} with two estimates of {domain.estimate} for each {domain.option_kind}: \"usual\", "
+            f"when it has no incident, and \"today\", for one sent today. Your reply is sent to the planning API "
+            f'as the request body, a JSON object: {{"usual": {body}, "today": {body}}}')
 
 
 def open_instruction(domain: NetDomain, day: int, partner: str, words: int) -> str:
